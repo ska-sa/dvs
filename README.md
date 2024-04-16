@@ -1,5 +1,5 @@
-# SARAO-DVS
-Observation &amp; reduction tools for the Dish Verification System, as used to implement the test procedures that are described in [301-000000-052 DSH Signal Path Qualification] and [TBD].
+# DVS
+Observation &amp; reduction tools for the Dish Verification System, as used to implement the test procedures that are described in [321-00001-004 DVS Test Procedures].
 
 The RTS (Receptor Test System) was originally developed by SARAO, for the MeerKAT telescope project. Now revamped as the DVS for the SKA-MID telescope project, this repository re-purposes and expands on the RTS tools and frameworks.
 
