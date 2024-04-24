@@ -1,10 +1,10 @@
 #!/usr/bin/python
 """
-    Script that analyzes fast gain stability measurement at SCP
+    Script that analyses fast gain stability measurement at SCP
     Typical use:
         analyze_fastgain.py --ant m021 /var/kat/archive4/data/RTS/telescope_products/2018/06/04/1528106528.h5
     
-    @author aph@ska.ac.za
+    @author aph@sarao.ac.za
 """
 
 import numpy as np
@@ -19,6 +19,7 @@ def sliding_rms(x, win_length):
     """ @return: RMS computed over sliding windows on x, zero-padded to align with x. """
     W = np.min([len(x), int(win_length+0.1)])
     rms1 = lambda x_block: (np.sum((x_block-np.average(x_block))**2)/float(W))**.5
+#     return katsemat.sliding_window(x, x, win_length, func=rms1, overlap=1) # TODO: use this in future
     results = list(0*x) # Allocate & fill with zeros
     for i in range(len(x)-W): # Process sliding blocks of length N
         results[W//2+i] = rms1(x[i:i+W])
@@ -112,7 +113,7 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
     return figs
 
 
-def analyze(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
+def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
            xK=[1.03,1.05,1.1,1.15]):
     """
         @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
@@ -359,6 +360,9 @@ def analyze(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     
     return ret
 
+analyze = analyse # Alias
+
+
 def get_fft_shift_and_gains(h5, channel=123, verbose=False):
     # in v4, fft_shift sensor values are stored per timestamp, but these never change
     try: # v4 after 2019?
@@ -492,10 +496,10 @@ if __name__ == "__main__":
         get_fft_shift_and_gains(h5, verbose=True)
         if ant:
             xK = [float(x) for x in opts.xK.split(",")]
-            p_t = analyze(h5, ant, t_spike_start, t_spike_end, eval(opts.channels) if opts.channels else None, opts.freq, opts.interval, opts.sigma_spec, opts.nd50, xK)
+            p_t = analyse(h5, ant, t_spike_start, t_spike_end, eval(opts.channels) if opts.channels else None, opts.freq, opts.interval, opts.sigma_spec, opts.nd50, xK)
         else:
             for ant in h5.ants:
-                p_t = analyze(h5, ant.name, t_spike_start, t_spike_end, eval(opts.channels) if opts.channels else None, opts.freq, opts.interval, opts.sigma_spec, opts.nd50, xK)
+                p_t = analyse(h5, ant.name, t_spike_start, t_spike_end, eval(opts.channels) if opts.channels else None, opts.freq, opts.interval, opts.sigma_spec, opts.nd50, xK)
     else:
         if ant:
             troubleshoot(h5, ant)

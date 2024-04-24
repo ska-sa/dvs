@@ -10,7 +10,7 @@
         ru = tip.process(h5, "m008", 900,1700, channel_mask='', PLANE="antenna",spec_sky=True)
         tip.report("m008", h5.name.split()[0].split(" ")[0], *ru, select_freq=[900,1200,1700])
         
-@author aph@ska.ac.za
+@author aph@sarao.ac.za
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 import pickle
 import warnings
 from matplotlib.backends.backend_pdf import PdfPages
-import katdal
 import scape
 import scikits.fitting as fit
 import healpy as hp
@@ -28,10 +27,11 @@ from astropy.coordinates import SkyCoord
 import time
 git_info = lambda: "analyze_tipping.py 11/03/2020"
 from matplotlib.offsetbox import AnchoredText
-import katselib
 
-import models
-from models import _c_, Tcmb
+import katdal
+from katselib import as_hackedL
+import katsemodels as models
+from katsemodels import _c_, Tcmb
 
 
 def angle_wrap(angle, period=2.0 * np.pi):
@@ -915,7 +915,7 @@ def open_dataset(filename, band=None, hackedL=False, ant_rx_SN={}, verbose=True,
        @return: the katdal dataset with data selected & ordered as required. """
     h5 = katdal.open(filename, **kwargs) if isinstance(filename,str) else filename
     if hackedL:
-        h5 = katselib.as_hackedL(h5)
+        h5 = as_hackedL(h5)
         h5.select(freqrange=(300e6,856.5e6))
     
     # Override receiver ID if requested

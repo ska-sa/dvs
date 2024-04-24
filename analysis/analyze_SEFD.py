@@ -1,35 +1,34 @@
 #!/usr/bin/python
 """
-    Formalization of earlier SEFD_TauAOrionA.ipynb
+    Formalisation of earlier SEFD_TauAOrionA.ipynb
     Typical use 1:
         python analyze_SEFD.py /data/132598363.h5 0 hydra
     which is equivalent to
-        from analyze_SEFD import run_SEFD, hydra
-        run_SEFD(sys.argv[1], int(sys.argv[2]), eval(sys.argv[3]), saveroot=".")
+        from analyze_SEFD import analyse; from sefd.models import hydra
+        analyse(sys.argv[1], int(sys.argv[2]), eval(sys.argv[3]), saveroot=".")
         
     Typical use 2:
         import analyze_SEFD as sefd
-        import models
         h5 = sefd.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
         
         bore, null_l, null_r, null_w, _HPBW = sefd.find_nulls(h5, bore, debug_level=1)
         
-        target, theta_src, profile_src, S_src = models.describe_source(models.taurus)
+        target, theta_src, profile_src, S_src = sefd.models.describe_source(sefd.models.taurus)
         par_angle = np.median(h5.parangle) * np.pi/180
-        offbore_deg = sefd.target_offset(models.taurus, np.mean(bore), ...)
+        offbore_deg = sefd.target_offset(sefd.models.taurus, np.mean(bore), ...)
         hpbw0 = np.nanpercentile(_HPBW, 5)
         hpbw0_f = np.mean(h5.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
         C = sefd.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, h5.channel_freqs/1e9)
         if (np.min(C) < 0.99):
             print("CAUTION: source transits far from bore sight (%.2fdeg), scaling flus by >=%.3f"%(offbore_deg,np.min(C)))
-        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
+        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(sefd.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
         
         freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, El = \
                 sefd.get_SEFD_ND(h5,bore,[(null_l[0],null_w),(null_r[0],null_w)],
                                  Sobs_src,theta_src/60*np.pi/180 / _HPBW,profile_src,
                                  freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
         
-    @author aph@ska.ac.za
+    @author aph@sarao.ac.za
 """
 import pylab as plt
 import numpy as np
@@ -41,9 +40,10 @@ try:
 except: 
     print("WARNING: Failed to load katdal, proceeding with limitations!")
 import katpoint
-from katselib import smooth, smooth2d, Polynomial2DFit, mask_jumps, PDFReport
-import models
-from models import _kB_, _c_
+from katsemat import smooth, smooth2d, Polynomial2DFit
+from katselib import mask_jumps, PDFReport
+import katsemodels as models
+from katsemodels import _kB_, _c_
 
 
 def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
@@ -688,7 +688,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         @param N_bore: Force the number of time samples to average over the bore sight crossing, else uses average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
-        @param theta_src: the equivalent half-power width [rad] of the target, to be removed from the fitted width (default 0)
+        @param theta_src: the equivalent half-power width [rad] of the target (default 0)
         @param debug_level: 0 for no debugging, 1 for some, 2 for some others and 3 for all (default 0)
         @return: (bore, nulls_before_transit, nulls_after_transit, HPBW_fitted, N_bore).
                  'bore' is the time indices while the target crosses bore sight, against frequency (1D).
@@ -1012,10 +1012,10 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def run_SEFD(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
               fitfreqrange=None, rfifilt=[1,7], freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
-    """ Generates measured and predicted SEFD results and collects it all in a PDF report, if requeired.
+    """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
         @param f: filename string, or an already opened h5 file, to be passed to 'load_vis()'.
         @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'load_vis()'.
@@ -1164,6 +1164,8 @@ def run_SEFD(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=Fa
         save_data(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg)
     return result
 
+run_SEFD = analyse # Alias
+
 
 def save_data(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, *ig, **nored):
     """ Saves data products to CSV files named as 'root/dataset-ant-product.csv
@@ -1181,7 +1183,7 @@ def save_data(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pS
                    header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
 
 def load_data(fids, product="SEFD", root=""):
-    """ Loads the results stored when run_SEFD() completes. Re-grids all data onto a common frequency grid.
+    """ Loads the results stored when analyse() completes. Re-grids all data onto a common frequency grid.
         @param fids: list of file ID's (e.g. "{epoch seconds}_sdp_l0-s0000")
         @param product: "SEFD"|"S_ND"|"counts2Jy" (default "SEFD")
         @return: freq_Hz, H_data, V_data
@@ -1301,13 +1303,13 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
 
 
 def fit_hpbw(f,mu,sigma, D, theta_src=0, fitchans=None, debug=True):
-    """ Finds the best fit polynomial that describes the beam width over frequency.
+    """ Finds the best fit polynomial that describes the half power width over frequency. Includes both the beam and source widths!
         
         @param f,mu,sigma: as returned by 'load4hpbw()', or possibly only the set for a single product.
         @param D: the aperture diameter [m] to scale the fitted coefficients to.
-        @param theta_src: the equivalent half-power width [rad] of the target, to be removed from the fitted width (default 0)
+        @param theta_src: the equivalent half-power width [rad] of the target (default 0)
         @param fitchans: selector to limit the frequency channels over which to fit the model (default None)
-        @return: lambda f: hpbw [rad]
+        @return: lambda f: hpw [rad]
     """
     theta_src = 0 if (theta_src is None) else theta_src
     # Basic model and constants
@@ -1391,7 +1393,7 @@ if __name__ == "__main__":
     parser.add_option('-a', '--ant', type='int', default=0,
                       help="Antenna numerical sequence as lsited in the dataset - NOT receptor ID (default %default).")
     parser.add_option('-t', '--target', type='string', default=None,
-                      help="Target name to either look up flux model in models.py, or from catalogue.")
+                      help="Target name to either look up flux model in katsemodels.py, or from catalogue.")
     parser.add_option('-x', '--flux-opt', type='string', default=None,
                       help="Identify the flux model to use for the source, or None if the target is loaded from the catalogue (default %default)")
     parser.add_option('-b', '--hpbw', type='string', default="lambda f: 1.22*(_c_/f)/13.965", # "Nominal best fit" for MeerKAT UHF & L-band
@@ -1413,5 +1415,5 @@ if __name__ == "__main__":
     freqmask = eval(opts.rfi_mask)
     fitfreqrange = eval(opts.fit_freq)
     
-    result = run_SEFD(args[0], opts.ant, opts.target, opts.flux_opt, HPBW=opts.hpbw, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
+    result = analyse(args[0], opts.ant, opts.target, opts.flux_opt, HPBW=opts.hpbw, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
     
