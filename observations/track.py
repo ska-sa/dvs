@@ -17,6 +17,9 @@ usage = "%prog [options] <'target/catalogue'> [<'target/catalogue'> ...]"
 description = 'Track one or more sources for a specified time. At least one ' \
               'target must be specified. Note also some **required** options below.'
 parser = standard_script_options(usage=usage, description=description)
+parser.add_option('--catalogue', default='',
+                  help="Name of file containing catalogue of targets to use, instead of default system catalogue.")
+
 # Add experiment-specific options
 parser.add_option('-t', '--track-duration', type='float', default=60.0,
                   help='Length of time to track each source, in seconds '
@@ -42,7 +45,25 @@ parser.set_defaults(description='Target track', nd_params='off')
 # Parse the command line
 opts, args = parser.parse_args()
 
-if len(args) == 0:
+# Allow the user to specify both a catalogue file and a target (or to work around collect_targets() not taking TLE files)
+if os.path.isfile(opts.catalogue):
+    def collect_targets(cam, args): # Override the standard function imported earlier
+        cat = katpoint.Catalogue(antenna=cam.sources.antenna)
+        try: # Maybe a standard catalogue file
+            cat.add(open(opts.catalogue, 'rt'))
+        except ValueError: # Possibly a TLE formatted file
+            try:
+                cat.add_tle(open(opts.catalogue, 'rt'))
+            except:
+                raise ValueError("%s is not a valid target catalogue file!" % opts.catalogue)
+        if (len(args) == 0):
+            return cat
+        else:
+            tgt = cat[args[0]]
+            if (tgt is None):
+                raise ValueError("No target retrieved from argument list!")
+            return katpoint.Catalogue(tgt, antenna=cam.sources.antenna)
+elif len(args) == 0:
     raise ValueError("Please specify at least one target argument via name "
                      "('Cygnus A'), description ('azel, 20, 30') or catalogue "
                      "file name ('sources.csv')")
@@ -91,7 +112,7 @@ with verify_and_connect(opts) as kat:
             keep_going = (opts.max_duration is not None) and opts.repeat
             targets_before_loop = len(targets_observed)
             # Iterate through source list, picking the next one that is up
-            for n, target in enumerate(targets):
+            for n, target in enumerate(targets.iterfilter(el_limit_deg=opts.horizon)):
                 # Cut the track short if time ran out
                 duration = opts.track_duration
                 if opts.max_duration is not None:

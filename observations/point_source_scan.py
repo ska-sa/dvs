@@ -51,6 +51,9 @@ parser = standard_script_options(
     "model fits and gain curve calculation. Use the specified target(s) and "
     "catalogue(s) or the default. This script is aimed at fast scans across "
     "a large range of sources. Some options are **required**.")
+parser.add_option('--catalogue', default='',
+                  help="Name of file containing catalogue of targets to use, instead of default system catalogue.")
+
 # Add experiment-specific options
 parser.add_option('-e', '--scan-in-elevation', action="store_true", default=False,
                   help="Scan in elevation rather than in azimuth (default=%default)")
@@ -80,6 +83,46 @@ parser.add_option('--search-fine', action="store_true", default=False,
                   'The intention of this is for use in Ku-band obsevations where the beam is 8 arc-min .*DEPRECATED*')
 
 parser.set_defaults(description='Point source scan',dump_rate=None)
+
+
+# Parse the command line
+opts, args = parser.parse_args()
+
+# Handle deprecated options
+if opts.quick:
+    user_logger.warning("The --quick option is deprecated, use --style=quick instead")
+    opts.style == 'quick'
+elif opts.fine:
+    user_logger.warning("The --fine option is deprecated, use --style=fine instead")
+    opts.style == 'fine'
+elif opts.search_fine:
+    user_logger.warning("The --search-fine option is deprecated, use --style=search-fine instead")
+    opts.style == 'search-fine'
+elif opts.source_strength != 'none':
+    user_logger.warning("The --source-strength=blah option is deprecated, use --style=blah instead")
+    opts.style = opts.source_strength
+# If dump rate is not specified, take it from the raster scan style
+if not opts.dump_rate:
+    opts.dump_rate = styles[opts.style].pop('dump_rate', 1.0)
+
+# Allow the user to specify both a catalogue file and a target (or to work around collect_targets() not taking TLE files)
+if os.path.isfile(opts.catalogue):
+    def collect_targets(cam, args): # Override the standard function imported earlier
+        cat = katpoint.Catalogue(antenna=cam.sources.antenna)
+        try: # Maybe a standard catalogue file
+            cat.add(open(opts.catalogue, 'rt'))
+        except ValueError: # Possibly a TLE formatted file
+            try:
+                cat.add_tle(open(opts.catalogue, 'rt'))
+            except:
+                raise ValueError("%s is not a valid target catalogue file!" % opts.catalogue)
+        if (len(args) == 0):
+            return cat
+        else:
+            tgt = cat[args[0]]
+            if (tgt is None):
+                raise ValueError("No target retrieved from argument list!")
+            return katpoint.Catalogue(tgt, antenna=cam.sources.antenna)
 
 
 def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sunmoon_separation_deg=10):
@@ -162,34 +205,6 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, antenna=None, el_limit
     return done, (T-T_start)
 
 
-# Parse the command line
-opts, args = parser.parse_args()
-
-# Handle deprecated options
-if opts.quick:
-    user_logger.warning("The --quick option is deprecated, use --style=quick instead")
-    opts.style == 'quick'
-elif opts.fine:
-    user_logger.warning("The --fine option is deprecated, use --style=fine instead")
-    opts.style == 'fine'
-elif opts.search_fine:
-    user_logger.warning("The --search-fine option is deprecated, use --style=search-fine instead")
-    opts.style == 'search-fine'
-elif opts.source_strength != 'none':
-    user_logger.warning("The --source-strength=blah option is deprecated, use --style=blah instead")
-    opts.style = opts.source_strength
-# If dump rate is not specified, take it from the raster scan style
-if not opts.dump_rate:
-    opts.dump_rate = styles[opts.style].pop('dump_rate', 1.0)
-
-_collect_targets_ = collect_targets
-def collect_targets(cam, args): # APH hack 072020
-    try:
-        cat = katpoint.Catalogue()
-        cat.add_tle(open('/home/kat/usersnfs/aph/tle-override.txt'))
-        return katpoint.Catalogue(cat[args[0]], antenna=cam.sources.antenna)
-    except:
-        return _collect_targets_(cam, args)
 
 with verify_and_connect(opts) as kat:
     if len(args) > 0:
