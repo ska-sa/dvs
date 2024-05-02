@@ -35,8 +35,9 @@ styles = {
     's': dict(dump_rate=1.0, num_scans=9, scan_duration=30, scan_extent=2.0, scan_spacing=2.0/8),
     'ku': dict(dump_rate=1.0, num_scans=9, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/8),
     # Standard for SKA Dish
-    'skab1': dict(dump_rate=1.0, num_scans=9, scan_duration=10, scan_extent=6.0, scan_spacing=6.0/8),
-    'skab2': dict(dump_rate=1.0, num_scans=9, scan_duration=10, scan_extent=3.0, scan_spacing=3.0/8),
+    'skab1': dict(dump_rate=1.0, num_scans=9, scan_duration=60, scan_extent=6.0, scan_spacing=6.0/8),
+    'skab2': dict(dump_rate=1.0, num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
+    'skab3': dict(dump_rate=1.0, num_scans=9, scan_duration=16, scan_extent=1.6, scan_spacing=1.6/8),
     #'skakuwide': dict(dump_rate=1.0, num_scans=9, scan_duration=60, scan_extent=2.0, scan_spacing=1.4/7),
     'skaku-wide': dict(dump_rate=1.0, num_scans=23, scan_duration=40, scan_extent=2.4, scan_spacing=0.1),
     'skaku-el': dict(dump_rate=1.0, num_scans=9, scan_duration=60, scan_extent=0.5, scan_spacing=0.5/8),
