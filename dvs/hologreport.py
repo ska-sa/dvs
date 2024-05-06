@@ -20,12 +20,13 @@ import numpy as np
 import scipy.optimize as sop
 import scipy.signal as sig
 from collections import namedtuple
+import itertools as itr
 import copy
 import time
 import katholog
 import logging; logging.disable(logging.DEBUG) # This is necessary for katdal
 import katpoint
-import katselib
+import katselib, katsemat
 import zernike
 
 import pylab as plt
@@ -130,7 +131,10 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     
     ff = "" if (int(freqMHz)==freqMHz) else "_%d"%((freqMHz-int(freqMHz))*10)
     try:
-        dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+        try:
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%s.mat"%(root,band,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+        except IOError:
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     # Conjugation changes the direction of travel (+z); then invert the 'll' axis to maintain IEEE definition of RCP.
@@ -143,7 +147,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     #      Now moved to 'load_data()' to rather get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
     #dataset.mm = -dataset.mm
     
-    beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing='perfeed', interpmethod='scipy', gridsize=gridsize)
+    beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
     if (beacon_pol is not None):
         beacon_pol = [1,-1j] if (beacon_pol == "RCP") else ([1,1j] if (beacon_pol == "LCP") else beacon_pol)
         fcH = dict(feedcombine=[beacon_pol[0],beacon_pol[1],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
@@ -153,6 +157,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         _H = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcH)
         _V = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcV)
         beamcube.Gx = _H.Gx; beamcube.Gy = _V.Gy
+        beamcube.Dx = 0*_H.Dx; beamcube.Dy = 0*_V.Dy # We use feedcombine to get beam(XX) = G + D so then the D terms must be zeroed to avoid potential double accounting  
     else:
         fcH = dict(feed="H")
         fcV = dict(feed="V")
@@ -164,15 +169,18 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
 
 
 def e_bn(pol, deg):
-    """ @param deg: angle [deg] by which to rotate the aperture plane to align +V to NCP relative to the source.
+    """ @param pol: "H" | "V" for 100% linear | "HV" for partial linear
+        @param deg: angle [deg] by which to rotate the aperture plane to align +V to NCP relative to the source.
                     When looking from the aperture to the source, +V is "up", +H is to the east and this angle is anticlockwise.
                     So if observer's latitude is south of the declination of the source then there's an extra 180deg.
         @return: [e_H, e_V] components
     """
     if (pol == "H"):
         return [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180)]
-    else:
+    elif (pol == "V"):
         return [np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)]
+    elif (pol == "HV"):
+        return [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180), np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)]
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0, flag_slew=False, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
@@ -193,6 +201,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
     """
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method='gainrawabs', timingoffset=timingoffset, **kwargs)
+    dataset.band = dataset.h5.spectral_windows[0].band # Cache this value for later reference
     if polswap: # Correct for polarisation swap(s) at scan antenna
         # Unfortunately the following is not usable for katdal datasets
         # dataset.visibilities = [dataset.visibilities[i] for i in [2,3,0,1]] # ['(V)H','(V)V','(H)H','(H)V'] -> ['(H)H','(H)V','(V)H','(V)V']
@@ -213,12 +222,13 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         out.deg_per_sec = np.percentile(dataset.deg_per_min, 95, axis=0)/60. # (Az,El)
         az_deg = np.mean(dataset.h5.az)
         out.el_deg = dataset.env_el[0]
+        out.parangle_deg = np.median((dataset.h5.parangle+360)%360) # +/-180
         out.temp_C = dataset.env_temp # (avg,min,max)
         out.wind_mps = dataset.env_wind # (avg,min,max)
-        out.wind_rel_deg = katselib.wrap(dataset.env_wind_dir[0]-az_deg, 360) # mean relative az. env_wind_dir[0] (mean direction) is on the same range as 'target azel', while [1,2] are over(0,360) so would need another 'wrap' to avoid 180deg ambiguity
+        out.wind_rel_deg = katsemat.wrap(dataset.env_wind_dir[0]-az_deg, 360) # mean relative az. env_wind_dir[0] (mean direction) is on the same range as 'target azel', while [1,2] are over(0,360) so would need another 'wrap' to avoid 180deg ambiguity
         out.sun_deg = dataset.env_sun # (avg,min,max) distance from bore sight
         sun_azel = np.array(katpoint.Target('Sun, special').azel(out.time_avg, antenna=dataset.h5.ants[0]))*180/np.pi # (az,el) mean angle [deg]
-        out.sun_rel_deg = ([katselib.wrap(sun_azel[0]-az_deg, 360), sun_azel[1]-out.el_deg]) if (sun_azel[1] > -5) else (np.nan, np.nan) # (az,el) mean angle relative to bore sight
+        out.sun_rel_deg = ([katsemat.wrap(sun_azel[0]-az_deg, 360), sun_azel[1]-out.el_deg]) if (sun_azel[1] > -5) else (np.nan, np.nan) # (az,el) mean angle relative to bore sight
         
         # Feed Indexer angles
         scanant = dataset.radialscan_allantenna[dataset.scanantennas[0]]
@@ -287,7 +297,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
             overlap_cycles = int(overlap_cycles) if (overlap_cycles < len(cyclestart)) else len(cyclestart)-1
             print("Proceeding with cycles detected using flagslew %s, onradial %s. Each cycle overlaps %d subsequent cycles!"%(flagslew,onradial,overlap_cycles))
             cycles = zip(cyclestart, cyclestop[overlap_cycles:])
-            beams, apmapsH, apmapsV = [[]]*len(np.atleast_1d(freqMHz)), [[]]*len(np.atleast_1d(freqMHz)), [[]]*len(np.atleast_1d(freqMHz))
+            beams, apmapsH, apmapsV = [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)]
             for ic in [n for n in range(min([len(cycles), maxcycles])) if (n in load_cycles)]: # Filter as per load_cycles
                 cycle = cycles[ic]
                 print('--------------------------------------------\nProcessing cycle %d of %d (%.2f hrs)\n'%(ic+1,len(cycles),cycle[1]-cycle[0]))
@@ -295,6 +305,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
                 for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                     _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
             
+            dataset.h5 = None # This object is not used further and since it is not serializable, it complicates use cases 
             return beams, apmapsH, apmapsV
         else:
             print("No cycles found, fall back as if load_cycles=None")
@@ -307,6 +318,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
     for f_MHz in np.atleast_1d(freqMHz):
         _load_cycle_(f_MHz, beams, apmapsH, apmapsV)
     
+    dataset.h5 = None # This object is not used further and since it is not serializable, it complicates use cases 
     return beams, apmapsH, apmapsV
 
 
@@ -388,7 +400,7 @@ def BDF(apmap, D, f):
 
 
 # Data structure for processed datasets
-_ResultSet_ = namedtuple("ResultSet", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","polswap","tags"]) # Work-around for defaults keyword not available in current version of python
+_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","polswap","tags"]) # Work-around for defaults keyword not available in current version of python
 ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,polswap=False,tags=None: _ResultSet_(
                 fid,f_MHz,beacon_pol,[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,clipextent,cycles,overlap_cycles,polswap,[] if tags==None else tags)
 
@@ -413,14 +425,14 @@ def load_records(holo_recs, scanant, timingoffset, DISHPARAMS, clipextent=None, 
             load_cycles = rec.cycles if ((rec.cycles is None) or not isinstance(rec.cycles, int)) else [rec.cycles]
             b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0+timingoffset, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=load_cycles, overlap_cycles=rec.overlap_cycles, **load_kwargs)
             if isinstance(rec.cycles, int):
-                b, aH, aV = b[0], aH[0], aV[0]
+                b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
             rec.beams.extend(b); rec.apmapsH.extend(aH); rec.apmapsV.extend(aV)
             if inspect_DT:
                 cycle0 = 0 if (load_cycles is None) else load_cycles[0]
-                b0 = load_data(filename, rec.f_MHz[:0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=[cycle0], overlap_cycles=rec.overlap_cycles, **load_kwargs)[0]
+                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=[cycle0], overlap_cycles=rec.overlap_cycles, **load_kwargs)[0]
                 plt.figure(figsize=(12,6))
-                plt.subplot(1,2,1); np.atleast_1d(b0[0])[0].plot("Gx", doclf=False); plt.title("timingoffset = 0") # First frequency, first cycle
-                plt.subplot(1,2,2); np.atleast_1d(b[0])[0].plot("Gx", doclf=False)
+                plt.subplot(1,2,1); np.atleast_1d(b0[0])[0].plot("Gx", doclf=False); plt.title("%d: timingoffset = 0"%rec.fid) # First frequency, first cycle
+                plt.subplot(1,2,2); np.atleast_1d(b[0])[0].plot("Gx", doclf=False); plt.title("timingoffset = %g"%timingoffset)
         else:
             print(filename)
         print(rec)
@@ -671,7 +683,7 @@ def plot_signalpathstats(rec, figsize=(14,16)):
     # Plot some extra info from sensor logs
     dataset = np.atleast_1d(rec.beams[0])[0].dataset
     T = dataset.rawtime
-    band = dataset.h5.spectral_windows[0].band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
+    band = dataset.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
     for ant in dataset.radialscan_allantenna:
         for i,P in enumerate(["H","V"]):
             v = katselib.getsensorvalues("%s_dig_%s_band_rfcu_%spol_overload"%(ant,band,P.lower()), T)[1]
@@ -745,17 +757,17 @@ def geterrorbeam(measuredG, modelG, crop=0, contourdB=-20, centered=True): # Min
         @return: errorbeam map
     """
     # Rescale without re-centering
-    measuredG = katselib.cropped_zoom(np.abs(measuredG), crop if (crop>0) else 0, 0,0)
-    modelG = katselib.cropped_zoom(np.abs(modelG), 0 if (crop>0) else -crop, 0,0)
+    measuredG = katsemat.cropped_zoom(np.abs(measuredG), crop if (crop>0) else 0, 0,0)
+    modelG = katsemat.cropped_zoom(np.abs(modelG), 0 if (crop>0) else -crop, 0,0)
     
     if not centered: # Re-centre, BUT experimentation suggests this is always worse than assuming the maps were centred to begin with
         shape = modelG.shape
         centre = np.mean(np.argwhere(modelG>=0.7*np.nanmax(modelG)), axis=0) # y,x
-        modelG = katselib.cropped_zoom(modelG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
+        modelG = katsemat.cropped_zoom(modelG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
         print("zoomed ", 0 if (crop>0) else -crop, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
 
         centre = np.mean(np.argwhere(measuredG>=0.7*np.nanmax(measuredG)), axis=0) # y,x
-        measuredG = katselib.cropped_zoom(measuredG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
+        measuredG = katsemat.cropped_zoom(measuredG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
         print("zoomed ", crop if (crop>0) else 0, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
     
     # Normalize both patterns & generate the error pattern
@@ -833,17 +845,19 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     plt.figure(figsize=(14,18))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAs-is")
-                    plt.subplot(3,2,1); beam.plot("Gx", doclf=False)
+                    plt.subplot(4,2,1); beam.plot("Gx", doclf=False); plt.title("Gx")
                     if (_predicted_ is not None): plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gx[0])), [-43], alpha=0.2)
-                    plt.subplot(3,2,2); beam.plot("Gy", doclf=False)
+                    plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.title("Dx")
+                    plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.title("Dy")
+                    plt.subplot(4,2,4); beam.plot("Gy", doclf=False); plt.title("Gy")
                     if (_predicted_ is not None): plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gy[0])), [-43], alpha=0.2)
-                    plt.subplot(3,2,3); _apmapH.plot('amp', doclf=False)
-                    plt.subplot(3,2,4); _apmapV.plot('amp', doclf=False)
+                    plt.subplot(4,2,5); _apmapH.plot('amp', doclf=False); plt.title("Aperture amplitude x")
+                    plt.subplot(4,2,6); _apmapV.plot('amp', doclf=False); plt.title("Aperture amplitude y")
                     if (devcmap is not None): # Adjust this only for the devmaps
                         _CM_ = apmapH.colmap
                         apmapH.colmap = apmapV.colmap = _apmapH.colmap = _apmapV.colmap = devcmap
-                    plt.subplot(3,2,5); _apmapH.plot('nopointingdev', doclf=False, **devkwargs) # Just pointing removed
-                    plt.subplot(3,2,6); _apmapV.plot('nopointingdev', doclf=False, **devkwargs)
+                    plt.subplot(4,2,7); _apmapH.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation x") # Just pointing removed
+                    plt.subplot(4,2,8); _apmapV.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation y")
                     pp.report_fig(max(plt.get_fignums()))
                 
                     
@@ -947,12 +961,17 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             
             # Reference patterns for this frequency, if any
             if (_predicted_ is not None):
+                beam,apmapH,apmapV = _predicted_[-3:]
                 plt.figure(figsize=(14,18))
                 plt.suptitle("Reference patterns @ %.1fMHz"%_predicted_[1])
-                plt.subplot(2,2,1); _predicted_[-3].plot("Gx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.)
-                plt.subplot(2,2,2); _predicted_[-3].plot("Gy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.)
-                plt.subplot(2,2,3); _predicted_[-2].plot('amp', doclf=False)
-                plt.subplot(2,2,4); _predicted_[-1].plot('amp', doclf=False)
+                plt.subplot(4,2,1); beam.plot("Gx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gx")
+                plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dx")
+                plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dy")
+                plt.subplot(4,2,4); beam.plot("Gy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gy")
+                plt.subplot(4,2,5); apmapH.plot('amp', doclf=False); plt.title("Aperture amplitude x")
+                plt.subplot(4,2,6); apmapV.plot('amp', doclf=False); plt.title("Aperture amplitude y")
+                plt.subplot(4,2,7); apmapH.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation x")
+                plt.subplot(4,2,8); apmapV.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation y")
                 pp.report_fig(max(plt.get_fignums()))
             
             if (ci == 0): # Only a single cycle, so reduce the len_1 lists to scalar values
@@ -1091,6 +1110,38 @@ def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=
     axes[0].set_title("%s\n%s - %s [local time]"%(label, time.ctime(time_range[0]+tzoffset*3600), time.ctime(time_range[-1]+tzoffset*3600)))
 
 
+def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None, masked=True):
+    """ Generates a figure to show the differences between aperture plane maps.
+        @param apmap0, apmap1: instances of katholog.ApertureMap
+        @param what: the attribute of an ApertureMap to represent (default 'nopointingphasemap')
+        @param vlim: limit the range of values of 'what' displayed, either None or (min,max) (default None).
+        @return: the figure's axes (always a 2D list)
+    """
+    apmaps0 = np.atleast_1d(apmap0)
+    apmaps1 = np.atleast_1d(apmap1)
+    fig, axs = plt.subplots(len(apmaps0),2, figsize=(6*2,5*len(apmaps0)))
+    axs = [axs] if (len(np.shape(axs))==1) else axs # Undo auto squeeze
+    fig.suptitle("%s [%s]"%(title, what))
+    unit = "mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl")
+    
+    for ax_,apmap0,apmap1 in zip(axs,apmaps0,apmaps1):
+        ax_[1].set_title("%.f - %.f"%(apmap0.dataset.env_times[1], apmap1.dataset.env_times[1]), x=0)
+        diff = apmap0.__getattribute__(what) - apmap1.__getattribute__(what)
+        if masked:
+            diff[apmap0.maskmap * apmap1.maskmap == 1] = np.nan
+        vlim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
+        im = ax_[0].imshow(diff, vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[0])
+        ax_[0].set_ylabel("Y"); ax_[0].set_xlabel("X")
+
+        diff = np.reshape(diff, (-1,))
+        std_sq2 = np.nanstd(diff)/2**.5
+        diff = np.clip(diff, vlim[0], vlim[1])
+        ax_[1].hist(diff[np.isfinite(diff)], bins=100, range=vlim); ax_[1].set_xlabel(unit)
+        ax_[1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
+        
+    return axs
+
+
 def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=30, clim=(-0.8,0.8), makepdfs=False, pdfprefix="ku", **report_kwargs):
     """ Generate reports with 'standard_report()' and return the results cross-indexed by all defined tags.
         Result fields 'feedoffsetsHV' & 'errbeamHV' are numpy masked arrays, with masked values represented by NaN's.
@@ -1169,7 +1220,7 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
         @param tags: a list of specific tags to summarise, in order (default "*" i.e. all tag strings)
         @param fspec_MHz: the frequencies corresponding to the last columns in phase_eff [MHz] """
     if (tags == "*"):
-        tags = [t for t in results.keys() if isinstance(t,str)] 
+        tags = [t for t in results.keys() if isinstance(t,str)]
     
     A2S = lambda a,fmt="%+.3f": "[%s]"%(" ".join([fmt%f for f in a])) # np.array2string doesn't work correctly with masked arrays!
     
@@ -1186,7 +1237,7 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
             metrics = [[],[]] # H,V
             NFS = len(fspec_MHz) # Number of spec frequencies
             for r in rr:
-                for fi in range(len(r.f_MHz)):
+                for fi,f in enumerate(r.f_MHz):
                     for el,foH,foV,rpH,rpV,ebH,ebV in zip(np.atleast_1d(r.el_deg),np.atleast_2d(r.feedoffsetsH[fi]),np.atleast_2d(r.feedoffsetsV[fi]),
                                                           np.atleast_2d(r.rpeffH[fi]),np.atleast_2d(r.rpeffV[fi]),np.atleast_2d(r.errbeamH[fi]),np.atleast_2d(r.errbeamV[fi])):
                         print("%10s\t%.f       %s\t\t%s\t\t%s"%(tag2label(tag), el, A2S(foH), A2S(rpH[-NFS:],"%.4f"), A2S(ebH*100,"%.2f")))
@@ -1216,3 +1267,49 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
     for eff_ix in range(-len(fspec_MHz),0):
         plot_eff_el(sets, labels, fspec_MHz=fspec_MHz, eff_ix=eff_ix, figsize=(14,3))
     plot_eff_freq(sets, labels, fspec_MHz=fspec_MHz, figsize=(14,3))
+
+
+def filter_results(results, exclude_tags=None, f_MHz=None):
+    """ Generate a subset of results originally from 'generate_results()'. Omit all HologResults which also appear against 'exclude_tags'
+        or not matching 'f_MHz'.
+        
+        @param results: {tag:[HologResults]}
+        @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
+        @param f_MHz: (f_min,f_max) frequencies [MHz] to match (default "*" i.e. all)
+        @return: {tag:[HologResults]} """
+    filtered = {}
+    
+    # Only include results for which accept_MHs returns True
+    accept_MHz = lambda MHz: (f_MHz == "*" ) or (MHz >= np.min(f_MHz) and MHz <= np.max(f_MHz))
+    
+    exclude_tags = [] if exclude_tags is None else exclude_tags
+    omit_tagged = list(itr.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
+    tags = [t for t in results.keys() if (t not in exclude_tags)] # Must filter through these sets
+    for tag in tags:
+        filtered[tag] = []
+        rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
+        for r in rr: # Select individual measurements in each HologResults based on frequency
+            hr = HologResults(el_deg=[],f_MHz=[],feedoffsetsH=[],feedoffsetsV=[],rpeffH=[],rpeffV=[],
+                                          rmsH=[],rmsV=[],errbeamH=[],errbeamV=[],info={k:[] for k in r.info.keys()})
+            for fi,f in enumerate(r.f_MHz):
+                if accept_MHz(f):
+                    hr.el_deg.append(r.el_deg[fi])
+                    hr.f_MHz.append(r.f_MHz[fi])
+                    hr.feedoffsetsH.append(r.feedoffsetsH[fi])
+                    hr.feedoffsetsV.append(r.feedoffsetsV[fi])
+                    hr.rpeffH.append(r.rpeffH[fi])
+                    hr.rpeffV.append(r.rpeffV[fi])
+                    hr.rpeffV.append(r.rpeffV[fi])
+                    hr.rmsH.append(r.rmsH[fi])
+                    hr.rmsV.append(r.rmsV[fi])
+                    hr.errbeamH.append(r.errbeamH[fi])
+                    hr.errbeamV.append(r.errbeamV[fi])
+                    for k in r.keys():
+                        hr[k].append(r[k][fi])
+            if (len(hr.el_deg) > 0):
+                filtered[tag].append(hr)
+                
+        if (len(filtered[tag]) == 0):
+            del filtered[tag]
+    
+    return filtered
