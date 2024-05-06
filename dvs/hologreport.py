@@ -20,7 +20,7 @@ import numpy as np
 import scipy.optimize as sop
 import scipy.signal as sig
 from collections import namedtuple
-import itertools as itr
+import itertools as iter
 import copy
 import time
 import katholog
@@ -129,13 +129,14 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     """
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     
-    ff = "" if (int(freqMHz)==freqMHz) else "_%d"%((freqMHz-int(freqMHz))*10)
+    ff = freqMHz - int(freqMHz)
     try:
         try:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%s.mat"%(root,band,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%d.mat"%(root,band,freqMHz,ff*10), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
         except IOError:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%d.mat"%(root,freqMHz,ff*10), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
+        ff = "" if (ff==0) else "_%d"%(ff*10)
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     # Conjugation changes the direction of travel (+z); then invert the 'll' axis to maintain IEEE definition of RCP.
     dataset.visibilities = [np.conj(v) for v in dataset.visibilities]
@@ -1283,7 +1284,7 @@ def filter_results(results, exclude_tags=None, f_MHz=None):
     accept_MHz = lambda MHz: (f_MHz == "*" ) or (MHz >= np.min(f_MHz) and MHz <= np.max(f_MHz))
     
     exclude_tags = [] if exclude_tags is None else exclude_tags
-    omit_tagged = list(itr.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
+    omit_tagged = list(iter.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
     tags = [t for t in results.keys() if (t not in exclude_tags)] # Must filter through these sets
     for tag in tags:
         filtered[tag] = []
