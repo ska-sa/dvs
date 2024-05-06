@@ -131,10 +131,11 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     
     ff = freqMHz - int(freqMHz)
     try:
+        ff = "" if (ff==0) else "%d"%(ff*10)
         try:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%d.mat"%(root,band,freqMHz,ff*10), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%d.mat"%(root,band,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
         except IOError:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%d.mat"%(root,freqMHz,ff*10), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%d.mat"%(root,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
         ff = "" if (ff==0) else "_%d"%(ff*10)
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
