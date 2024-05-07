@@ -1,220 +1,75 @@
 # https://docs.google.com/document/d/1KuUgt05_h7IhXeArFLno2KMq7XKO943JaA1TpT7gHpA
-# Entries collected from gaincal_l_5jy.csv, sources_pnt_Ku.csv, sources_all.csv, some coordinates updated from SIMBAD, INAF = Table 3 of "A First Extended Catalogue of Pointing/Focus Calibrators for the Sardinia Radio Telescope"
+# Targets suitable for single dish pointing in MeerKAT RTS Ku-band (most of these worked well on m028 & s0000 in 2020)
+# Entries collected from gaincal_l_5jy.csv, sources_pnt_Ku.csv, sources_all.csv, some coordinates updated from SIMBAD
 # ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000,)   flux polynomial,                                               unc[arcsec] source,             Gal l,  Gal b,~1400MHz flx,redshift,NED Object type     IRAS/X-ray  s-dish comment
-
-# Numbers in comments below from <katselib.plot_scans(katdal.open(...), target_plane=True, ants=["m028"], pols=["HH"], chans=(500,4000))>
-
-# 21082021 11.7GHz: 0.5,0.6 [DESPERATE]
-J000613-062338 | PKS 0003-066, radec gaincal, 00:06:13.892894, -06:23:35.335300, (7000 15000 4.4851 -2.5022 0.3761)
-
-# 21082021 11.7GHz: 0,0,0
-#J0010-4153 | PKS 0008-421, radec gaincal, 00:10:52.52, -41:53:10.8
-
-# 21082021 11.7GHz: indistinct,indistinct,indistinct
-#J0025-2602 | PKS 0023-26 | OB-238,                           radec, 00:25:49.16,  -26:02:12.6,  (1410.0 8400.0 -1.69419422297 2.10689777152 -0.40432185373),    mas        VLBI 2.3/8.4 GHz,    42.27, -84.17,      9 Jy,  z=0.32,  Sy                                ok   CSS src                       
-
-# 082021 11.7GHz: 0,0,0
-#J0046-4207 | PKS 0043-42,                                    radec, 00:46:17.75,  -42:07:51.5,  (400.0 2000.0 3.12 -0.70),                                      1.25x1.25  2Mass,              306.61, -74.96,      8 Jy,  z=0.12,  E; LINER                          ok   < ~4'; FRII               
-
-# 21082021 11.7GHz: indistinct,garbage
-#J0108+0134 | PKS 0106+013, radec gaincal, 01:08:38.77, +01:35:00.3,, CRATES
-
-# 21082021 11.7GHz: 0,0
-#PKS J0116-2052,radec,01:16:51.56,-20:52:10.8,,0,90,Elliptical Radio galaxy (not traditionally a pointing target)
-
-# 21082021 11.7GHz: 0.2,indistinct
-J0137+3309 | 3C 48,                                          radec, 01:37:41.30,  +33:09:35.1,  (1408.0 23780.0 2.465 -0.004 -0.1251),                          mas        VLBI 2.3/8.4 GHz,   133.96, -28.72,     16 Jy,  z=0.37,  Sy 1.5                 I; X       ok   <10"; core dominated with faint ext'd em               
-
-# 21082021 11.7GHz: 0,0
-#J0252-7104 | PKS 0252-712, radec gaincal, 02:52:46.155968, -71:04:35.2741510
-
-# 21082021 11.7GHz: garbage,garbage
-#J025743+060238,radec, 2:57:43.25, 6:02:38.4,,CRATES
 
 J0319+4130 | *Per A | Perseus A | NGC 1275 | 3C 84,           radec, 03:19:48.16,  +41:30:42.1,  (400.0 2000.0 1.398),                                           mas        VLBI 2.3/8.4 GHz,   150.58, -13.26,     13 Jy,  v=5264,  LIRG; Sy 1.5; FRI; cD  I; X       ok?  strong core & jet inside 10' radio halo; BLLAC;                  
 
-# 062020 13.1GHz: always bad? Asymmetry in Ku-band, centroid poorly defined [NO]
-#J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79,  -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,                 240.16, -56.69,   ~148 Jy,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes   
+# CAUTION: Asymmetry in Ku-band, centroid poorly defined
+J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79,  -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,240.16,-56.69,   ~148 Jy,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes   
 
-# 21082021 11.7GHz: 0,0
-#J034632-342252 | PKS 0344-34,radec,03: 46: 30.58,-34: 22: 46.2,,CRATES
-
-# 21082021 11.7GHz: 0.2,0.2 (gradient background) [NO]
-#J034840-274916 | PKS J0348-2749,radec,03: 48: 38.15,-27: 49: 13.5,,CRATES
-
-# 21082021 11.7GHz: 0,garbage
-#J0358+1026 | 3C 98 | PKS 0356+10,                            radec, 03:58:54.43,  +10:26:03.0,  (400.0 2000.0 3.32 -0.74),                                      1.25x1.25  2Mass,              179.84, -31.05,     10 Jy,  v=9130,  Sy 2; FRII; NLRG                  no   ~5'; double lobes             
-
-# 21082021 11.7GHz: 0,0.1 [NO]
-#J0408-6545 | PKS 0408-65,                                    radec, 04:08:20.38,  -65:45:09.1,  (1410.0 8400.0 -3.70830186533 3.80739194577 -0.720249171902),   mas        VLBI 2.3/8.4 GHz,   278.64, -40.88,     15 Jy,  z=0.96,  BLLAC?                            ok   compact; GPS source             
-
-# 21082021 11.7GHz: 0.2,0.2 [NO]
-#J0408-7507 | PKS 0410-75,                                    radec, 04:08:48.49,  -75:07:19.3,  (200.0 12000.0 1.362 0.7345 -0.254),                            7.5x7.5    Molonglo 408 MHz,   288.98, -36.13,     14 Jy,  z=0.69,  NLRG                              ok   ~15"; FRII; lobe-domin; pol.                 
-
-# 21082021 11.7GHz: 0,0
-#J042904-534927 | IC 2082E,radec,04: 29: 08.19,-53: 49: 40.5,,CRATES
-
-# 21082021 11.7GHz: 0, weak [NO]
-#J0431+2037 | PKS 0428+205, radec gaincal, 04:31:03.7620, +20:37:34.250, ()
-
-# 21082021 11.7GHz: 0.6 [DESPERATE]
 J0437+2940 | 3C 123,                                         radec, 04:37:04.38,  +29:40:13.8,  (1408.0 23780.0 2.525 0.246 -0.1638),                           mas        VLBI 2.3/8.4 GHz,   170.58, -11.66,     47 Jy,  z=0.22,  LERG; FRII             X          ok   <1'                 
 
-# 21082021 11.7GHz: 0.4,0.5 [DESPERATE]
-J0440-4333 | PKS 0438-43,                                    radec, 04:40:17.18,  -43:33:08.6,  (1410.0 8400.0 -4.82850957757 3.82855552335 -0.639544506483),   mas        VLBI 2.3/8.4 GHz,   248.41, -41.57,      6 Jy,  z=2.86,  QSO                    IRAS deep  ok   ~compact; 2-comp              
-
-# 21082021 11.7GHz: 1.0,1.0, [DESPERATE]
 J0519-4546 | Pic A | Pictor A | PKS 0518-45,                 radec, 05:19:49.72,  -45:46:43.9,  (635.0 5009.0 -1.265 3.036 -0.653),                             1.25x1.25  MOST,               251.60, -34.63,     69 Jy,  z=0.04,  LINER; S0 pec          X          no   ~6'; strong double lobes; FRII                 
 
-# 21082021 11.7GHz: 0.3 [NO]
-#J0521+1638 | 3C 138 | PKS 0518+16,                           radec, 05:21:09.89,  +16:38:22.1,  (1410.0 8400.0 -1.32934004351 1.91278744917 -0.376296576679),   mas        VLBI 2.3/8.4 GHz,   187.40, -11.34,      9 Jy,  z=0.76,  Sy 1.5; core-dom       X          ok   compact <1"; CSS src; pol; triple-comp; no flux var: flux calib   
-
-# 21082021 11.7GHz: 0.7,0.8 [DESPERATE]
-J0522-3627 | PKS 0521-36 | ESO 362-G021,                     radec, 05:22:57.99,  -36:27:30.9,  (1410.0 8400.0 -0.476553541789 1.38252143286 -0.268873301084),  mas        VLBI 2.3/8.4 GHz,   240.61, -32.72,     17 Jy,  z=0.06,  E; FRI; BLLAC; Sy 1    I; X; Gam  ok   arcsec scale; core & jet                   
-
-# 21082021 11.7GHz: 50 [GOLD]
 J0534+2200 | Tau A | Taurus A | 3C 144 | Crab | PKS 0531+21, radec, 05:34:31.94,  +22:00:52.2,  (1400.0 10000.0 3.915 -0.299),                                  0.5x0.5    opt/psr,            184.56,  -5.78,    930 Jy,        ,  SNR; Psr               I; X; Gam  no   ~5' @ 160MHz; single comp           
 
-# 21082021 11.7GHz: 32. Poorly defined centroid [TESTS]
-J0535-0523 | Ori A | Orion A | M42 | 3C 145 | PKS 0532-05,   radec, 05:35:17.26,  -05:23:28.8,  (1000.0 10000.0 -0.429874080747 1.64134149914 -0.219515164089), 7.5x7.5    Molonglo 408MHz,    209.01, -19.38,    410 Jy,        ,  HII; Cl                X          no   < ~60'?                       
+# CAUTION: Poorly defined centroid
+J0535-0523 | Ori A | Orion A | M42 | 3C 145 | PKS 0532-05,   radec, 05:35:17.30,  -05:23:28.0,  (1000.0 10000.0 -0.429874080747 1.64134149914 -0.219515164089), 7.5x7.5    Molonglo 408MHz,    209.01, -19.38,    410 Jy,        ,  HII; Cl                X          no   < ~60'?                       
 
-# 21082021 11.7GHz: 1.9,1.8,2.2,2.4 [YES]
+J0522-3627 | PKS 0521-36 | ESO 362-G021,                     radec, 05:22:57.99,  -36:27:30.9,  (1410.0 8400.0 -0.476553541789 1.38252143286 -0.268873301084),  mas        VLBI 2.3/8.4 GHz,   240.61, -32.72,     17 Jy,  z=0.06,  E; FRI; BLLAC; Sy 1    I; X; Gam  ok   arcsec scale; core & jet                   
+
 J0538-6904 | J053844-690542 | MC 74,                                          radec, 05:38:44.26,  -69:05:42.4,  (200.0 12000.0 -3.94 3.799 -0.6469),                           50x50       PKS,                279.44, -31.67,     34 Jy,        ,  HII                               no   prob ext'd; in 30 Dor                   
 
-# 21082021 11.7GHz: 5.2 [GOLD]
 J0541-0153 | 3C 147.1 | PKS 0539-01,                         radec, 05:41:42.60,  -01:54:17.0,  (100.0 6000.0 -3.564 3.208 -0.4861),                           12.5x12.5   Molonglo 408 MHz,   206.53, -16.36,     64 Jy,        ,  HII                               no   prob ext'd               
 
-# 21082021 11.7GHz: 0.4 [DESPERATE/NO]
-J0627-0553 | 3C 161 | PKS 0624-05,                           radec, 06:27:10.06,  -05:53:06.0,  (1408.0 10550.0 1.250 0.726 -0.2286),                           0.4x0.4    PKS90,              215.44,  -8.07,     18 Jy,        ,  --                                ok?  VLA resolved; symm double, NED           
+J0859-4731 | CTB 31,                                         radec, 08:59:07,   -47:31:24,    (750.0 12000.0 5.569 -0.9902),                                 50x50       PKS90,267.95,-1.06,    250 Jy,        ,  SNR                               no   prob ext'd 
 
-# 21082021 11.7GHz: 0.3,0.3 [NO]
-#J063542-751615 | ATPMN J063546.4-751616,radec,06: 35: 46.46,-75: 16: 16.7,,CRATES
-
-# 082021 11.7GHz: 0,0,indistinct
-#J074328-672617 | ATPMN J074331.6-672625,radec,07: 43: 31.59,-67: 26: 25.6,,CRATES
-
-# 21082021 11.7GHz: 0.7 [DESPERATE]
-J0752-2625 | PKS 0750-26 | OHIO I -248.3,                    radec, 07:52:22.80,  -26:25:41.0,  (200.0 12000.0 -2.956 3.169 -0.5998),                          50x50       PKS,                243.16,  +0.37,     11 Jy,        ,  HII                               no   prob ext'd, NED               
-
-# 20082021 11.7GHz: 15,15 [GOLD]
-J0859-4731 | CTB 31,                                         radec, 08:59:07,   -47:31:24,    (750.0 12000.0 5.569 -0.9902),                                 50x50       PKS90,              267.95,  -1.06,    250 Jy,        ,  SNR                               no   prob ext'd 
-
-# 20082021 11.7GHz: 0.5,0.5,0.5,0.5 [DESPERATE]
 J0918-1205 | Hyd A | Hydra A | 3C 218 | PKS 0915-11,         radec, 09:18:05.65,  -12:05:44.0,  (1408.0 10550.0 4.729 -1.025 0.0130),                           10x10      phot,               242.93,  25.09,     43 Jy,  z=0.05,  S0; Sy 3; LINER; FRI   X          ok?  tot ext ~7'; main comp ~1.5'; tailed radio src             
 
-JVAS J0927+3902,radec,09:27:03.0,+39:02:20.851,,11.234,720,INAF IRA 496/263
+J1219+0549 | 3C 270 | NGC 4261 | PKS 1216+06,                radec, 12:19:23.22,  +05:49:29.7,  (20.0 6000.0 1.888 0.369 -0.1855),                              0.5x0.5    SDSS,               281.80,  67.37,     18 Jy,  v=2238,  LINER; Sy              X          no   double lobe ~ 7'; FRI                   
 
-# 06112021 11.7GHz: 0.0 [NO]
-#J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,  +07:25:20.6,  (1408.0 4750.0 6.757 -2.801 0.2969),                            0.5x0.5    SDSS,               228.58,  42.29,      7 Jy,  z=0.09,  Sy 1.5; BLRG                      ok?  ~4'; FRII               
-
-# 06112021 11.7GHz: [NO]
-#J1008+0730 | PKS 1005+077 | 3C237, radec gaincal, 10:08:00.0160, 07:30:16.552
-
-# 082021 11.7GHz: 0,0,0,0,0,0
-#J1211-5309 | PKS 1209-52,                                    radec, 12:09:40.00,   -52:25:0.0,    (20.0 12000.0 -12.77 12.69 -2.528),                           50x50      PKS90,              296.95,   9.25,     62 Jy,        ,  SNR                               no   prob ext'd               
-
-# 20082021 11.7GHz: garbage,garbage,garbage,garbage,indistinct,indistinct
-#J1219+0549 | 3C 270 | NGC 4261 | PKS 1216+06,                radec, 12:19:23.22,  +05:49:29.7,  (20.0 6000.0 1.888 0.369 -0.1855),                              0.5x0.5    SDSS,               281.80,  67.37,     18 Jy,  v=2238,  LINER; Sy              X          no   double lobe ~ 7'; FRI                   
-
-# 23082021 11.7GHz: indistinct,indistinct
-#J122455+212245,radec, 12:24:55.25, 21:22:45.1,,CRATES
-
-# 20082021 11.7GHz: 2.1,2.2,garbage,2.0,1.7 [DESPERATE]
 J1229+0203 | 3C 273 | PKS 1226+02,                           radec, 12:29:06.70,  +02:03:08.6,  (1410.0 8400.0 10.0465955419 -4.90623613415 0.709890678937),    mas        VLBI 2.3/8.4 GHz,   289.95,  64.36,     45 Jy,  z=0.16,  Sy 1.0; ULIRG; blazar  I; X; Gam  ok   compact core and jet of ~25"; circ pol               
 
-# 20082021 11.7GHz: 3.2,3.4,3.2 [YES]
 J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,  +12:23:28.0,  (1408.0 10550.0 4.484 -0.603 -0.0280),                          mas        VLBI 2.3/8.4 GHz,   283.78,  74.49,    220 Jy,  v=1307,  Sy; LINER; FRI; cD     I; X       ok   < ~1'; core dominated                   
 
-# 20082021 11.7GHz: 2.1,2.2,2.0 [YES]
 J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
 
-# 062020 13.1GHz: always bad?
-# 23082021 11.7GHz: 0,0,0,garbage
-#J1311-2216 | PKS 1308-220 | 3C283, radec gaincal, 13:11:39.3347, -22:16:41.748
+J1311-2216 | PKS 1308-220 | 3C283, radec gaincal, 13:11:39.34, -22:16:41.2
 
-# 20082021 11.7GHz: 3.5,3.5 #large elliptical - beam extended so wider scans
-#J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278 Jy,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
+J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278 Jy,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
 
-# 082021 11.7GHz: indistinct,indistinct,0.1,0.1,indistinct [NO]
-#J1330+2509 | 3C287, radec gaincal, 13:30:37.69, +25:09:10.9, (80 14900 1.0388 0.5265 -0.2145 0.0089)
-
-# 23082021 11.7GHz: 0.3
 J1331+3030 | 3C 286,                                         radec, 13:31:08.29,  +30:30:33.0,  (1408.0 43200.0 0.956 0.584 -0.1644),                           mas        VLBI 2.3/8.4 GHz,    56.52,  80.67,     15 Jy,  z=0.85,  DLAS; Sy 1.5; core-do  X          ok   <~5"; primary flux calib (no variab)               
 
-# 082021 11.7GHz: indistinct,0,indistinct,indistinct,0.2
-#J1347+1217 | PKS 1345+125, radec gaincal, 13:47:33.36, +12:17:24.238, (333. 99000. 1.4389 -0.2156 0.0345 -0.0130)
+J155656-791403,radec, 15:56:56.26, -79:14:03.1,,CRATES
 
-# 062020 13.1GHz: always bad?
-# 23082021 11.7GHz: indistinct,indistinct,0.1,0.1,indistinct
-#J155656-791403,radec, 15:56:56.26, -79:14:03.1,,CRATES
+J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,  +04:59:34.9,  (1408.0 10550.0 3.852 -0.361 -0.1053),                          1.25x1.25  2Mass,               23.05,  28.95,     48 Jy,  z=0.15,  i.a. E/S0 pair; NLRG   X          no   ~5'; FRI/FRII                     
 
-# 17082021 11.7GHz: 0.1,0.3,0.4,0.3,0.5,0.5,0.5,0.5 [NO]
-#J1615-6054 | PKS 1610-60 | ESO 137-G006,                     radec, 16:15:03.85,  -60:54:26.1,  (750.0 12000.0 0.08319 2.14 -0.5243),                           1.25x1.25  2Mass,              325.29,  -7.21,     43 Jy,  v=5480,  cD                                no   ~8'; strong inner lobes; in A3627         
-
-# 17082021 11.7GHz: garbage,garbage,garbage,garbage,garbage
-#J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,  +04:59:34.9,  (1408.0 10550.0 3.852 -0.361 -0.1053),                          1.25x1.25  2Mass,               23.05,  28.95,     48 Jy,  z=0.15,  i.a. E/S0 pair; NLRG   X          no   ~5'; FRI/FRII                     
-
-# 17082021 11.7GHz: 0.3,0,1.2,0.9,1.0,1.0,1.0,1.0,1.1
 J1720-0058 | 3C 353 | PKS 1717-00,                           radec, 17:20:28.15,  -00:58:47.1,  (1408.0 10550.0 3.148 -0.157 -0.0911),                          1.25x1.25  2Mass,               21.20,  19.65,     56 Jy,  v=9120,  S0; NLRG                          no   ~5'; FRII               
 
-# 21082021 11.7GHz: 0.2,0.2,0.2,0.1,0.1,0.1,0.15,0.2 [NO]
-#J1819-6345 | PKS 1814-637, radec gaincal, 18:19:35.002381, -63:45:48.18906
+J1819-6345 | PKS 1814-637, radec gaincal, 18:19:35.002381, -63:45:48.18906
 
-# 05112021 11.7GHz: Doesn't look good in GSM, but worked on MeerKAT-Ku [DESPERATE]
-PKS 1830-210, radec gaincal, 18:33:39.9150, -21:03:40.050,,,,,,,
+PKS 1830-210, radec gaincal, 18:33:39.9150, -21:03:40.050
 
-# 082021 11.7GHz: 0.4,1.0,0.9,0.9,0.9,0.7,0.7,indistinct [DESPERATE]
-PKS J1924-2914,radec,19:24:51.1,-29:14:30.121,,11.491,720,INAF IRA 496/478
+PKS 1921-293, radec gaincal, 19:24:51.055957, -29:14:30.121150
 
-# 082021 11.7GHz: 0,0,0,indistinct,0.05,0.05,0.05
-#J193244-453640 | ATPMN J193244.8-453637,radec,19: 32: 44.89,-45: 36: 37.4,,CRATES
+J193244-453640 | ATPMN J193244.8-453637,radec,19: 32: 44.89,-45: 36: 37.4,,CRATES
 
 J1959+4044 | Cyg A | Cygnus A | 3C 405,                      radec, 19:59:28.36,  +40:44:02.1,  (20.0 2000.0 4.695 0.085 -0.178),                               mas        VLBI,                76.19,   5.76,   1590 Jy,  z=0.06,  Sy 2                   I; X       ok   ~3'; double radio src; cD; FRII                 
 
-# SIMBAD position is off by 2.2deg, so not reliable!
-#J2039+4219 | Cygnus X | TXS 2037+421,                        radec, 20:28:40.80,  +41:10:12.0,  (1000.0 10000.0 -18.6518084773 10.6913037958 -1.4244492132),    7.5x7.5    VLA 1400MHz,         81.68,   0.53,    ~19 Jy,        ,  HII                               no   ext'd 327 MHz src: probably Galactic               
+J2107-2526 | PKS 2104-25 | NGC 7018,                         radec, 21:07:25.7,  -25:25:46,  ,                                                               10.1x10    Molonglo 408 MHz,    21.47, -40.18,     11 Jy,  z=0.04,  E pec                             ok   <2'; core & lobes?             
 
-# 21082021 11.7GHz: indistinct,0,0.1,0.15,0.15,0.15 [NO]
-#J2107-2526 | PKS 2104-25 | NGC 7018,                         radec, 21:07:25.7,  -25:25:46,  ,                                                               10.1x10    Molonglo 408 MHz,    21.47, -40.18,     11 Jy,  z=0.04,  E pec                             ok   <2'; core & lobes?             
+J2123+2504 | 3C 433,                                         radec, 21:23:44.58,  +25:04:27.23,  (20.0 6000.0 2.29 0.1239 -0.1597),                              0.8x0.7    Texas Int 365 MHz,   74.48, -17.69,     11 Jy,  z=0.10,  Sy 2; NLRG; FRI                   ok   <2'; edge-darkened appearance                 
 
-# 21082021 11.7GHz: indistinct,0.15,0.1,indistinct [NO]
-#J2123+2504 | 3C 433,                                         radec, 21:23:44.58,  +25:04:27.23,  (20.0 6000.0 2.29 0.1239 -0.1597),                              0.8x0.7    Texas Int 365 MHz,   74.48, -17.69,     11 Jy,  z=0.10,  Sy 2; NLRG; FRI                   ok   <2'; edge-darkened appearance                 
-
-# 21082021 11.7GHz: 0.8,0.9,0.7,0.9,1.0 [DESPERATE]
-PKS J2136+0041,radec,21:36:38.6,+00:41:54.213,,9.367,540,INAF IRA 496/526
-
-# 21082021 11.7GHz: indistinct,0.6,0.5,0.7,0.6,0.6,0.5,0.5 [DESPERATE]
 J2157-6941 | PKS 2153-69 | ESO 075-G041,                     radec, 21:57:05.98,  -69:41:23.7,  (200.0 12000.0 2.923 -0.1222 -0.1043),                          mas        VLBI 2.3/8.4 GHz,   321.32, -40.65,     30 Jy,  v=8476,  S0; Sy 1/2?            I; X       ok   ~4' incl faint comp; FRII           
 
-# 21082021 11.7GHz: 0,garbage,0
-#J2223-0206 | PKS 2223-0206 | 3C445, radec, 22:23:49.7, -02:06:13,,;Elliptical Galaxy < 0.3arcmin
-
-# 21082021 11.7GHz: 0.4,0.5,0.5,0.5,0.4,0.3 [DESPERATE]
-J2225-0457 | PKS 2223-052 | 3C446, radec gaincal, 22:25:47.259291, -04:57:01.390730
-
-# 21082021 11.7GHz: 0,0
-#J2229-3823 | PKS 2226-386, radec gaincal, 22:29:46.91, -38:23:59.3, ()
-
-# 21082021 11.7GHz: 1.2,1.2,1.3 [DESPERATE]
 J2253+1608 | PKS 2251+158 | 3C454.3, radec gaincal, 22:53:57.747932, 16:08:53.560890
 
-# 21082021 11.7GHz: 0.1,0.1,0,0,indistinct [NO]
-#J233612-523622 | ATPMN J233612.1-523622,radec,23: 36: 12.08,-52: 36: 21.2,,CRATES
+J233828+270126 | 3C 465,radec,23: 38: 29.39,+27: 01: 53.2,,CRATES
 
-# 21082021 11.7GHz: 0,0,0.1 [NO]
-#J233828+270126 | 3C 465,radec,23: 38: 29.39,+27: 01: 53.2,,CRATES
+J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25 Jy,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes                                   
 
-# 21082021 11.7GHz: 0,0,0
-#J2341-3506 | PKS 2339-353, radec gaincal, 23:41:45.8910, -35:06:22.130, (80.  20000. -1.6575 3.4649 -1.2586 0.1128)
-
-# 21082021 11.7GHz: 0.2,0.3,0.2,0.2,0.3,0.4 [NO]
-#J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25 Jy,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes                                   
-
-
-# These planets have T_a>0.15K in 14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
-# 11.7GHz: [YES]
+# These planets yield T_a>0.15K in ~14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
 Venus,                                                       special
-# 11.7GHz: [YES]
 Jupiter,                                                     special
-# 11.7GHz: [YES]
 Saturn,                                                      special
