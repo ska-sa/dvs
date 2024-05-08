@@ -1,5 +1,5 @@
-# https://docs.google.com/document/d/1KuUgt05_h7IhXeArFLno2KMq7XKO943JaA1TpT7gHpA
 # Targets suitable for single dish pointing in MeerKAT S-band - TO BE CONFIRMED
+# -> no targets that are separated by less than 60arcmin.
 # Entries collected from gaincal_l_5jy.csv, sources_pnt_Ku.csv, sources_all.csv, point_Sband.csv; some coordinates updated from SIMBAD
 # ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000,)   flux polynomial,                                               unc[arcsec] source,             Gal l,  Gal b,~1400MHz flx,redshift,NED Object type     IRAS/X-ray  s-dish comment
 J000613-062338 | PKS 0003-066, radec gaincal, 00:06:13.892894, -06:23:35.335300, (7000 15000 4.4851 -2.5022 0.3761)
@@ -146,7 +146,7 @@ J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,
 
 
 
-#Added from SRT, L & CRATES on 3 may 2020
+#Added from SRT, L & CRATES
 MASIV J0005+3820,radec,00:05:57.2,+38:20:15.148,,0,90,INAF IRA 496/17
 VSOP J0013+4051,radec,00:13:31.1,+40:51:37.144,,0,45,INAF IRA 496/24
 J0022+0014 | PKS 0019-000, radec gaincal, 00:22:25.4258, +00:14:56.163, ()
@@ -224,8 +224,6 @@ VCS1 J1215+1654,radec,12:15:04.0,+16:54:37.957,,0.251,45,INAF IRA 496/319
 PKS J1239-1023,radec,12:39:43.1,-10:23:28.692,,0.687,360,INAF IRA 496/332
 PKS J1246-0730,radec,12:46:04.2,-07:30:46.574,,0,180,INAF IRA 496/333
 PKS J1305-1033,radec,13:05:33.0,-10:33:19.428,,0.87,180,INAF IRA 496/342
-JVAS J1310+3220,radec,13:10:28.7,+32:20:43.782,,2.19,45,INAF IRA 496/344
-JVAS J1310+3233,radec,13:10:59.4,+32:33:34.449,,0.575,45,INAF IRA 496/345
 PKS J1316-3338,radec,13:16:08.0,-33:38:59.172,,0,180,INAF IRA 496/346
 J1323-4452 | PKS 1320-446, radec gaincal, 13:23:4.2504, -44:52:33.840, ()
 J133254+020041,radec, 13:32:54.24, 2:00:41.4,,CRATES
