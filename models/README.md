@@ -33,6 +33,6 @@ noise-diode-models
 https://github.com/ska-sa/katconfig/tree/karoo/user/noise-diode-models
 
 receiver-models
-------------------
+---------------
 https://github.com/ska-sa/katconfig/tree/karoo/user/receiver-models
 
