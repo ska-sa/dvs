@@ -115,7 +115,7 @@ def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False): # TODO:
         beam.fitpoly(fitdBlevel=fitdBlevel, degree=degree)
 
 
-def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="./models/beam-patterns/ska", applypointing='perfeed', gridsize=512, **kwargs):
+def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="../models/beam-patterns/ska", applypointing='perfeed', gridsize=512, **kwargs):
     """ Loads predicted holography datasets and projected to physical geometry as specified by 'DISHPARAMS'.
         Simulated patterns are converted from native "transmit" to "receive".
         File naming convention: either MK_GDSatcom_{freqMHz}.mat or {band}_{el_deg}_{freqMHz}.mat
