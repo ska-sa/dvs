@@ -115,7 +115,7 @@ def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False): # TODO:
         beam.fitpoly(fitdBlevel=fitdBlevel, degree=degree)
 
 
-def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="./models/BeamPatterns/ska", applypointing='perfeed', gridsize=512, **kwargs):
+def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="./models/beam-patterns/ska", applypointing='perfeed', gridsize=512, **kwargs):
     """ Loads predicted holography datasets and projected to physical geometry as specified by 'DISHPARAMS'.
         Simulated patterns are converted from native "transmit" to "receive".
         File naming convention: either MK_GDSatcom_{freqMHz}.mat or {band}_{el_deg}_{freqMHz}.mat
@@ -130,14 +130,13 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     
     ff = freqMHz - int(freqMHz)
+    ff = "" if (ff==0) else "_%d"%(ff*10)
     try:
-        ff = "" if (ff==0) else "%d"%(ff*10)
         try:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%s.mat"%(root,band,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%s_%d%s.mat"%(root,band,freqMHz,ff[-1:]), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
         except IOError:
-            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+            dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff[-1:]), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
-        ff = "" if (ff==0) else "_%d"%(ff*10)
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     # Conjugation changes the direction of travel (+z); then invert the 'll' axis to maintain IEEE definition of RCP.
     dataset.visibilities = [np.conj(v) for v in dataset.visibilities]
@@ -381,17 +380,22 @@ def re_analyse(self, feedoffset=None, feedphasemap=0):
     return self
 
 
-def BDF(apmap, D, f):
-    """ Computes the Beam Deviation Factor [Y.T. Lo "On the BDF of a Parabolic Reflector] as quoted in [Ruze " Small Displacements of Parabolic Reflectors"].
+def BDF(apmap, D, f, k=0.36):
+    """ Computes the Beam Deviation Factor [Y.T. Lo "On the BDF of a Parabolic Reflector] as quoted in [Ruze "Small Displacements of Parabolic Reflectors"].
         Employs only aperture plane amplitude, so does not depend on the focal length & magnification factor with which the aperture map
         has been initialised.
         
+        The following sample usage confirms that k=0.34 is suitable for MeerKAT UHF & L-band:
+            pDP = dict(telescope="MeerKAT", xyzoffsets=[0.0,13.5/2.,0], xmag=-1.35340292717, focallength=5.48617)
+            b, amH, amV = load_predicted(1100, None, pDP, el_deg=45, band="L", clipextent=5)
+            print(BDF(amH,13.5,0.55*13.5), BDF(amV,13.5,0.55*13.5), BDF(None,13.5,0.55*13.5,k=0.34))
+        
         @param apmap: a katholog ApertureMap
         @param D,f: characteristics of the effective parabola
+        @param k: coefficient for approximate formula, if no apmap is given (default 0.36 - representative for Gaussian illumination)
         @return: beam deviation factor """
     if (apmap is None):
-        BDF0 = lambda k=0.36: (1+k*(D/(4*f))**2)/(1+(D/(4*f))**2) # From Y.T.Lo, k~0.36 depends on taper, f/D for the actual parabola!
-        BDF = BDF0()
+        BDF = (1+k*(D/(4*f))**2)/(1+(D/(4*f))**2) # From Y.T.Lo, k~0.36 depends on taper, f/D for the actual parabola!
     else:
         x,y = np.meshgrid(np.linspace(-apmap.mapsize/2.0,apmap.mapsize/2.0,apmap.gridsize+1)[:-1],np.linspace(-apmap.mapsize/2.0,apmap.mapsize/2.0,apmap.gridsize+1)[:-1])
         r = np.sqrt(x**2+y**2)
@@ -427,7 +431,7 @@ def load_records(holo_recs, scanant, timingoffset, DISHPARAMS, clipextent=None, 
             load_cycles = rec.cycles if ((rec.cycles is None) or not isinstance(rec.cycles, int)) else [rec.cycles]
             b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0+timingoffset, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=load_cycles, overlap_cycles=rec.overlap_cycles, **load_kwargs)
             if isinstance(rec.cycles, int):
-                b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
+                    b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
             rec.beams.extend(b); rec.apmapsH.extend(aH); rec.apmapsV.extend(aV)
             if inspect_DT:
                 cycle0 = 0 if (load_cycles is None) else load_cycles[0]
@@ -734,7 +738,7 @@ def snr_mask(beams, SNR_min=30, phaseRMS_max=30):
         a, ph = np.abs(x), np.unwrap(np.angle(x))*180/np.pi
         bp = np.linspace(0, len(x[0]), 8, dtype=int) # Breakpoint indices for piecewise linear fits; expect issues with fewer than 4 & more than 10 segments!
         a_, ph_ = sig.detrend(a, bp=bp), sig.detrend(ph, bp=bp)
-        snr.append(zip(np.mean(a,axis=1)/np.std(a_,axis=1), np.std(ph_,axis=1))) # count/count, deg, arranged as (product)
+        snr.append(list(zip(np.mean(a,axis=1)/np.std(a_,axis=1), np.std(ph_,axis=1)))) # count/count, deg, arranged as (product)
         snr_a, rms_ph = np.transpose(np.min(np.asarray(snr[-1])[ix,:], axis=0)) # Use only co-pol for the mask
         mask.append((snr_a<SNR_min) or (rms_ph>phaseRMS_max))
     return np.asarray(snr), np.asarray(mask)
@@ -953,7 +957,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                             ax.set_xlabel("degrees"); ax.set_ylabel("degrees")
                             ax.set_xlim(*eb_extent); ax.set_ylim(*eb_extent)
                     if (ci == 0): # Only figures for the first cycle
-                        plt.colorbar(im, ax=axes)
+                        plt.colorbar(im, ax=axes[-1])
                         pp.report_fig(max(plt.get_fignums()))
                     print("Error Beam")
                     print("    %s\t\t%s"%(sHV[0],sHV[1]))
