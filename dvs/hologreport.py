@@ -23,7 +23,7 @@ from collections import namedtuple
 import itertools as iter
 import copy
 import time
-import katholog
+import dvsholog as katholog # (a special release of katholog)
 import logging; logging.disable(logging.DEBUG) # This is necessary for katdal
 import katpoint
 import katselib, katsemat

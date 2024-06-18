@@ -1,29 +1,46 @@
 #!/usr/bin/bash
 #
-#  Installs dependent packages into virtual environments that have already been set up as follows:
-#  
-#      pip install virtualenv
-#      virtualenv -p python2 /scratch2/adriaan/venv-py2
-#      virtualenv -p python3 /scratch2/adriaan/venv-py3
+#  Installs virtual environment and dependent packages, as required to work with
+#  the DVS frameworks.
+#  Ensure that your github ssh keys have been activated!
 #
-#  Some packages also require that github ssh keys have been activated.
 
-# python3 environment
+pip install virtualenv
+virtualenv -p python3 ~/venv-py3
+
+## IMPORTANT: always work in this python3 environment
 source ~/venv-py3/bin/activate
 pip install --upgrade pip
 pip cache purge
 pip install ipykernel jupyter notebook
-ipython3 kernel install --name "venv-py3" --user
+ipython3 kernel install --name "python3" --user
+
 
 pip install numpy scipy matplotlib
-pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpscripts,katsdpcal}
-pip install pysolr paramiko
+pip install pysolr paramiko zernike
 
-git clone git@github.com:ska-sa/katholog.git
-pip install ./katholog && rm -rf katholog
-pip install zernike
+pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpscripts,katsdpcal}
+# TODO: At present, this package is private - a temporary situation.
+pip install git+ssh://git@github.com/ska-sa/dvsholog
 
 pip install git+https://github.com/telegraphic/PyGSM
 py=`ls ~/venv-py3/lib/`
 mv ~/venv-py3/lib/$py/site-packages/pygsm/gsm2016_components.h5 ~/venv-py3/lib/$py/site-packages/pygsm/gsm2016_components.h5~
 wget -O i~/venv-py3/lib/$py/site-packages/pygsm/gsm2016_components.h5 https://zenodo.org/record/3479985/files/gsm2016_components.h5?download=1
+
+
+## Set up the DVS workspace
+git clone git@github.com:ska-sa/dvs.git
+# TODO: At present, this required package is private - a temporary situation.
+git clone git@github.com:ska-sa/systems-analysis.git
+ln -s systems-analysis/analysis dvs/libraries/systemsanalysis
+
+# This repository is private
+git clone --single-branch --branch karoo-dvs git@github.com:ska-sa/katconfig.git
+ln -s katconfig/user/noise-diode-models dvs/models
+ln -s katconfig/user/receiver-models dvs/models
+
+ipython3 kernel install --name "dvs" --user
+jupyter kernelspec list | grep dvs
+echo ACTION: Insert the following line into the above dvs/kernel.json 
+echo  \"env\": {\"PYTHONPATH\":\"/home/aph/work_dvs/dvs\"},
