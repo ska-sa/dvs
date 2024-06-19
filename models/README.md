@@ -30,9 +30,8 @@ SKA_B1 & SKA_B2: extracted from EMSS 2019_10_02_Ta.zip & converted Ta___.mat to 
 
 noise-diode-models
 ------------------
-https://github.com/ska-sa/katconfig/tree/karoo/user/noise-diode-models  !!!WSL soft link!!! 
+Noise diode models that are "work in progress" (not yet committed to https://github.com/ska-sa/katconfig)
 
 receiver-models
 ---------------
-https://github.com/ska-sa/katconfig/tree/karoo/user/receiver-models  !!!WSL soft link!!! 
-
+Receiver noise models that are "work in progress" (not yet committed to https://github.com/ska-sa/katconfig)
