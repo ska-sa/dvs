@@ -7,87 +7,58 @@
     Typical use 2:
         import analyze_tipping as tip
         h5 = tip.open_dataset("/data/132598363.h5")
-        ru = tip.process(h5, "m008", 900,1700, channel_mask='', PLANE="antenna",spec_sky=True)
+        ru = tip.process(h5, "m008", 900,1700, freq_mask='', PLANE="antenna",spec_sky=True)
         tip.report("m008", h5.name.split()[0].split(" ")[0], *ru, select_freq=[900,1200,1700])
         
-@author aph@sarao.ac.za
+    @author aph@sarao.ac.za
 """
+__version__ = "18/06/2024"
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pickle
-import warnings
 from matplotlib.backends.backend_pdf import PdfPages
-import scape
 import scikits.fitting as fit
 import healpy as hp
 import ephem
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import time
-git_info = lambda: "analyze_tipping.py 11/03/2020"
 from matplotlib.offsetbox import AnchoredText
 
-import katdal
-from katselib import as_hackedL
-import katsemodels as models
-from katsemodels import _c_, Tcmb
+import scape
+import katdal, logging; logging.disable(logging.DEBUG) # This is necessary for katdal
+from katselib import load_frequency_mask
+import katsemat as mat
+from . import util, models, modelsroot
 
+# Noise Diode Models that are not yet "deployed in the telescope"
+nd_models_folder = modelsroot + '/noise-diode-models'
 
-def angle_wrap(angle, period=2.0 * np.pi):
-    """Wrap angle into the interval -*period* / 2 ... *period* / 2."""
-    return (angle + 0.5 * period) % period - 0.5 * period
+Tcmb = 2.725 # [K]
 
 
 class Sky_temp:
-    #import gsm # APH removed these 03/2017
-    #import healpy as hp
-    #from astropy import units as u
-    #from astropy.coordinates import SkyCoord
     """
        T_sky = T_cont + T_cmb  from the global sky model
        Read in  file, and provide a method of passing back the Tsky temp a at a position
     """
-    def __init__(self,nu=1828.0,path="/var/kat/archive/data/models/gsm",diameter=13.965,smooth=0): # APH 032017 changed smooth to numeric scale factor
+    def __init__(self,nu=1828.0,hpbw=0.01,smooth=0): # APH 032017 changed smooth to numeric scale factor
         """ Load The Tsky data from an inputfile in FITS format and scale to frequency
-        This takes in 1 parameter:
-        nu (MHz) center frequency
-        
+            @param nu: frequency for the sky map, default 1828 [MHz]
+            @param hpbw: suggested resolution for the map, default 0.01 [radian]
         """
-        # APH 032017 refactored this function significantly
-        #hpbw = 1.23*(3e8/(nu*1e6))/diameter # APH 032017 based on EMSS full wave UHF-band; 1.22 for L-band, which was measured on TauA (L. Schwardt, 11/2014)
-        self.hpbw = 1.27*(_c_/(nu*1e6))/diameter # APH 042017 based on parabolic tapered beam used below
-        
-#         # APH added these for (21)
-#         # Tapered Beam pattern: m=1 for uniform, m=2 for parabolic taper [VLA memo 327], closely matches CAD results to 2nd null. 
-#         E = lambda theta,a,wl,m: 2*np.pi*a**2/wl*(1+np.cos(theta))*sp.special.jn(m,2*np.pi*a/wl*np.sin(theta))/(2*np.pi*a/wl*np.sin(theta))**m
-#         A = lambda theta,D,wl,m: E(theta+1e-8,D/2.,wl,m)**2 / E(1e-8,D/2.,wl,m)**2
-#         self.B = lambda theta: A(theta,diameter,300./nu,2) # Beam function now used by Tsky
-#         # Pre-computed by numerical methods. eta_beam = SA(-null..null)/SA(4pi)
-#         self.SA = 1.075 * np.pi/4./np.log(2)*hpbw**2 # Just a factorisation of SA(4pi), the solid angle of B over 4pi Sr.
-#         # TODO: Finalise choosing between 1st & 2nd null - results don't seem sensitive
-#         self.null, self.eta_beam = 1.29*hpbw, 0.989 # 1st null. Was 1.367, 0.914 < 072018
-#         #self.null, self.eta_beam = 2.11*hpbw, 0.999 # 2nd null. Was 2.252, 0.927 < 072018
-# #        self.null = 2.252*hpbw; self.SA = 0.927 * np.pi/4./np.log(2)*hpbw**2; Sky_temp.eta_beam = 0.927  #### Back to analyze_tipping (4).py
-        self.null = 1.29*self.hpbw # First null of ^2 beam
-        
-        #self.freq_map = gsm.get_freq(nu,path)
-        #self.freq_map += Tcmb  # CMB tempreture not included in de Oliveira-Costa's GSM
-        #if smooth > 0: # APH changed 03/2017 to implement correct smoothing & permit arbitrary smoothing!
-        #    native_fwhm = 56*np.pi/60./180. # 'gsm' has 56arcmin resolution
-        #    if (smooth*hpbw > native_fwhm): # APH 032017 added this check, can't sharpen the map.
-        #        self.freq_map = hp.sphtfunc.smoothing(self.freq_map,fwhm=((smooth*hpbw)**2-native_fwhm**2)**.5)
+        self.hpbw = hpbw
+        self.null = 1.29*self.hpbw # First null of ^2 beam (i.e. feed has parabolic taper)
         self._freq_map_, self.resolution = models.get_gsm(nu, smooth*self.hpbw)
-
         self.nu = nu
         
     def freq_map(self): # APH added 092018 instead of object attribute
         return self._freq_map_ + Tcmb  # CMB temperature not included in the GSM maps - do not modify the cached map, and don't cache this modified version!
 
     def Tsky(self,ra,dec,integrate=True,bm_floor=0): # APH 042017 added integrate=True to replace earlier
-        """given RA/Dec in Degrees  return the value of the spot
-        assuming the healpix map is in Galatic coords
-        @param integrate: False to return the temperature at the map resolution, True to return iint_beamnull{GSM}/SA(4pi) (default True)
+        """ Given RA/Dec in Degrees  return the value of the spot
+            assuming the healpix map is in Galatic coords
+            @param integrate: False to return the temperature at the map resolution, True to return iint_beamnull{GSM}/SA(4pi) (default True)
         """
         freq_map = self.freq_map()
         def get_value(ra,dec):
@@ -101,13 +72,13 @@ class Sky_temp:
         return (result[0] if len(result)==1 else np.asarray(result))
         
     def plot_sky(self,ra=None,dec=None,norm='log',unit='Kelvin',  pointstyle='ro',pointlabels=None, lat='-30.713',lon='21.444',elev=1050,date=None, cartesian=True, fig=None): # APH ADDED from pointstyle
-        """ plot_sky plots the sky temperature and overlays pointing centers as red dots
-        The sky tempreture is the data that was loaded when the class was initiated.
-        plot_sky takes in 3 optional parameters:
+        """ Plots the sky temperature and overlays pointing centers as red dots
+            The sky temperature is the data that was loaded when the class was initiated.
+            plot_sky takes in 3 optional parameters:
                 ra,dec  are list/1D-array like values of right ascension and declination
                 pointlabels: list of *(galactic lon, galactic lat, string label)* to plot with pointstyle
                 fig: figure to re-use, default None
-        returns matplotlib figure object that the plot is assosated with.
+            returns matplotlib figure object that the plot is associated with.
         """
         if not fig: # APH added this switch to re-use fig
             fig = plt.figure(figsize=(16,9))
@@ -127,7 +98,7 @@ class Sky_temp:
         
         if cartesian or (date is None): # Plot pointing coordinates in Cartesian projection
             c = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
-            l = np.degrees(angle_wrap(-c.galactic.l.radian % (np.pi*2)) )
+            l = np.degrees(mat.wrap(-c.galactic.l.radian))
             b = np.degrees(c.galactic.b.radian)
             plt.plot(l,b,pointstyle) # APH changed 'ro' to pointstyle
             if pointlabels: # APH added this to annotate lon.lat points
@@ -185,9 +156,10 @@ class Sky_temp:
 
 class System_Temp:
     """Extract tipping curve data points and surface temperature."""
-    # APH removed freqs=1822 - just use d.freqs[freq_index]; & added sort_ind=None below - previously it was grabbed out of global namespace.
-    def __init__(self,d,freq_index=0,sort_ind=None,elevation=None,ra=None,dec=None,timestamps=None,surface_temperature=23.0,air_relative_humidity=0.23):#d, nu, pol
-        """ First extract total power in each scan (both mean and standard deviation) """
+    def __init__(self,d,freq_index=0,sort_ind=None,elevation=None,ra=None,dec=None,timestamps=None,surface_temperature=23.0,air_relative_humidity=0.23):
+        """ First extract total power in each scan (both mean and standard deviation)
+            @param d: the dataset.
+        """
         self.units = d.data_unit
         
         self.name = d.antenna.name
@@ -206,7 +178,7 @@ class System_Temp:
         self.ra = ra[valid_el]
         self.dec = dec[valid_el]
         self.timestamps = timestamps[valid_el] # APH added 052017 -> 102018
-        self.surface_temperature = surface_temperature# Extract surface temperature from weather data
+        self.surface_temperature = surface_temperature
         self.freq = d.freqs[freq_index]  #MHz Centre frequency of observation APH changed [0] to [freq_index] on 03/2017
         ### APH begin 032017 added the default opacity & T_atm calculation here.
         T_atm = 1.12 * (273.15 + surface_temperature) - 50.0 # APH 02/2017 changed comment: Ippolito 1989 eq 6.8-6, quoting Wulfsberg 1964
@@ -229,10 +201,11 @@ class System_Temp:
 #                self.Tsys_sky[pol].append(tipping_mu[val_el]-T_sky(ra,dec))# APH 032017 In process(), use apeff to correctly transfer to feed input plane.
     
     def calc_Sky_Temp(self, D, bm_floor_dBi=-6, radius=30): # APH created 10/2018, exposed floor_dBi & radius [multiple of HPBW]
-        iso = (D*np.pi/(_c_/1e6/self.freq))**-2 # Isotropic antenna gain relative to bore sight gain of the reflector antenna
+        wavelength = models._c_/1e6/self.freq
+        iso = (D*np.pi/wavelength)**-2 # Isotropic antenna gain relative to bore sight gain of the reflector antenna
         bm_floor = iso * 10**(bm_floor_dBi/10.)
         ## APH moved below ~5 lines from inside '__init__()' and its 'for pol... loop' since sky model is not polarisation dependent
-        T_skytemp = Sky_temp(nu=self.freq, diameter=D)
+        T_skytemp = Sky_temp(nu=self.freq, hpbw=1.27*wavelength/D)
         if not hasattr(self, "T_sky"):
             self.T_sky = T_skytemp.Tsky(self.ra,self.dec,bm_floor=bm_floor)
             for v in self.sigma_Tsys.values(): # APH 032017 added to update sigma_Tsys
@@ -259,62 +232,51 @@ class System_Temp:
             yield i,self.ra[i],self.dec[i],self.elevation[i]
             
             
-
-def remove_rfi(d,width=3,sigma=5,axis=1):
-    for i in range(len(d.scans)):
-        d.scans[i].data = scape.stats.remove_spikes(d.scans[i].data,axis=axis,spike_width=width,outlier_sigma=sigma)
-    return d
-
-# APH below changed filename to filename_or_file to clarify one could pass an open katdal dataset 
-def load_cal(filename_or_file, baseline, nd_models, freq_channel=None,channel_mask='',channel_range=None,band_input=None, debug=False):
-    """ Load the dataset into memory """
+def load_cal(filename_or_file, baseline, nd_models=None, freq_channel=None,channel_range=None,band_input=None, freq_mask='',remove_spikes=False, debug=False):
+    """ Load the dataset into memory
+        @param filename_or_file: either the filename for, or an already open katdal dataset 
+        @param nd_models : None, or a string to override the noise diode models in the dataset using the ones in this directory.
+                Model filenames are like 'rx.%(band).%(serialno).%(pol).csv' (e.g. 'rx.l.4.h.csv').
+    """
     print('Loading noise diode models')
     
     try:
         d = scape.DataSet(filename_or_file, baseline=baseline, nd_models=nd_models,band=band_input)
     except IOError:
-        nd = scape.gaincal.NoiseDiodeModel(freq=[200,2000],temp=[20,20]) # APH extended 800 down to 200
-        warnings.warn('Warning: Failed to load/find Noise Diode Models, setting models to 20K ')
-        print('Warning: Failed to load/find Noise Diode Models, setting models to 20K ')
+        nd = scape.gaincal.NoiseDiodeModel(freq=[200,20000],temp=[20,20])
+        print('Warning: Failed to load/find Noise Diode Models, setting models to 20K')
         d = scape.DataSet(filename_or_file, baseline=baseline,  nd_h_model = nd, nd_v_model=nd ,band=band_input)
     n_chan = len(d.freqs)
     
     if not channel_range is None :
         start_freq_channel = int(channel_range.split(',')[0])
         end_freq_channel = int(channel_range.split(',')[1])
-        edge = np.tile(True, n_chan)
-        edge[slice(start_freq_channel, end_freq_channel)] = False
+        static_flags = np.tile(True, n_chan)
+        static_flags[slice(start_freq_channel, end_freq_channel)] = False
     else :
-        edge = np.tile(False, n_chan)
+        static_flags = np.tile(False, n_chan)
     
-    if len(channel_mask)>0:
-        if isinstance(channel_mask, str): # load static flags if pickle file is given
-            pickle_file = open(channel_mask) 
-            rfi_static_flags = pickle.load(pickle_file)
-            pickle_file.close()
+    if len(freq_mask) > 0:
+        rfi_static_flags = load_frequency_mask(freq_mask, d.freqs)
+        if len(rfi_static_flags) == n_chan:
+            static_flags = np.logical_or(static_flags, rfi_static_flags)
         else:
-            rfi_static_flags = channel_mask
-    else: # No channels flagged
-        rfi_static_flags = np.tile(False, n_chan)
+            print("Warning: Frequency mask doesn't match the dataset! No static RFI channels flagged.")
 
-    static_flags = np.logical_or(edge,rfi_static_flags)
-
-    #d = d.select(freqkeep=~static_flags)
     freq_channel_flagged = []
     for band in freq_channel:
         tmp_band = []
         for channel in band : 
             if not static_flags[channel] : # if not flagged
                 tmp_band.append(channel)
-        #if len(tmp_band) > 0 :
         freq_channel_flagged.append(tmp_band)   
                 
-    #if not freq_channel is None :
-    #    d = d.select(freqkeep=freq_channel)
-    #print "Flagging RFI"
-    #sd = remove_rfi(d,width=7,sigma=5)  # rfi flaging Needed ?
+    if remove_spikes: # Automatic rfi flagging
+        print("Flagging RFI spikes")
+        for i in range(len(d.scans)):
+            d.scans[i].data = scape.stats.remove_spikes(d.scans[i].data,axis=1,spike_width=7,outlier_sigma=5)
+
     print("Converting to Temperature")
-#    print "Plotting the number of channels in each band of the list of lists freq_channel_flagged will be usefull "
     if debug:
         plt.figure(figsize=(14,5))
         plt.plot(d.nd_h_model.freq, d.nd_h_model.temp)
@@ -327,52 +289,6 @@ def load_cal(filename_or_file, baseline, nd_models, freq_channel=None,channel_ma
         d.average(channels_per_band=freq_channel_flagged)
         
     return d
-
-
-
-def chisq_pear(fit,Tsys):
-    fit = np.array(fit)
-    return np.sum((Tsys-fit)**2/fit)
-
-
-def fit_tipping(T_sys,SpillOver,pol,freqs,T_rx,fixopacity=False,spill_scale=1):
-    """The 'tipping curve' is fitted using the expression below, with the free parameters of $T_{ant}$ and $\tau_{0}$
-        the Antenna tempreture and the atmospheric opacity. All the varables are also functions of frequency .
-        $T_{sys}(el) = T_{cmb}(ra,dec) + T_{gal}(ra,dec) + T_{atm}*(1-\exp(\frac{-\ta   u_{0}}{\sin(el)})) + T_spill(el) + T_{ant} + T_{rx}$
-        We will fit the opacity and $T_{ant}$.s
-        T_cmb + T_gal is obtained from the T_sys.Tsky() function
-        if fixopacity is set to true then $\tau_{0}$ is set to 0.01078 (Van Zee et al.,1997) this means that $T_{ant}$ becomes
-        The excess tempreture since the other components are known. When fixopacity is not True then it is fitted and T_ant
-        is assumed to be constant with elevation
-    """
-    ## APH added comment 02/2017: the code below does not in fact FIT anything, it simply computes the model, and returns the residual. And the TODO below is spurious.
-#TODO Set this up to take in RA,dec not el to avoid scp problems
-    #T_atm = 1.12 * (273.15 + T_sys.surface_temperature) - 50.0 # APH 02/2017 removed, not necessary
-    returntext = []
-#    if not fixopacity: # APH 032017 removed, not necessary
-#        #print T_sys.surface_temperature,T_sys.air_relative_humidity, T_sys.pressure, T_sys.height, freqs
-#        tau = calc_atmospheric_opacity(T_sys.surface_temperature,T_sys.air_relative_humidity, T_sys.pressure, T_sys.height/1000., freqs/1000.)
-#        # Height in meters above sea level, frequency in GHz.
-#    else:   
-#        tau = 0.01078
-#    print("atmospheric_opacity = %f  at  %f MHz"%(tau,freqs))
-    tip = fit.nonlinlstsq.NonLinearLeastSquaresFit(None, [0, 0.00]) # APH changed 11/2016 from scape.fitting.NonLinearLeastSquaresFit(None, [0, 0.00]) # nonsense Vars
-    def know_quant(x):
-        rx = T_rx.rec[pol](freqs)
-        #sky = T_sys.Tsky(x) # APH 032017 unnecessary complication, rather compute residual from Tsys_sky
-        spill = SpillOver.spill[pol](np.array([[x,],[freqs]]))*spill_scale # APH (18) added *spill_scale
-#        atm = T_atm * (1 - np.exp(-tau / np.sin(np.radians(x)))) # APH 032017 no longer used
-        #print "Rec %3.1f + Sky %3.1f + Spill %3.1f + Atm %3.1f = %3.1f" % (rx ,sky , spill , atm,rx+sky+spill+atm)
-        return rx + spill # sky + spill + atm    # APH 032017 dropped sky+atm, this is residual Tsys at feed input reference plane
-    
-    func = know_quant
-    fit_func = []
-#    returntext.append('Not fitting Opacity assuming a value if %f , $T_{ant}$ is the residual of of model data. ' % (tau,))
-    for el,t_sys in zip(T_sys.elevation, T_sys.Tsys_sky[pol]):  # APH 032017 changed from T_sys.Tsys[pol]
-        fit_func.append(t_sys - func(el))
-        #print "T_sys %3.1f - T_other %3.1f " %(t_sys,func(el))
-    chisq =0.0# nonsense Vars
-    return {'params': tip.params,'fit':fit_func,'scatter':None,'chisq':chisq,'text':returntext} # APH 032017 'scatter'is unused and meaningless, so changed 'scatter'from (T_sys.Tsys[pol]-fit_func)
 
 
 def plot_data_el(Tsys,Tant,title='',units='K',line=42,aperture_efficiency=None,PLANE="antenna",frequency=1420):
@@ -388,7 +304,7 @@ def plot_data_el(Tsys,Tant,title='',units='K',line=42,aperture_efficiency=None,P
     plt.legend((line1, line2, line3,line4 ),  ('$T_{sys}%s$ HH'%plane,'$T_{ant}$ HH', '$T_{sys}%s$ VV'%plane,'$T_{ant}$ VV'), loc='best')
     plt.title('Tipping curve: %s' % (title))
     plt.xlabel('Elevation (degrees)')
-    lim_min = r_lim([np.percentile(Tsys[:,0:2],10),np.percentile(Tant[:,0:2],10),-5.])
+    lim_min = mat.apply(np.nanmin, [np.percentile(Tsys[:,0:2],10),np.percentile(Tant[:,0:2],10),-5.])
     data2plane = lambda data, POL: data/aperture_efficiency.eff[POL](frequency) if ("antenna" in PLANE) else data
     recLim_apEffH = data2plane(receptor_band_limit(frequency,elevation), "HH") # APH 082018
     recLim_apEffV = data2plane(receptor_band_limit(frequency,elevation), "VV") # APH 082018
@@ -400,62 +316,12 @@ def plot_data_el(Tsys,Tant,title='',units='K',line=42,aperture_efficiency=None,P
             plt.plot(elevation, recLim_apEffH*error_margin, lw=1.1,c='g',linestyle='--')
             plt.plot(elevation, recLim_apEffV*error_margin, lw=1.1,c='g',linestyle='--')
         plt.hlines(1, elevation.min(), elevation.max(), colors='k',linestyle='--')
-    lim_max = r_lim([np.percentile(Tsys[:,0:2],90),np.percentile(Tant[:,0:2],90)*1.1,np.max(recLim_apEffH)*1.2,line*1.1],np.max)
-    plt.ylim(lim_min,roundup(lim_max,closest=5)) # APH added roundup
+    lim_max = mat.apply(np.nanmax, [np.percentile(Tsys[:,0:2],90),np.percentile(Tant[:,0:2],90)*1.1,np.max(recLim_apEffH)*1.2,line*1.1])
+    plt.ylim(lim_min,mat.roundup(lim_max,closest=5)) # APH added roundup
     plt.xlim(10,90) # APH added
     plt.grid()
     plt.ylabel('Noise equivalent temperature  (K)') # APH changed from '$T_{sys}/\eta_{ap}$
     return fig
-
-def roundup(x, closest=1): # Round up to an integer multiple of 'closet' - APH added
-    if closest > 0:
-        x = int(x/float(closest)+0.5)*float(closest)
-    return x
-
-def r_lim(dataf,func=np.nanmin): # APH changed to nanmin to guard against NaNs
-    """ Returns the func of the data , not used on nans"""
-    dataf = np.array(dataf)
-    index = ~np.isnan(dataf)
-    return func(dataf[index,...]) if (index.any()) else np.nan # APH added to guard against NaNs 
-
-def receptor_band_limit(frequency,elevation):
-    # APH factored out elevation from individual functions, into this function
-    Tatm = lambda f_MHz, el: 275*(1-np.exp(-(0.005+0.075*(f_MHz/22230.)**4)/np.sin(el*np.pi/180))) # Approximate relation appropriate for spec limit
-    
-    if False and (frequency.max() < 1800): # APH added this to short-circuit the previous "bottom-up" limits still coded below
-        return_array = receptor_UHFLband_CDR_limit(frequency)
-        return_array = return_array - Tatm(frequency,15) + Tatm(frequency,elevation)
-        return return_array # CAUTION: this is at aperture plane, the others are at feed plane! Also, more conservative atmospheric adjustment than previously
-    
-    if (frequency.min() < 800):
-        return_array = receptor_UHFband_limit(frequency)
-    elif (frequency.max() < 1800):
-        return_array = receptor_Lband_limit(frequency)
-    else:
-        return_array = np.nan*frequency
-    # APH added the code below to adjust for atmosphere vs. elevation
-    return_array = return_array - Tatm(frequency,90) + Tatm(frequency,elevation)
-    return return_array
-
-def receptor_UHFLband_CDR_limit(frequency): # MHz, at 15deg elevation
-    # 275-410 m^2/K at L-band Receivers CDR, extended as 275 down through UHF-band
-    Ag = np.pi*(13.5/2)**2 # Specified minimum antenna geometric collecting area
-    Tsys_eta_zenith = (64*Ag)/np.interp(frequency,[580,900,1670],[275.0,275.0,410.0])
-    return Tsys_eta_zenith
-
-def receptor_Lband_limit(frequency): # APH factored out elevation, this is at zenith
-    """275-410 m^2/K at Receivers CDR"""
-    return_array = np.zeros_like(frequency,dtype=np.float) # APH changed division below to "/float()"
-    return_array[np.array(frequency < 1280)] = np.array(12 + 6+(5.5-6)/float(1280-900)*(frequency-900))[np.array(frequency < 1280)]
-    return_array[np.array(~(frequency < 1280))] = np.array(12 + 5.5+(4-5.5)/float(1670-1280)*(frequency-1280))[np.array(~(frequency < 1280))]
-    return return_array
-
-def receptor_UHFband_limit(frequency): # APH factored out elevation, this is at zenith
-    return_array = np.zeros_like(frequency,dtype=np.float) # APH changed division below to "/float()"
-    return_array[np.array(frequency < 900)] = np.array(8 + (12-8)/float(1015-580)*(frequency-580) + 8+(7-8)/float(900-580)*(frequency-580))[np.array(frequency < 900)]
-    return_array[np.array(~(frequency < 900))] = np.array (8 + (12-8)/float(1015-580)*(frequency-580) + 7+(4-7)/float(1015-900)*(frequency-900))[np.array(~(frequency < 900))]
-    return_array = (8 + (12-8)/float(1015-580)*(frequency-580)) + (10+(4-10)/float(1015-580)*(frequency-580)) # Acceptance RS + Predicted spill+atm above 40degEl
-    return return_array
 
 
 def plot_data_freq(frequency,Tsys,Tant,title='',aperture_efficiency=None,PLANE="antenna",plot_limits=True):
@@ -481,15 +347,11 @@ def plot_data_freq(frequency,Tsys,Tant,title='',aperture_efficiency=None,PLANE="
             plt.plot(frequency,recLim_apEffV*error_margin, lw=1.1,color='g',linestyle='--')
         plt.hlines(1, frequency.min(), frequency.max(), colors='k',linestyle='--')
 
-    low_lim = (r_lim(Tsys[:,0:2]),r_lim(Tant[:,0:2]) )
-    low_lim = np.nanmin(low_lim) # APH changed to nanmin to guard against NaNs
+    low_lim = np.nanmin( [Tsys[:,0:2], Tant[:,0:2]] )
     low_lim = -5. # np.max((low_lim , -5.))
-    def tmp(x):
-        return np.percentile(x,80)
-    high_lim = (r_lim(Tsys[:,0:2],tmp),r_lim(Tant[:,0:2],tmp))
-    high_lim = np.nanmax(high_lim) # APH changed to nanmin to guard against NaNs
+    high_lim = np.nanmax( [np.nanpercentile(Tsys[:,0:2],80), np.nanpercentile(Tant[:,0:2],80)] )
     high_lim = np.nanmax((high_lim , 46*1.1)) # APH changed to nanmin to guard against NaNs, & *1.1 like plot_el, rather than *1.3
-    plt.ylim(low_lim,roundup(high_lim,closest=5)) # APH added roundup
+    plt.ylim(low_lim,mat.roundup(high_lim,closest=5)) # APH added roundup
     if plot_limits and (frequency.min() < 1500): # Only for UHF & L-band
         fspec = (580,1015) if (frequency.min() < 800) else (900,1670) # APH added this to accommodate UHF band
         plt.vlines(fspec[0],low_lim,high_lim,lw=1.1,color='darkviolet',linestyle='--')
@@ -503,10 +365,53 @@ def plot_data_freq(frequency,Tsys,Tant,title='',aperture_efficiency=None,PLANE="
     return fig
 
 
+def receptor_UHFLband_CDR_limit(freqsMHz): # MHz, at 15deg elevation, at aperture plane.
+    # 275-410 m^2/K at L-band Receivers CDR, extended as 275 down through UHF-band
+    Ag = np.pi*(13.5/2)**2 # Specified minimum antenna geometric collecting area
+    Tsys_eta = (64*Ag)/np.interp(freqsMHz,[580,900,1670],[275.0,275.0,410.0])
+    return Tsys_eta
+
+def receptor_Lband_limit(freqsMHz): # Tsys at zenith, at feed plane
+    """275-410 m^2/K at Receivers CDR"""
+    Tsys = np.zeros_like(freqsMHz,dtype=np.float) # APH changed division below to "/float()"
+    Tsys[np.array(freqsMHz < 1280)] = np.array(12 + 6+(5.5-6)/float(1280-900)*(freqsMHz-900))[np.array(freqsMHz < 1280)]
+    Tsys[np.array(~(freqsMHz < 1280))] = np.array(12 + 5.5+(4-5.5)/float(1670-1280)*(freqsMHz-1280))[np.array(~(freqsMHz < 1280))]
+    return Tsys
+
+def receptor_UHFband_limit(freqsMHz): # Tsys at zenith, at feed plane
+    Tsys = np.zeros_like(freqsMHz,dtype=np.float) # APH changed division below to "/float()"
+    Tsys[np.array(freqsMHz < 900)] = np.array(8 + (12-8)/float(1015-580)*(freqsMHz-580) + 8+(7-8)/float(900-580)*(freqsMHz-580))[np.array(freqsMHz < 900)]
+    Tsys[np.array(~(freqsMHz < 900))] = np.array (8 + (12-8)/float(1015-580)*(freqsMHz-580) + 7+(4-7)/float(1015-900)*(freqsMHz-900))[np.array(~(freqsMHz < 900))]
+    Tsys = (8 + (12-8)/float(1015-580)*(freqsMHz-580)) + (10+(4-10)/float(1015-580)*(freqsMHz-580)) # Acceptance RS + Predicted spill+atm above 40degEl
+    return Tsys
+
+
+receptor_band_limits = [#Add limit lines as a tuple of functions (is_MHz_in_band, Tsys_at_zenith(MHz))
+                        (lambda freqsMHz: np.min(freqsMHz)<856, receptor_UHFband_limit),
+                        (lambda freqsMHz: np.max(freqsMHz)<=1712, receptor_UHFband_limit),
+                        (lambda freqsMHz: False, receptor_UHFLband_CDR_limit), # APH 2018: Short-circuited because it needs special care to use correctly.
+                       ]
+def receptor_band_limit(freqsMHz, elev_deg):
+    """ Generate limit lines of Tsys, for the plots. """
+    Tatm = lambda f_MHz, el: 275*(1-np.exp(-(0.005+0.075*(f_MHz/22230.)**4)/np.sin(el*np.pi/180))) # Approximate relation appropriate for spec limit
+    
+    Tsys_r = np.nan*freqsMHz
+    for test, limit in receptor_band_limits:
+        if test(freqsMHz):
+            Tsys_r = limit(freqsMHz)
+            break
+    
+    # Adjust for atmosphere vs. elevation
+    return_array = Tsys_r - Tatm(freqsMHz,90) + Tatm(freqsMHz,elev_deg)
+    return return_array
+
+
 #### APH 02/2017 factored the code into process_b(*process_a()) which is IDENTICAL to the original process(), just re-factored slightly
-def process_a(h5, ant, freq_min=0, freq_max=9e9, channel_bw=10., freq_chans=None, sky_radius=30, channel_mask='/var/kat/katsdpscripts/RTS/rfi_mask.pickle', debug=False): # APH added freq_min & freq_max [MHz] to only load subset of interest
-    """ @param sky_radius: radius to truncate the all sky integral for T_sky model [multiple of HPBW] (default 30)
-        @param channel_mask: full name of pickle file with RFI mask for this band, or boolean array (discard where True) """
+def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=None, sky_radius=30, freq_mask='', debug=False): # APH added freq_min & freq_max [MHz] to only load subset of interest
+    """ @param freq_min, freq_max: [MHz] (default 0, 20000)
+        @param sky_radius: radius to truncate the all sky integral for T_sky model [multiple of HPBW] (default 30)
+        @param freq_mask: full name of file with RFI mask for this band """
+    global nd_models_folder
     h5.select(reset="TFB")
     h5.select(scans='track')
     ant = ant if isinstance(ant, str) else ant.name
@@ -526,7 +431,7 @@ def process_a(h5, ant, freq_min=0, freq_max=9e9, channel_bw=10., freq_chans=None
     print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw, freq_list.min(),freq_list.max()) )
     band = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
     # APH use h5 below instead of filename -- permits overriding of h5 attributes
-    d = load_cal(h5, "%s" % (ant,), nd_models, chunks,channel_mask=channel_mask,channel_range=freq_chans,band_input=band, debug=debug)
+    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,channel_range=freq_chans,band_input=band, freq_mask=freq_mask, debug=debug)
     # Update after loading has possibly discarded masked-out chunks
     freq_list = np.asarray([d.freqs[j] for j in range(len(d.freqs))]) # APH re-phrased this to fix bug 082018
     
@@ -544,15 +449,12 @@ def process_a(h5, ant, freq_min=0, freq_max=9e9, channel_bw=10., freq_chans=None
     timestamps = np.array([np.average(scan_time) for scan_time in scape.extract_scan_data(d.scans,'abs_time').data]) # APH added 052017
     timestamps = timestamps[sort_ind] # APH added 052017
     
-    #length = 0 # APH 032017 removed this - not necessary
     d.filename = [filename]
-    #freq loop
     T_SysTemps = []
     for i,freq_val in enumerate(d.freqs):
         print("> Loading %g MHz"%freq_val)
         T_SysTemp = System_Temp(d,freq_index=i,sort_ind=sort_ind,elevation=elevation,ra=ra,dec=dec,timestamps=timestamps,surface_temperature=surface_temperature,air_relative_humidity=air_relative_humidity) # APH added sort_ind
         T_SysTemp.calc_Sky_Temp(D=aperture_efficiency.D, bm_floor_dBi=bm_floor_dBi, radius=sky_radius) # APH re-factored into this 102018
-        #print("Load T_sysTemp = %.2f Seconds"%(time.time()-time_start))
         T_SysTemps.append(T_SysTemp)
         
     return nice_title,T_SysTemps,freq_list,elevation,ra,dec,surface_temperature,air_relative_humidity,receiver,SpillOver,aperture_efficiency
@@ -596,10 +498,28 @@ def Tsysmodel(T_SysTemps,freq_list,elevation,ra,dec,surface_temperature,air_rela
         
         if full: # Add elevation-independent contributions, except for Antenna Ohmic + electronics after LNA.
             dTdT = 1 if (Trxref is None) else (273.15+surface_temperature)/Trxref
-            Tmodel[:,i,0] += models.Tcmb + receiver.rec["HH"](T_SysTemp.freq)*dTdT 
-            Tmodel[:,i,1] += models.Tcmb + receiver.rec["VV"](T_SysTemp.freq)*dTdT
+            Tmodel[:,i,0] += Tcmb + receiver.rec["HH"](T_SysTemp.freq)*dTdT 
+            Tmodel[:,i,1] += Tcmb + receiver.rec["VV"](T_SysTemp.freq)*dTdT
         
     return Tmodel
+
+def fit_tipping(T_sys,SpillOver,pol,freqs,T_rx,spill_scale=1):
+    """ The 'tipping curve' is modeled using the expression below, with the free parameter just $T_{ant}$ - the Antenna noise temperature.
+            $T_{sys}(el) = T_{cmb}(ra,dec) + T_{gal}(ra,dec) + T_{atm}*(1-\exp(\frac{-\ta   u_{0}}{\sin(el)})) + T_spill(el) + T_{ant} + T_{rx}$
+        T_cmb + T_gal + T_atm is obtained from the T_sys.Tsky() function, T_spill & T_rx must have been determined elsewhere.
+        
+        @return: Tant (i.e. the un-modelled residual)
+    """
+    Trx = T_rx.rec[pol](freqs)
+    def func(x):
+        spill = SpillOver.spill[pol](np.array([[x,],[freqs]]))*spill_scale # APH (18) added *spill_scale
+        return Trx + spill # sky + spill + atm    # APH 032017 dropped sky+atm, this is residual Tsys at feed input reference plane
+    
+    resid = []
+    for el,t_sys in zip(T_sys.elevation, T_sys.Tsys_sky[pol]):  # APH 032017 changed from T_sys.Tsys[pol]
+        resid.append(t_sys - func(el))
+    return resid
+
 
 def process_b(nice_title,T_SysTemps,freq_list,elevation,ra,dec,surface_temperature,air_relative_humidity,receiver,SpillOver,aperture_efficiency,apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True,mb_crestfactor=1.3):
     """ @param apscale: the ratio ApArea_model/ApArea_report, which scales ap_eff(ApArea_model) to ap_eff(ApArea_report) (default 1 so for MeerKAT ApArea_report=ApArea_model which corresponds to D=13.5m)
@@ -622,62 +542,9 @@ def process_b(nice_title,T_SysTemps,freq_list,elevation,ra,dec,surface_temperatu
     # TODO: 11/2020 rewrite below to use Tsysmodel(T_SysTemps,freq_list,elevation,ra,dec,surface_temperature,air_relative_humidity,receiver,SpillOver,aperture_efficiency,mb_crestfactor=1.3, full=True)
     ### APH 032017 override sky noise subtraction
     for i,T_SysTemp in enumerate(T_SysTemps):
-        ### APH 032017 this has been the way it's been done till now (still in System_Temp)
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-np.asarray(T_SysTemp.T_sky) 
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-np.asarray(T_SysTemp.T_sky) 
-        
         ### APH (1) subtract it AT THE FEED input plane -- results & un-modelled residuals look beautiful
         atm_atten = np.exp(-T_SysTemp.opacity)
-        ##T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_SysTemp.T_sky)-Tcmb)*aperture_efficiency.eff['HH'](d.freqs[i]))
-        ##T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_SysTemp.T_sky)-Tcmb)*aperture_efficiency.eff['VV'](d.freqs[i]))
-        # APH (6) below works quite well, if smooth=1 i.e. beam filling factor = 0.5
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_SysTemp.T_sky)-Tcmb)*0.5)
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_SysTemp.T_sky)-Tcmb)*0.5)
-        # APH (7) the above but include "foreground" as point sources
-        #T_sky_bg,T_sky_ps = Sky_temp(freq_val,smooth=0,smooth_bg=1).Tsky(T_SysTemp.ra,T_SysTemp.dec,split=True) # BG resolution matches beam i.e. coupling=0.5
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_sky_bg)-Tcmb)*0.5+np.asarray(T_sky_ps)*aperture_efficiency.eff['HH'](d.freqs[i]))
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_sky_bg)-Tcmb)*0.5+np.asarray(T_sky_ps)*aperture_efficiency.eff['VV'](d.freqs[i]))
-        # APH (8) the above but include "foreground" as point sources
-        #T_sky_bg,T_sky_ps = Sky_temp(freq_val,smooth=1).Tsky(T_SysTemp.ra,T_SysTemp.dec,split=True) # FG resolution matches beam i.e. coupling=0.5
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_sky_bg)-Tcmb)+np.asarray(T_sky_ps)*aperture_efficiency.eff['HH'](d.freqs[i]))
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-T_SysTemp.T_atm-atm_atten*(Tcmb+(np.asarray(T_sky_bg)-Tcmb)+np.asarray(T_sky_ps)*aperture_efficiency.eff['VV'](d.freqs[i]))
-        # APH (9) changed source coupling: FG trated as point source and since resolution matches beam i.e. T_ps=2*T_smoothed
-        #T_sky_bg,T_sky_ps = Sky_temp(d.freqs[i],smooth=1).Tsky(T_SysTemp.ra,T_SysTemp.dec,split=True) # FG resolution matches beam i.e. T_ps=2*T_smoothed
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-T_SysTemp.T_atm-atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)*2)*aperture_efficiency.eff['HH'](d.freqs[i])
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-T_SysTemp.T_atm-atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)*2)*aperture_efficiency.eff['VV'](d.freqs[i])
-        # (12) eta_mb = 1.3*eta_ap and scale everything as if D=13.5m
-        eta_rad = 0.99
         eta_mb = [mb_crestfactor*aperture_efficiency.eff['HH'](T_SysTemp.freq), mb_crestfactor*aperture_efficiency.eff['VV'](T_SysTemp.freq)] # APH reinstated this 10/2020 and deactivated all below
-#         # (14) eta_mb = 0.97 and use D=13.965m throughout (eta_ap is scaled to match this)
-#         eta_mb = [0.97, 0.97]
-#         # (16) Use eta_mb for actual pattern, and correct for Tspill being based on "nominal" background rather than actual background
-#         eta_mb = np.asarray([[0.9],[0.9]])
-        #Delta_Tspill = (1-eta_mb)*atm_atten*(T_sky_bg-(Tcmb + 1.6*(d.freqs[i]/1e3)**-2.75)) # Approximate correction integrated beyond main beam
-        # (17) Scale T_*map with 1/(main beam:gaussian beam) factor
-        #T_sky_ps *= 1/.86
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-Delta_Tspill[0]-eta_rad*eta_mb[0]*(T_SysTemp.T_atm+atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)))
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-Delta_Tspill[1]-eta_rad*eta_mb[1]*(T_SysTemp.T_atm+atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)))
-        # (18) Corrected opacity calculation. Also correct SpillOver for difference in assumed atmosphere used only in fit_tipping
-        #spill_scale = (T_SysTemp.T_atm+atm_atten*T_sky_bg) / Tsky_tab_SKA([d.freqs[i]/1e3],(90-T_SysTemp.elevation)*np.pi/180.) # Approximate correction integrated beyond main beam
-        ##WIP##spill_scale = (T_SysTemp.T_atm+atm_atten*T_sky_bg+273.15+T_SysTemp.surface_temperature)/2. / BrightT_SKA([d.freqs[i]/1e3],(90-T_SysTemp.elevation)*np.pi/180.)
-        #print(d.freqs[i], " spillover scaled by ", spill_scale)
-        # (19) Drop spill_scale & Correction of airmass function as per Han & Westwater 2000 -- see System_Temp.__init__()
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-eta_rad*eta_mb[0]*(T_SysTemp.T_atm+atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)))
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-eta_rad*eta_mb[1]*(T_SysTemp.T_atm+atm_atten*(np.asarray(T_sky_bg)+np.asarray(T_sky_ps)))
-        spill_scale = 1.
-        # (21) Use T_SysTemp.T_sky which is now correctly integrated across the antenna beam out to 2nd null
-        # (22) Use sky-based T_ND and correct opacity (also use Han & Westwater's T_atm0)
-        # (23) use eta_rad=1 for sky-based T_ND
-        eta_rad = 1
-        # (29) dropped the one scale by eta_mb
-        #T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-eta_rad*eta_mb[0]*(T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky))
-        #T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-eta_rad*eta_mb[1]*(T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky))
-        T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-eta_rad*(eta_mb[0]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky))
-        T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-eta_rad*(eta_mb[1]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky))
-        # (27),(28) Correct for the fact that spillover doesn't include Tgal.  For tau < 0.01 it can be shown that avg atmospheric extinction is > 0.99, with <5% error.
-        T_SysTemp.Tsys_sky['HH'] -= (1-eta_mb[0])*0.99*np.asarray(T_SysTemp.T_avgsky)
-        T_SysTemp.Tsys_sky['VV'] -= (1-eta_mb[1])*0.99*np.asarray(T_SysTemp.T_avgsky)
-        
         # 08/2018: at the waveguide port, Tsys = eta_rad*TA + Treflectors + Tfeedandreceiver
         #   TA = iint{4pi}{((e^-tau*(Tcmb+Tgsm)+Tatm+Tgnd(theta))*sin(theta)}{dphi dtheta}
         # where GSM excludes CMB! We have a prediction for
@@ -688,30 +555,19 @@ def process_b(nice_title,T_SysTemps,freq_list,elevation,ra,dec,surface_temperatu
 #         eta_mb = [T_SysTemp.eta_mb]*2 # eta_mainbeam as used in integrating Tcelest into Tspillover
         Tcelest = 1.7*(T_SysTemp.freq/1e3)**-2.75 + (0 if MeerKAT else Tcmb) # As used to generate T_spill
         atm_atten_allsky = 0.99 # Approx. iint_{2pi SR}{e^-tau(theta)}
-#         TA_spill_HH = eta_mb[0]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky) + atm_atten_allsky*(np.asarray(T_SysTemp.T_avgsky)-(1-eta_mb[0])*Tcelest) # 10/2018 T_avgsky is now computed with main beam blanked, so don't scale that by (1-eta_mb)
-#         TA_spill_VV = eta_mb[1]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky) + atm_atten_allsky*(np.asarray(T_SysTemp.T_avgsky)-(1-eta_mb[1])*Tcelest)
+        # 10/2018 T_avgsky is now computed with main beam blanked, so don't scale that by (1-eta_mb)
         TA_spill_HH = eta_mb[0]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky) + atm_atten_allsky*atm_atten*(np.asarray(T_SysTemp.T_avgsky)-(1-eta_mb[0])*Tcelest)
         TA_spill_VV = eta_mb[1]*T_SysTemp.T_atm+atm_atten*np.asarray(T_SysTemp.T_sky) + atm_atten_allsky*atm_atten*(np.asarray(T_SysTemp.T_avgsky)-(1-eta_mb[1])*Tcelest)
         T_SysTemp.Tsys_sky['HH'] = np.asarray(T_SysTemp.Tsys['HH'])-eta_rad*TA_spill_HH
         T_SysTemp.Tsys_sky['VV'] = np.asarray(T_SysTemp.Tsys['VV'])-eta_rad*TA_spill_VV
     
     ## Standard code resumes
-    #units = T_SysTemp.units+'' APH 0302017 moved to "report_...()"
     for i,T_SysTemp in enumerate(T_SysTemps):
-        fit_H = fit_tipping(T_SysTemp,SpillOver,'HH',T_SysTemp.freq,receiver,fixopacity=fix_opacity,spill_scale=spill_scale)
-        #print("Fit tipping H = %.2f Seconds"%(time.time()-time_start))
-        fit_V = fit_tipping(T_SysTemp,SpillOver,'VV',T_SysTemp.freq,receiver,fixopacity=fix_opacity,spill_scale=spill_scale)
-        #print("Fit tipping V = %.2f Seconds"%(time.time()-time_start))
-        #print ('Chi square for HH  at %s MHz is: %6f ' % (np.mean(d.freqs),fit_H['chisq'],))
-        #print ('Chi square for VV  at %s MHz is: %6f ' % (np.mean(d.freqs),fit_V['chisq'],))
-        #length = len(T_SysTemp.elevation)  # APH 032017 removed -- not necessary. Also changed [0:length,...]  below to [:,...]
         if spec_sky: # APH added this condition 082018
             Tsky_spec = Tcmb + 1.7*(T_SysTemp.freq/1e3)**-2.75 # T_SysTemp.Tsys_sky  is Tsys-Tsky (Tsky includes Tcmb & Tatm). We then add the spec sky aproxx (T_gal+Tcmb)
             Tsky_spec = Tsky_spec*atm_atten + T_SysTemp.T_atm # APH032017 added this line. T_SysTemp.Tsys_sky  is Tsys-Tsky (Tsky includes Tcmb & Tatm) @ feed input. We then add the spec sky aproxx (T_gal+Tcmb+T_atm)
             tsys[:,i,0] = np.array(T_SysTemp.Tsys_sky['HH'])+eta_rad*Tsky_spec
             tsys[:,i,1] = np.array(T_SysTemp.Tsys_sky['VV'])+eta_rad*Tsky_spec
-            #tsys[:,i,0] = (np.array(T_SysTemp.Tsys_sky['HH']))+Tsky_spec*aperture_efficiency.eff['HH'](d.freqs[i]) # APH 032017 replaced above
-            #tsys[:,i,1] = (np.array(T_SysTemp.Tsys_sky['VV']))+Tsky_spec*aperture_efficiency.eff['VV'](d.freqs[i]) # APH 032017
             PLANE += ",spec_sky"
         else:
             tsys[:,i,0] = np.array(T_SysTemp.Tsys['HH'])
@@ -724,21 +580,22 @@ def process_b(nice_title,T_SysTemps,freq_list,elevation,ra,dec,surface_temperatu
             tsys[:,i,1] /= aperture_efficiency.eff['VV'](T_SysTemp.freq)
             tsys[:,i,3] /= aperture_efficiency.eff['HH'](T_SysTemp.freq)
             tsys[:,i,4] /= aperture_efficiency.eff['VV'](T_SysTemp.freq)
-        tant[:,i,0] = np.array(fit_H['fit'])[:,0]
-        tant[:,i,1] = np.array(fit_V['fit'])[:,0]
+        fit_H = fit_tipping(T_SysTemp,SpillOver,'HH',T_SysTemp.freq,receiver)
+        fit_V = fit_tipping(T_SysTemp,SpillOver,'VV',T_SysTemp.freq,receiver)
+        tant[:,i,0] = np.array(fit_H)[:,0]
+        tant[:,i,1] = np.array(fit_V)[:,0]
         tant[:,i,2] = elevation
-        #print("Debug: T_sys = %f   App_eff = %f  value = %f"%( np.array(fit_H['fit'])[22,0],aperture_efficiency.eff['HH'](d.freqs[i]),np.array(fit_H['fit'])[22,0]/aperture_efficiency.eff['HH'](d.freqs[i])))
+        #print("Debug: T_sys = %f   App_eff = %f  value = %f"%( np.array(fit_H)[22,0],aperture_efficiency.eff['HH'](d.freqs[i]),np.array(fit_H)[22,0]/aperture_efficiency.eff['HH'](d.freqs[i])))
     if (np.max(SpillOver.spill["HH"]([[45]*len(T_SysTemps),[T.freq for T in T_SysTemps]])) == 0): # It should be enough to test one polarisation at 45degEl
         PLANE += ",nospill"
     # The last T_SysTemp is passed on as a convenient container for sky_fig, units, elevation angles
     return nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE
 
+
 def report_a(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE):
     reportfilename = "%s_%s_tipping_curve.pdf"%(filename.split("/")[-1].split(".")[0],ant)
     pp = PdfPages(reportfilename)
-    print('http://kat-imager.kat.ac.za:8888/files/SysEng/'+reportfilename)
-    print('http://kat-imager.kat.ac.za:8888/files/SysEng/ska-se/aph/'+reportfilename)
-    print('http://com04.science.kat.ac.za:8891/tree/work/sdqm/'+reportfilename)
+    print('http://.../'+reportfilename)
     return pp
 
 def report_b(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, pp, cartesian=True):
@@ -753,7 +610,7 @@ def report_c(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
     
     tsys_ = np.take(tsys[0:length,:,0:2], iselect_freq, axis=1) # El, etc. are in axis=2@[2:]
     tant_ = np.take(tant[0:length,:,0:2], iselect_freq, axis=1) # El, etc. are in axis=2@[2:]
-    ylim = (roundup(np.nanpercentile(tant_,2), closest=5)-5, roundup(np.nanpercentile(tsys_,98), closest=5)) # 5 .. 95 for robustness to RFI
+    ylim = (mat.roundup(np.nanpercentile(tant_,2), closest=5)-5, mat.roundup(np.nanpercentile(tsys_,98), closest=5)) # 5 .. 95 for robustness to RFI
     
     for i,freq in zip(iselect_freq,select_freq):
         lineval = 46 if freq > 1420 else 42 #UHF & L-band spec limit
@@ -761,7 +618,7 @@ def report_c(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
         # APH slightly simplified title below and use freq_list instead of d.freqs
         fig = plot_data_el(tsys[0:length,i,:],tant[0:length,i,:],title="%s at %.1f MHz"%(nice_title,freq),units=T_SysTemp.units,line=lineval,aperture_efficiency=aperture_efficiency,PLANE=PLANE,frequency=freq_list[i])
         plt.ylim(*ylim)
-        plt.figtext(0.89, 0.04,git_info(), horizontalalignment='right',fontsize=10)
+        plt.figtext(0.89, 0.04,__version__, horizontalalignment='right',fontsize=10)
         fig.savefig(pp,format='pdf')
 
 def report_d(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, pp, select_freq=None, select_el=[15,45,90], plot_limits=True):
@@ -774,11 +631,11 @@ def report_d(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
     
     tsys_ = np.take(tsys[:,_fspec,0:2], iselect_el, axis=0) # El, etc. are in axis=2@[2:]
     tant_ = np.take(tant[:,_fspec,0:2], iselect_el, axis=0) # El, etc. are in axis=2@[2:]
-    ylim = (roundup(np.nanpercentile(tant_,2), closest=5)-5, roundup(np.nanpercentile(tsys_,98), closest=5))
+    ylim = (mat.roundup(np.nanpercentile(tant_,2), closest=5)-5, mat.roundup(np.nanpercentile(tsys_,98), closest=5))
     
     for i in iselect_el :
         fig = plot_data_freq(freq_list[_fspec],tsys[i,_fspec,:],tant[i,_fspec,:],title="%s at %.1f$^\circ$ elevation"%(nice_title,T_SysTemp.elevation[i]),aperture_efficiency=aperture_efficiency,PLANE=PLANE,plot_limits=plot_limits)
-        plt.figtext(0.89, 0.04,git_info(), horizontalalignment='right',fontsize=10)
+        plt.figtext(0.89, 0.04,__version__, horizontalalignment='right',fontsize=10)
         plt.ylim(*ylim)
         fig.savefig(pp,format='pdf')
     return f_low, f_high, _fspec
@@ -788,11 +645,11 @@ def report_cd(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficien
     for i,p in enumerate("HV"):
         fig = plt.figure(figsize=(16,9))
         _t_ = tsys[:,:,i]
-        T_max = roundup(np.nanpercentile(_t_,95), closest=5) + 5 # +5 softens saturation in case there's actually little RFI
+        T_max = mat.roundup(np.nanpercentile(_t_,95), closest=5) + 5 # +5 softens saturation in case there's actually little RFI
         plt.contourf(freq_list, T_SysTemp.elevation, _t_, levels=np.linspace(T_min,T_max,10)); plt.colorbar(fraction=0.05)
         plt.xlabel("f [MHz]"); plt.ylabel("Elevation angle [$^\circ$]")
         plt.title("%s, $T_{sys}%s$ %s"%(nice_title,("" if ("feed" in PLANE) else "/\eta_{ap}"),p*2))
-        plt.figtext(0.89, 0.04,git_info(), horizontalalignment='right',fontsize=10)
+        plt.figtext(0.89, 0.04,__version__, horizontalalignment='right',fontsize=10)
         fig.savefig(pp,format='pdf')
 
 def report_e(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, pp):
@@ -842,10 +699,7 @@ def report_e(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
     """
     text += r"""  * $\eta_{\mathrm{ap}}$ has been estimated using full wave EM analysis of the as-built optics & scaled to represent $D=%.2f$m.
     """%(aperture_efficiency.D)
-    if fix_opacity :
-        text += r"""  * $\tau_{0}$, the zenith opacity, is set to 0.01078 (Van Zee et al., 1997). """
-    else:
-        text += r"""  * $\tau_{0}$, the zenith opacity, is calculated according to ITU-R P.676-9."""
+    text += r"""  * $\tau_{0}$, the zenith opacity, is calculated according to ITU-R P.676-9."""
     text += r"""
       * $T_{\mathrm{atm}}$ is calculated as per Ippolito 1989 (eq 6.8-6)
     """
@@ -870,16 +724,16 @@ def report_e(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
     ax.set_axis_off()
     plt.subplots_adjust(top=0.99,bottom=0,right=0.975,left=0.01)
     #plt.figtext(0.1,0.1,text,fontsizie=10)
-    plt.figtext(0.89, 0.04,git_info(), horizontalalignment='right',fontsize=10)
+    plt.figtext(0.89, 0.04,__version__, horizontalalignment='right',fontsize=10)
     fig.savefig(pp,format='pdf')
     pp.close()
     plt.close(fig)
 
     
-def process(h5, ant, f_minMHz, f_maxMHz, channel_mask='/var/kat/katsdpscripts/RTS/rfi_mask.pickle', apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True):
-    return process_b(*process_a(h5, ant, f_minMHz, f_maxMHz, channel_mask=channel_mask), apscale=apscale,PLANE=PLANE,spec_sky=spec_sky,MeerKAT=MeerKAT)
+def process(h5, ant, f_minMHz, f_maxMHz, freq_mask='', apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True):
+    return process_b(*process_a(h5, ant, f_minMHz, f_maxMHz, freq_mask=freq_mask), apscale=apscale,PLANE=PLANE,spec_sky=spec_sky,MeerKAT=MeerKAT)
 
-cache = {} # "files":[filenames], ant.name: [ *[filename, process():return]* ], ant.name+"/bb": {filename:intermadiate results}
+cache = {} # "files":[filenames], ant.name: [ *[filename, process():return]* ], ant.name+"/bb": {filename:intermediate results}
 
 def process_cached(cache, h5, ant, f_min, f_max, apscale=1.,PLANE="antenna"):
     filename = h5.name.split()[0].split(" ")[0] # "rdb files are different
@@ -902,48 +756,33 @@ def report(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency,
     return nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE
 
 
-# General band-neutral settings
-fix_opacity = False
-nd_models = '/var/kat/katconfig/user/noise-diode-models/mkat'
-#nd_models = '/home/kat/SysEng/tsys_results/' # Early days - MANUALLY COPY TO HERE
-
 def open_dataset(filename, band=None, hackedL=False, ant_rx_SN={}, verbose=True, **kwargs):
-    """ @param band: None to let 'models' guess the band from frequencies, or force to e.g. "B1", "u", "l" (default None)
-       @param hackedL: deprecated, use filename=katselib.as_hackedL(katdal.open(fn)) instead
-       @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
-       @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
-       @return: the katdal dataset with data selected & ordered as required. """
-    h5 = katdal.open(filename, **kwargs) if isinstance(filename,str) else filename
+    """ Convenience method for opening a dataset.
+        @param band: None to let 'models' guess the band from frequencies, or force to e.g. "B1", "u", "l" (default None)
+        @param hackedL: True if the dataset was recorded with the "hacked L-band digitiser".
+        @param ant_rxSN: {antname:rxband.sn} If the metadata does not reflect correct receiver ID, override it here.
+        @param kwargs: Passed to katdal, e.g. to change the centre freq, pass 'centre_freq=...Hz'.
+        @return: the katdal dataset with data selected & ordered as required. """
+    ds = katdal.open(filename, **kwargs) if isinstance(filename,str) else filename
+    ds = util.hack_dataset(ds, hackedL=hackedL, ant_rx_override=ant_rx_SN, verbose=verbose)
     if hackedL:
-        h5 = as_hackedL(h5)
-        h5.select(freqrange=(300e6,856.5e6))
-    
-    # Override receiver ID if requested
-    for ant in h5.ants:
-        h5.receivers[ant.name] = ant_rx_SN.get(ant.name,h5.receivers[ant.name])
+        ds.select(freqrange=(300e6,856.5e6))
+    models.BAND = band # Provide a hint for models.band()
+    return ds
 
-    if verbose:
-        print(h5)
-        print(h5.receivers)
-    
-    models.BAND = band
-    return h5
-
-open_h5 = open_dataset # Deprecated alias
 
 if __name__ == "__main__":
-    try:
-        import sys
-        filename = sys.argv[1]
-        antname = sys.argv[2]
-        select_freq = eval("[%s]"%sys.argv[3])
-    except:
-        print("Usage: <program> filename ant select_freq")
-        print("    ant: \"all\" or \"m0xx\"")
-        print("    select_freq: comma-separated list of MHz e.g. 1000,1300,1600")
-    else:
-        h5 = open_dataset(filename)
-        ants = [a.name for a in h5.ants] if (antname=="all") else [antname]
-        for ant in ants:
-            ru = process(h5, ant, np.min(select_freq), np.max(select_freq), PLANE="antenna",spec_sky=True)
-            report(ant, h5.name.split()[0].split(" ")[0], *ru, select_freq=select_freq)
+    import optparse
+    parser = optparse.OptionParser(usage="%prog [opts] <dataset filename>",
+                                   description="Process a 'tip curve' dataset and generate a standard report.")
+    parser.add_option("-a", "--ants", dest="ants", help="The name(s) of the specific antenna(s) in the dataset to process, or 'all'")
+    parser.add_option("--select-freq", dest="select_freq", help="Comma-separated list of frequencies, including limits in MHz, e.g. '900,1000,1400,1600'")
+    parser.add_option("--freq-mask", dest="freq_mask", default="", help="Filename for frequency mask, either text or pickle format.")
+    opts, args = parser.parse_args()
+    
+    ds = open_dataset(args[0])
+    ants = [a.name for a in ds.ants] if (opts.ant=="all") else opts.ants.split(',')
+    select_freq = map(float, opts.select_freq.split(","))
+    for ant in ants:
+        ru = process(ds, ant, min(select_freq), max(select_freq), freq_mask=opts.freq_mask, PLANE="antenna",spec_sky=True)
+        report(ant, ds.name.split()[0].split(" ")[0], *ru, select_freq=select_freq)
