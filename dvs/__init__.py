@@ -10,4 +10,14 @@ if ('site-packages' not in __pkgroot__):
             sys.path.append(lib)
 
 
-cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
+from .util import cbid2url
+
+
+modelsroot = __pkgroot__ + "/models"
+
+
+import katsemodels as models
+# Update these global paths (the module loader ensures there's only one instance, so all are affected!)
+models.aperture_efficiency_dir = modelsroot+'/aperture-efficiency'
+models.spill_over_dir = modelsroot+'/spill-over'
+models.lab_Trec_dir = modelsroot+'/receiver-models'
