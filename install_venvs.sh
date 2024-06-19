@@ -35,11 +35,6 @@ git clone git@github.com:ska-sa/dvs.git
 git clone git@github.com:ska-sa/systems-analysis.git
 ln -s systems-analysis/analysis dvs/libraries/systemsanalysis
 
-# This repository is private
-git clone --single-branch --branch karoo-dvs git@github.com:ska-sa/katconfig.git
-ln -s katconfig/user/noise-diode-models dvs/models
-ln -s katconfig/user/receiver-models dvs/models
-
 ipython3 kernel install --name "dvs" --user
 jupyter kernelspec list | grep dvs
 echo ACTION: Insert the following line into the above dvs/kernel.json 
