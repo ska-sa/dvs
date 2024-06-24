@@ -1016,7 +1016,7 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
               fitfreqrange=None, rfifilt=[1,7], freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
@@ -1024,7 +1024,7 @@ def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=Fal
         @param f: filename string, or an already opened h5 file, to be passed to 'load_vis()'.
         @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'load_vis()'.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
-        @param flux_opt: an identifier for the source flux model, passed to 'models.describe_source()'.
+        @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
         @param HPBW: something like 'lambda f: 1.2*(3e8/f)/D' [rad] to avoid fitting HPBW from the data itself (default None). Used to select data for the beam nulls.
         @param N_bore: Force the number of time samples to average over the bore sight crossing, else uses average of HPBW/20 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
@@ -1052,7 +1052,7 @@ def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=Fal
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
         
-        src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_opt=flux_opt, flux_model_min_freq_MHz=np.min(h5.freqs)/1e6, verbose=True)
+        src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, flux_model_min_freq_MHz=np.min(h5.freqs)/1e6, verbose=True)
         hpw_src = (np.log(2)/2.)**.5*theta_src if (profile_src == "disc") else theta_src # from Baars 1973
         hpw_src *= np.pi/(180*60.) # arcmin to [rad]
         par_angle = np.median(h5.parangle) * np.pi/180 # Parallactic angle [rad] of antenna towards the source on bore sight
@@ -1397,7 +1397,7 @@ if __name__ == "__main__":
                       help="Antenna numerical sequence as listed in the dataset - NOT receptor ID (default %default).")
     parser.add_option('-t', '--target', type='string', default=None,
                       help="Target name to either look up flux model in katsemodels.py, or from catalogue.")
-    parser.add_option('-x', '--flux-opt', type='string', default=None,
+    parser.add_option('-x', '--flux-key', type='string', default=None,
                       help="Identify the flux model to use for the source, or None if the target is loaded from the catalogue (default %default)")
     parser.add_option('-b', '--hpbw', type='string', default="lambda f: 1.22*(_c_/f)/13.965", # "Nominal best fit" for MeerKAT UHF & L-band
                       help="None, or a function that defines the half power beamwidth in radians, like 'lambda f_Hz: rad' (default %default)")
@@ -1413,5 +1413,5 @@ if __name__ == "__main__":
     freqmask = eval(opts.rfi_mask)
     fitfreqrange = eval(opts.fit_freq)
     
-    result = analyse(args[0], opts.ant, opts.target, opts.flux_opt, HPBW=opts.hpbw, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
+    result = analyse(args[0], opts.ant, opts.target, opts.flux_key, HPBW=opts.hpbw, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
     
