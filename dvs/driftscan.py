@@ -1052,7 +1052,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
         
-        src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, flux_model_min_freq_MHz=np.min(h5.freqs)/1e6, verbose=True)
+        src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, verbose=True)
         hpw_src = (np.log(2)/2.)**.5*theta_src if (profile_src == "disc") else theta_src # from Baars 1973
         hpw_src *= np.pi/(180*60.) # arcmin to [rad]
         par_angle = np.median(h5.parangle) * np.pi/180 # Parallactic angle [rad] of antenna towards the source on bore sight
