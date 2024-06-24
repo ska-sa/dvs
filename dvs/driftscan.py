@@ -2,31 +2,32 @@
 """
     Formalisation of earlier SEFD_TauAOrionA.ipynb
     Typical use 1:
-        python analyze_SEFD.py /data/132598363.h5 0 hydra
+        python driftscan.py /data/132598363.h5 0 "Hydra A"
     which is equivalent to
-        from analyze_SEFD import analyse; from sefd.models import hydra
-        analyse(sys.argv[1], int(sys.argv[2]), eval(sys.argv[3]), saveroot=".")
+        from driftscan import analyse
+        analyse(sys.argv[1], int(sys.argv[2]), sys.argv[3], saveroot=".")
         
     Typical use 2:
-        import analyze_SEFD as sefd
-        h5 = sefd.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
+        import driftscan
+        ds, target = driftscan.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
         
-        bore, null_l, null_r, null_w, _HPBW = sefd.find_nulls(h5, bore, debug_level=1)
+        bore, null_l, null_r, null_w, _HPBW = driftscan.find_nulls(ds, debug_level=1)
         
-        target, theta_src, profile_src, S_src = sefd.models.describe_source(sefd.models.taurus)
-        par_angle = np.median(h5.parangle) * np.pi/180
-        offbore_deg = sefd.target_offset(sefd.models.taurus, np.mean(bore), ...)
+        theta_src, profile_src, S_src = driftscan.models.describe_source("Taurus A")
+        par_angle = np.median(ds.parangle) * np.pi/180
+        _bore_ = int(np.median(bore)
+        offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs)))
         hpbw0 = np.nanpercentile(_HPBW, 5)
-        hpbw0_f = np.mean(h5.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
-        C = sefd.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, h5.channel_freqs/1e9)
+        hpbw0_f = np.mean(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
+        C = driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, ds.channel_freqs/1e9)
         if (np.min(C) < 0.99):
             print("CAUTION: source transits far from bore sight (%.2fdeg), scaling flus by >=%.3f"%(offbore_deg,np.min(C)))
-        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(sefd.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
+        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
         
         freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, El = \
-                sefd.get_SEFD_ND(h5,bore,[(null_l[0],null_w),(null_r[0],null_w)],
-                                 Sobs_src,theta_src/60*np.pi/180 / _HPBW,profile_src,
-                                 freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
+                driftscan.get_SEFD_ND(ds,bore,[(null_l[0],null_w),(null_r[0],null_w)],
+                                      Sobs_src,theta_src/60*np.pi/180 / _HPBW,profile_src,
+                                      freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
         
     @author aph@sarao.ac.za
 """
@@ -52,7 +53,7 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
         @param snap_to: limits are roudned to integer multiples of this number (default 1).
         @return (min,max) or possibly None """
     a, b = 1-margin_pct/100., 1+margin_pct/100.
-    _data = data[np.isfinite(data)]
+    _data = np.ma.compressed(data) if isinstance(data, np.ma.masked_array) else data[np.isfinite(data)]
     if (len(_data) == 0):
         return None
     else:
@@ -385,7 +386,7 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
        @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
        @param debug: True to generate figures that may aid in debugging the dataset (default False)
        @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
-       @return: the katdal dataset with data selected & ordered as required.
+       @return: (the katdal dataset with data selected & ordered as required, drift target with the antenna set).
     """
     h5 = katdal.open(f, **kwargs) if isinstance(f,str) else f
     
@@ -438,6 +439,9 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
     
     h5.__select_SEFD__()
     
+    target = [t for t in h5.catalogue.targets if t.body_type=='radec'][0]
+    target.antenna = h5.ants[0]
+    
     if debug:
         filename = h5.name.split("/")[-1].split(".")[0] # Without extension
         vis = np.abs(h5.vis[:]) # TODO: I have no idea why using vis[:] here and everywhere else speeds up the dask dataset, but it does, dramatically!
@@ -457,7 +461,7 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
             alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0]),
                                                                lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0])))
             alt_x.set_xlabel("Channel #")
-    return h5
+    return h5, target
 
 
 def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
@@ -838,36 +842,36 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
     print("Expected off-source std/mu = %s at %.f MHz" % (1/np.sqrt(BW0*tau), np.average(freqrange)/1e6)) # Must not have a slope
 
 
-def target_offset(src_RADEC, timestamp, ant, az, el, freq, label="observation", debug=True):
+def target_offset(target, timestamp, az, el, freq, label="observation", debug=True):
     """ Determines the offset of the source at the specified time, relative to the pointing direction of the
         specified antenna.
         
-        @param src_RADEC: eg. "TauA, radec, 05:34:31.94, 22:00:52.2"
+        @param target: the katpoint.Target, with the observing antenna set if you have debug enabled.
         @param timestamp: the specified time instant [UTC seconds]
         @param ant: the katpoint.Antenna acting as observer.
         @param az, el: azimuth & elevation look angles [deg] of the antenna.
         @param freq: the frequency [Hz] to use for determining the antenna's beam width.
         @return on_delta: the offset of the source from bore sight [deg]
     """
-    src = katpoint.Target(src_RADEC, antenna=ant)
     t_obs = katpoint.Timestamp(timestamp)
-    on_sky = np.asarray(src.radec(t_obs, antenna=ant))*180/np.pi
-    on_exp = np.asarray(src.azel(t_obs))*180/np.pi
+    ant = target.antenna
+    on_sky = np.asarray(target.radec(t_obs, antenna=ant))*180/np.pi
+    on_exp = np.asarray(target.azel(t_obs))*180/np.pi
     on_rec = np.squeeze([az, el])
     
     on_delta = np.squeeze([np.abs(on_exp[0]-on_rec[0]), np.abs(on_exp[1]-on_rec[1])])
     on_delta[0] = np.angle(np.exp(1j*on_delta[0]*np.pi/180)) * 180/np.pi # Remove 360deg ambiguity from Az angle
-    HPBW = 1.22*(_c_/freq)/ant.diameter *180/np.pi # Standard illumination of circular aperture
     if debug:
         print("UTC for %s of target: %s" % (label, t_obs))
         print("    Antenna pointing to RA %.3f hrs, DEC %.3f deg" % (on_sky[0]*24/360., on_sky[1]))
         print("    Target Az,El: %s deg"%(on_exp))
         print("    Antenna Az,El: %s deg"%(on_rec))
+        HPBW = 1.22*(_c_/freq)/ant.diameter *180/np.pi # Standard illumination of circular aperture
         print("    Source within %s deg of beam bore sight (<%.3f HPBW)" % (on_delta,np.max(np.abs(on_delta)/HPBW)))
         # Report on the proximity to some special targets
         for special in ["Sun", "Moon"]:
             tgt = katpoint.Target("%s, special"%special.lower(), antenna=ant)
-            print("    Distance from target to the %s %.f deg" % (special, tgt.separation(src, t_obs)*180/np.pi))
+            print("    Distance from target to the %s %.f deg" % (special, tgt.separation(target, t_obs)*180/np.pi))
     return np.max(on_delta)
 
 
@@ -1034,11 +1038,10 @@ def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=Fal
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    h5 = load_vis(f, ant=ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
+    h5, target = load_vis(f, ant=ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
     cleanchans = chan_idx(h5.channel_freqs, fitfreqrange)
     filename = h5.name.split("/")[-1].split(" ")[0]
     ant = h5.ants[0]
-    target = [t for t in h5.catalogue.targets if t.body_type=='radec'][0]
     source = source if source else target.name
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
@@ -1079,7 +1082,7 @@ def analyse(f, ant, source, flux_opt, ant_rxSN={}, swapped_pol=False, strict=Fal
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
-        offbore_deg = target_offset(target.description, h5.timestamps[_bore_], ant, h5.az[_bore_], h5.el[_bore_], np.mean(h5.freqs), "bore sight transit", debug=True)
+        offbore_deg = target_offset(target, h5.timestamps[_bore_], h5.az[_bore_], h5.el[_bore_], np.mean(h5.freqs), "bore sight transit", debug=True)
         hpbw0, hpbw0_f = np.nanpercentile(_HPBW[cleanchans], 5), np.percentile(h5.channel_freqs[cleanchans], 95) # ~Smallest HPBW at ~highest frequency
         C = models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, h5.channel_freqs/1e9)
         print("Scaling source flux for pointing offset, by %.3f - %.3f over frequency range"%(np.max(C), np.min(C)))
@@ -1391,7 +1394,7 @@ if __name__ == "__main__":
                                                " (if not available for a band, assumes some nominal default value)."
                                                "Results are summarised in figures and processing log in PDF report.")
     parser.add_option('-a', '--ant', type='int', default=0,
-                      help="Antenna numerical sequence as lsited in the dataset - NOT receptor ID (default %default).")
+                      help="Antenna numerical sequence as listed in the dataset - NOT receptor ID (default %default).")
     parser.add_option('-t', '--target', type='string', default=None,
                       help="Target name to either look up flux model in katsemodels.py, or from catalogue.")
     parser.add_option('-x', '--flux-opt', type='string', default=None,
@@ -1406,11 +1409,6 @@ if __name__ == "__main__":
                       help="Strictly avoid noise diode unless tracking the target (default %default).")
     
     (opts, args) = parser.parse_args()
-    try:
-        opts.target = models.__dict__[opts.target]
-    except:
-        print("WARNING: failed to interpret target %s, defaulting to None"%opts.target)
-        opts.target = None
     opts.hpbw = eval(opts.hpbw)
     freqmask = eval(opts.rfi_mask)
     fitfreqrange = eval(opts.fit_freq)
