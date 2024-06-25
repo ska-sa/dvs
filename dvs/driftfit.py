@@ -245,8 +245,8 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
         # Reduce resolution before fitting (to speed up)
         ch_res = int(ch_res)
-        chans = np.asarray(downsample(f_axis[fmask], ch_res, trunc=True), int)
-        vis_nb = downsample(vis_nb[:,fmask,:], ch_res, axis=1, filter=np.nanmean, trunc=True)
+        chans = np.asarray(downsample(f_axis[fmask], ch_res, method=np.nanmean, trunc=True), int)
+        vis_nb = downsample(vis_nb[:,fmask,:], ch_res, axis=1, method=np.nanmean, trunc=True)
         # Fit each remaining channel independently, with NaN's where fit doesn't converge
         dbl, bm, sigma, mu = _fit_bm_(vis_nb, t_axis, force=False, sigmu0=sigmu0, debug=debug>0)
         # Interpolate to restore original frequency resolution
