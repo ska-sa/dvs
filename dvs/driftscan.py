@@ -10,22 +10,23 @@
     Typical use 2:
         import driftscan
         ds, target = driftscan.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
+        src, theta_src, profile_src, S_src = driftscan.models.describe_source("Taurus A", verbose=True)
         
-        bore, null_l, null_r, null_w, _HPBW = driftscan.find_nulls(ds, debug_level=1)
+        bore, null_l, null_r, _HPBW, null_w = driftscan.find_nulls(ds, debug_level=1)
+        _bore_ = int(np.median(bore))
         
-        theta_src, profile_src, S_src = driftscan.models.describe_source("Taurus A")
-        par_angle = np.median(ds.parangle) * np.pi/180
-        _bore_ = int(np.median(bore)
-        offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs)))
+        offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs))
         hpbw0 = np.nanpercentile(_HPBW, 5)
         hpbw0_f = np.mean(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
         C = driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, ds.channel_freqs/1e9)
         if (np.min(C) < 0.99):
             print("CAUTION: source transits far from bore sight (%.2fdeg), scaling flus by >=%.3f"%(offbore_deg,np.min(C)))
+        
+        par_angle = ds.parangle[_bore_] * np.pi/180
         Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
         
         freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, El = \
-                driftscan.get_SEFD_ND(ds,bore,[(null_l[0],null_w),(null_r[0],null_w)],
+                driftscan.get_SEFD_ND(ds,bore,[null_l[0],null_r[0]],null_w,
                                       Sobs_src,theta_src/60*np.pi/180 / _HPBW,profile_src,
                                       freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
         
@@ -36,10 +37,7 @@ import numpy as np
 import warnings
 import scipy.optimize as sop
 import scipy.interpolate as interp
-try:
-    import katdal
-except: 
-    print("WARNING: Failed to load katdal, proceeding with limitations!")
+import katdal
 import katpoint
 from katsemat import smooth, smooth2d, Polynomial2DFit
 from katselib import mask_jumps, PDFReport
@@ -446,21 +444,21 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
         filename = h5.name.split("/")[-1].split(".")[0] # Without extension
         vis = np.abs(h5.vis[:]) # TODO: I have no idea why using vis[:] here and everywhere else speeds up the dask dataset, but it does, dramatically!
         vis_ = vis/np.percentile(vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
-        freqs = h5.channel_freqs/1e6
+        chans = h5.channels
         ax = plt.subplots(2,2, sharex=True, gridspec_kw={'height_ratios':[2,1]}, figsize=(16,8))[1]
         for p,P in enumerate(h5._pol):
-            ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(freqs[0],freqs[-1], 0,vis_.shape[0]),
+            ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
             ax[0][p].set_title("%s\n%s"%(filename,P)); ax[0][p].set_ylabel("Time [samples]")
-            ax[1][p].plot(freqs, 10*np.log10(np.max(vis[:,:,p], axis=0)))
+            ax[1][p].plot(chans, 10*np.log10(np.max(vis[:,:,p], axis=0)))
             ax[1][p].set_ylabel("max [dBcounts]"); ax[1][p].grid(True)
-        ax[1][1].set_xlabel("Frequency [MHz]")
+            ax[1][p].set_xlabel("Channel #")
         
-        chans = h5.channels
+        freqs = h5.channel_freqs/1e6
         for i in [0,1]:
-            alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0]),
-                                                               lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0])))
-            alt_x.set_xlabel("Channel #")
+            alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0])),
+                                                               lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0]))
+            alt_x.set_xlabel("Frequency [MHz]")
     return h5, target
 
 
@@ -610,7 +608,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,theta_src,profile_src,null_labels=No
     # Predicted results for assumed background (single polarization)
     ant = h5.ants[0]
     RxSN = h5.receivers[ant.name]
-    fTgal = lambda n: Tgal if Tgal else models.fit_bg(h5, nulls[n][0].mean(), D=ant.diameter, debug=True)[0]
+    fTgal = lambda n: Tgal if Tgal else models.fit_bg(h5, np.nanmedian(nulls[n]), D=ant.diameter, debug=True)[0]
     if (Tatm is None):
         Tatm = lambda freqs, el_deg: 275*(1-np.exp(-models.opacity(freqs, h5.sensor)/np.sin(el_deg*np.pi/180))) # ITU-R P.372-11 suggests 275 as a typical number, NASA's propagation handbook 1108(02) suggests 280 K [p 7-8]
     pText, pTsys, pSEFD, Tsys_deduced = [], [], [], []
@@ -1055,7 +1053,6 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, verbose=True)
         hpw_src = (np.log(2)/2.)**.5*theta_src if (profile_src == "disc") else theta_src # from Baars 1973
         hpw_src *= np.pi/(180*60.) # arcmin to [rad]
-        par_angle = np.median(h5.parangle) * np.pi/180 # Parallactic angle [rad] of antenna towards the source on bore sight
         pp.header = "Drift scan %s of %s on %s"%(filename, src_ID, ant.name)
         
         # Plot the raw data, integrated over frequency, vs relative time
@@ -1086,6 +1083,8 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         hpbw0, hpbw0_f = np.nanpercentile(_HPBW[cleanchans], 5), np.percentile(h5.channel_freqs[cleanchans], 95) # ~Smallest HPBW at ~highest frequency
         C = models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, h5.channel_freqs/1e9)
         print("Scaling source flux for pointing offset, by %.3f - %.3f over frequency range"%(np.max(C), np.min(C)))
+        
+        par_angle = h5.parangle[_bore_] * np.pi/180
         Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * np.reshape(models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
         theta_src = theta_src/60*np.pi/180/_HPBW # arcmin -> fraction of HPBW (very small impact if HPBW includes source extent)
         
