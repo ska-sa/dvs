@@ -456,8 +456,8 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
         
         freqs = h5.channel_freqs/1e6
         for i in [0,1]:
-            alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0])),
-                                                               lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0]))
+            alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0]),
+                                                               lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0])))
             alt_x.set_xlabel("Frequency [MHz]")
     return h5, target
 
