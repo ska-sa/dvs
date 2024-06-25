@@ -39,10 +39,11 @@ import scipy.optimize as sop
 import scipy.interpolate as interp
 import katdal
 import katpoint
-from katsemat import smooth, smooth2d, Polynomial2DFit
-from katselib import mask_jumps, PDFReport
 import katsemodels as models
 from katsemodels import _kB_, _c_
+from katsemat import smooth, smooth2d
+from . import driftfit
+from katselib import PDFReport
 
 
 def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
@@ -93,33 +94,6 @@ def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,b
         plt.legend(loc='best', fontsize='small', framealpha=0.8)
 
 
-def downsample(x, N, axis=-1, filter=np.nanmean, trunc=False): # TODO: find out if there's a standard implementation of this.
-    """ Re-samples a copy of 'x' by averaging over non-overlapping blocks of length 'N' (using 'method') along the specified axis
-        
-        @param N: down-sampling factor, must be an integer divisor of x.shape[axis].
-        @param axi: the axis along which to down sample, or -1 to down sample the flattened array (default -1).
-        @param filter: method to apply when interpolating data (default np.nanmean).
-        @param trunc: True to reduce the length of the axis to a multiple of N, thereby avoiding the possible runtime error (default False)
-        @return: an array with same dimensions as 'x' but down-sampled by a factor 'N'.
-    """
-    if (axis<0): # "Unwrap" the index so that we don't need to worry about it further below
-        axis += len(x.shape)
-    if not trunc:
-        assert (x.shape[axis] % N == 0), "Resampling by %d doesn't preserve the number of samples (%d) along axis %d!"%(N,x.shape[axis],axis)
-    y = np.ma.array(x, copy=True, fill_value=x.fill_value) if isinstance(x, np.ma.masked_array) else np.array(x, copy=True)
-    if (N > 1):
-        N_axes = len(y.shape)
-        for i in range(axis+1,N_axes): # Move all axes after the one we're interested in, to the front
-            y = np.moveaxis(y, -1, 0)
-        if trunc and (y.shape[-1] % N != 0):
-            y = y[...,:int(y.shape[-1]/N)*N]
-        y = np.reshape(y,[s for s in y.shape[:-1]]+[y.shape[-1]//N,N]) # Last index (f) gets split into groups of N
-        y = filter(y,axis=-1)
-        for i in range(axis+1,N_axes): # Move all axes that were moved earlier, back
-            y = np.moveaxis(y, 0, -1)
-    return y
-
-
 def chan_idx(channels, bounds):
     """ @param bounds: a list or tuple of min,max channels (same units as channels) or None to pass all.
         @return: a selector based on the indices where channels fall within the bounds """
@@ -158,219 +132,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
         return array2d
 
 
-def _fit_bl_(vis, masks=None, polyorders=[1,1]):
-    """ Fit a (low order) polynomial to the first two axes of the data.
-        NB: masking (numpy.ma.masked_array) of the input data is ignored for the fit; only the 'vis-baseline' result
-        inherits the masking of the input data.
-        
-        @param vis: real-valued data.
-        @param masks: optional (mask0,mask1) to select across first two axes (default None)
-        @param polyorders: the orders of the polynomials to fit over the two axes (default [1,1])
-        @return: (baseline, vis-baseline) both with the  same shape as 'vis'.
-    """
-    N_t, N_f, N_p = vis.shape
-    f_mesh, t_mesh = np.meshgrid(np.arange(N_f), np.arange(N_t))
-    if (masks is None) or ((masks[0] is None) and (masks[-1] is None)):
-        masked = lambda x: x
-    elif (masks[0] is not None) and (masks[1] is not None):
-        masked = lambda x: x[np.ix_(*masks)]
-    elif (masks[0] is not None):
-        masked = lambda x: x[masks[0],...]
-    elif (masks[1] is not None):
-        masked = lambda x: x[:,masks[1],...]
-    x_p, y_p = masked(t_mesh), masked(f_mesh)
-    
-    # The fit seems to be much improved if we remove bias in both the data, as well as in all axes with gaps in it
-    x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.mean(vis, axis=0)
-    z_p = masked(vis - v0)
-    model = Polynomial2DFit(polyorders)
-    bl = [model.fit([x_p-x0, y_p-y0], z_p[...,p])([t_mesh-x0, f_mesh-y0]) for p in range(N_p)]
-    bl = np.stack(bl, axis=-1) # t,f,p
-    bl += v0 # Restore bias
-    
-    v_nb = vis - bl # The data with the fitted baseline subtracted
-    return bl, v_nb
-
-def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
-    """ Fits a Gaussian, plus a first order polynomial for the baseline along the first axis of the data (which fails to converge
-        if the baseline slope exceeds the beam height). This fit is repeated sequentially and independently along the second axis,
-        consequently execution time scales linearly with the size of the second axis.
-        
-        @param vis: real-valued data arranged as (time, freq, prod)
-        @param t_axis: the intervals along the first axis, in terms of which sigma & mu will be defined.
-        @param force: True to return starting estimate (rather than NaN's) if solution doesn't converge (default False).
-        @param sigmu0: first estimate for [sigma,mu], or None to use default starting estimate (default None)
-        @return: [baseline, beam] each shaped like vis; [sigmaH,sigmaV] each shaped like vis axis 1; [muH,muV] like vis axis 1
-    """
-    # TODO: add a smoothness constraint for mu over the first two axes (time & frequency)
-    G = lambda ampl,sigma,mu: abs(ampl)*np.exp(-1/2.*(t_axis-mu)**2/sigma**2) # 1/sigma/sqrt(2pi)*... is absorbed in amplitude term
-    B = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[oH+sH*t_axis + G(aH,sigmaH,muH),
-                                                               oV+sV*t_axis + G(aV,sigmaV,muV)]
-    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.2 + G(1,1*sigmaH,muH), # Weights to emphasize the beam peak over the baseline
-                                                               0.2 + G(1,1*sigmaV,muV)]
-    
-    N_t, N_f, N_p = np.shape(vis)
-    assert (N_p==2), "_fit_bm_() is hard-coded for data shaped like (*,*,2), not %s"%np.shape(vis)
-    
-    # Starting estimates: ampl, sigma, mu
-    if sigmu0 is None:
-        mu0 = np.median(t_axis[np.ma.any(vis>np.nanpercentile(vis,80,axis=(0,1)), axis=(1,2))])
-        sigma0 = N_t/9. # Reasonable guess to start for typical scans -- no fit expected if 4*sigma > N_t
-    else:
-        sigma0, mu0 = sigmu0
-    if np.isnan(mu0): # This happens in some pathological cases (e.g. channel 0), return NaN's
-        return (np.nan+vis), (np.nan+vis), [[np.nan]*2]*N_f, [[np.nan]*2]*N_f
-    
-    A0 = np.nanpercentile(vis[int(mu0-10):int(mu0+10),...].data,95,axis=0) - np.nanpercentile(vis.data,5,axis=0) # (freq,prod) Use .data since can't use ma.compressed() - it discards dimensions
-    
-    bl, bm, sigma, mu = [], [], [], [] # Arranged as (freq,time,prod) and (freq,prod)
-    vis = vis / A0 # Normalize amplitudes, so that both pols contribute similarly to optimization metric
-    for f in range(N_f): # Fit per frequency channel
-        if debug and (f%10 == 0):
-            print("INFO: Fitting channel %d of %d"%(f,N_f))
-        v_nb = vis[:,f,:]
-        p0 = [0,0, 0,0, 1,1, sigma0,sigma0, mu0,mu0]
-        p, s, _,_, _,_, w = sop.fmin_bfgs(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
-        ss = np.nansum((B(*p)-v_nb)**2, axis=(0,1))
-        
-        # Repeat the fit if necessary
-        if ((w == 1) or (np.min(p[-2:]) < 0 or np.max(p[-2:]) >= N_t)): # warning OR bore sight transit out-of-bounds = likely invalid fit
-            if debug:
-                print("INFO: beam fitting failed to converge on first attempt, re-trying with better starting estimates.")
-            # Update p0 based on the best of the two pols and retry
-            bb = np.argmin(ss) # Best of the two pols
-            if ((p[-2+bb] < 0) or (p[-2+bb] >= N_t)): # In some pathological cases the lowest residual has mu out of bounds
-                bb = abs(1-bb) # 0->1, 1->0
-            p0 = p0[:-4] + [p[bb+len(p0[:-4])+i] for i in [0,0,2,2]] # sigma & mu from the best of the fitted pols
-            p, s, _,_, _,_, w = sop.fmin_bfgs(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
-            ss = np.nansum((B(*p)-v_nb)**2, axis=(0,1))
-            
-            if ((w == 1) or (np.min(p[-2:]) < 0 or np.max(p[-2:]) >= N_t)): # Unrecoverable after two attempts
-                if force:
-                    print("WARNING: beam fitting failed to converge (SS: %g~%s), using 2nd order estimate in stead" % (s, str(ss/np.max(ss))))
-                    p = p0
-                else:
-                    if debug:
-                        print("INFO: beam fitting failed to converge (SS: %g~%s), channel %d gets NaNs instead of %s" % (s, str(ss/np.max(ss)), f, str(p)))
-                    bl.append(np.nan+v_nb); bm.append(np.nan+v_nb); sigma.append([np.nan]*2); mu.append([np.nan]*2)
-                    continue
-            elif debug:
-                print("INFO: beam fitting successful on second attempt")
-        
-        p_bl, p_bm = p[:-6], p[-6:]
-        bl.append(B(*(list(p_bl)+[0,0,1,1,0,0]))); bm.append(B(*(list(0*p_bl)+list(p_bm))))
-        sigma.append(p[-4:-2]); mu.append(p[-2:])
-    bl, bm = np.stack(bl,axis=1)*A0, np.stack(bm,axis=1)*A0 # Change from (freq,time,prod) to (time,freq,prod) and reverse the earlier normalization
-    sigma, mu = np.asarray(sigma), np.asarray(mu)
-    
-    return bl, bm, sigma, mu
-
-def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=""):
-    """ Fit a Gaussian bump plus a baseline defined by a 2nd order polynomial to the time (spatial) axis and
-        a first order polynomial over frequency.
-        Note: execution time scales linearly with len(channels)/ch_res, typically at 0.3sec/channel.
-
-        @param vis: data arranged as (time,freq,products)
-        @param ch_res: for a speed-up, > 0 to fit beams for every "ch_res" frequency bin or <=0 to fit band average only (default 0)
-        @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps (default None).
-        @param timemask: selector to filter out samples in time (default None)
-        @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
-        @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to show the raw data and 3 for 1+2 (default 0)
-        @param debug_label: text to label debug information with (default "")
-        @return: baseline, beam (Power, same shapes as vis), sigma (Note 1,3), mu (Note 2,3).
-                 Note 1: sigma is the standard deviation of duration of main beam transit, per freq, so HPBW = sqrt(8*ln(2))*sigma [in units of time dumps]
-                 Note 2: mu is times of bore sight transit per frequency [in units of time dumps]
-                 Note 3: sigma & mu are masked arrays, with non-finite and outlier values masked.
-    """
-    # The fitting easily fails to converge if there's too large a slope, so the approach is
-    # 1. fit a rough provisional baseline on a masked sub-set (fundamental limitation in how good we can mask e.g. over frequency) 
-    # 2. fit a beam + delta baseline on the residual (data-baseline), each frequency channel independently.
-    # 3. combine the provisional and delta baselines to form the final baseline
-    
-    N_t, N_f = vis.shape[:2]
-    t_axis = np.arange(N_t)
-    f_axis = np.arange(N_f)
-    
-    if freqchans is not None:
-        mask = np.full(vis.shape, True); mask[:,freqchans,:] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
-    if timemask is not None:
-        mask = np.full(vis.shape, True); mask[timemask,...] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
-    vis, tmask, fmask = mask_jumps(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
-    tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
-    fmask = ~np.any(fmask, axis=1) # Includes freqchans
-    if (debug > 2):
-        plot_data(t_axis, np.nanmean(vis[:,fmask,:], axis=1), xtag="Time [samples]", ytag="Power [linear]", header=debug_label+" Provisional baseline fitting")
-        plot_data(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1), newfig=False)
-    
-    # 1. Fit & subtract provisional baseline through first x% and last x% of the time series.
-    # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, an dit might not be worthwhile to transform vis to (time, angle/HPBW, prod)
-    _tmask = np.array(tmask, copy=True); _tmask[N_t//4:-N_t//4] = False
-    bl, vis_nb = _fit_bl_(vis, (_tmask,fmask), polyorders=[1,2])
-    if (debug > 2):
-        plot_data(t_axis, np.mean(bl[:,fmask,:], axis=1), newfig=False)
-    
-    # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
-    vis0_nb = np.ma.mean(vis_nb[:,fmask,:], axis=1) # Integrated power in H & V, over time
-    dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
-    dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0) # Repeat along (existing) freq axis
-    
-    if (ch_res <= 0): # Asked for the band average fits are copied across frequency
-        if (debug >= 2):
-            plot_data(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted", xtag="Time [samples]", ytag="Power [linear]", header=debug_label)
-            plot_data(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models", newfig=False)
-
-    else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
-        sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
-        # Reduce resolution before fitting (to speed up)
-        ch_res = int(ch_res)
-        chans = np.asarray(downsample(f_axis[fmask], ch_res, trunc=True), int)
-        vis_nb = downsample(vis_nb[:,fmask,:], ch_res, axis=1, filter=np.nanmean, trunc=True)
-        # Fit each remaining channel independently, with NaN's where fit doesn't converge
-        dbl, bm, sigma, mu = _fit_bm_(vis_nb, t_axis, force=False, sigmu0=sigmu0, debug=debug>0)
-        # Interpolate to restore original frequency resolution
-        dbl = interp.interp1d(chans, dbl, 'quadratic', axis=1, bounds_error=False)(f_axis)
-        bm = interp.interp1d(chans, bm, 'quadratic', axis=1, bounds_error=False)(f_axis)
-        mu = interp.interp1d(chans, mu, 'quadratic', axis=0, bounds_error=False)(f_axis)
-        sigma = interp.interp1d(chans, sigma, 'quadratic', axis=0, bounds_error=False)(f_axis)
-        # Mask out all suspicious results
-        _sigma = np.nanmedian(sigma)
-        mask = ~np.isfinite(sigma) # False to keep data
-        mask[~mask] |= (np.abs(sigma[~mask]) > 2*_sigma)  | (np.abs(sigma[~mask]) < 0.5*_sigma) # Split it like this to avoid unnecessary RuntimeWarnings where sigma is nan!
-        sigma = np.ma.masked_array(sigma, mask, fill_value=np.nan)
-        mu = np.ma.masked_array(mu, mask, fill_value=np.nan)
-        if (debug >= 2):
-            fig, ax = plt.subplots(2,2, figsize=(12,10))
-            fig.suptitle(debug_label)
-            
-            resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
-            for p in [0,1]:
-                ax[1][p].set_title("Model residuals [%]")
-                im = ax[1][p].imshow(resid[:,:,p], origin="lower", aspect='auto', vmin=-10,vmax=10, cmap=plt.get_cmap('viridis'))
-                ax[1][p].set_xlabel("Frequency [channel]")
-            ax[1][0].set_ylabel("Time [samples]"); plt.colorbar(im, ax=ax[1]) 
-            
-            plt.subplot(2,1,1); plt.title("Baselines subtracted")
-            _a, _b = (vis-bl-dbl)[:,fmask,:], bm[:,fmask,:]
-            for i in range(2): # Two halves of the band, separately
-                _f = slice(int(i*_a.shape[1]/2), int((i+1)*_a.shape[1]/2))
-                plt.plot(t_axis, np.nanmean(_a[:,_f,:],axis=1), '-', label="Measured %d/2"%(i+1))
-                plt.plot(t_axis, np.nanmean(_b[:,_f,:],axis=1), '--', label="Fitted %d/2"%(i+1))
-            plt.legend(); plt.xlabel("Time [samples]"); plt.ylabel("Power [linear]"); plt.grid(True)
-    
-    # 3. Update the provisional baseline so that bl+mb ~ vis
-    bl += dbl
-    
-    if (debug & 1): # 1, 3
-        fig, ax = plt.subplots(2, 1, figsize=(12,6))
-        fig.suptitle(debug_label)
-        ax[0].plot(f_axis, mu); ax[0].grid(True); ax[0].set_ylabel("Bore sight crossing time 'mu'\n[time samples]")
-        ax[1].plot(f_axis, sigma); ax[1].grid(True); ax[1].set_ylabel("HP crossing duration 'sigma'\n[time samples]"); ax[1].set_xlabel("Frequency [channel]")
-    
-    return bl, bm, sigma, mu
-
-def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=True, debug=False, **kwargs):
+def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
     """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
         Also supplies auxilliary features that are employed in processing steps in this module.
         
@@ -382,11 +144,13 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
        @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
        @param swapped_pol: True to swap the order of H & V pol around (default False)
        @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
+       @param flags: Select which flags are used to clean the data (default "cam,data_lost,ingest_rfi").
        @param debug: True to generate figures that may aid in debugging the dataset (default False)
        @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
        @return: (the katdal dataset with data selected & ordered as required, drift target with the antenna set).
     """
     h5 = katdal.open(f, **kwargs) if isinstance(f,str) else f
+    h5.select(flags=flags)
     
     for a,sn in ant_rxSN.items():
         h5.receivers[a] = sn
@@ -442,15 +206,15 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
     
     if debug:
         filename = h5.name.split("/")[-1].split(".")[0] # Without extension
-        vis = np.abs(h5.vis[:]) # TODO: I have no idea why using vis[:] here and everywhere else speeds up the dask dataset, but it does, dramatically!
-        vis_ = vis/np.percentile(vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
+        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan # Using vis[:] here and everywhere else for speed up (dask lazy loaded data)
+        vis_ = vis/np.nanpercentile(vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
         chans = h5.channels
         ax = plt.subplots(2,2, sharex=True, gridspec_kw={'height_ratios':[2,1]}, figsize=(16,8))[1]
         for p,P in enumerate(h5._pol):
             ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
             ax[0][p].set_title("%s\n%s %s"%(filename,ant,P)); ax[0][p].set_ylabel("Time [samples]")
-            ax[1][p].plot(chans, 10*np.log10(np.max(vis[:,:,p], axis=0)))
+            ax[1][p].plot(chans, 10*np.log10(np.nanmax(vis[:,:,p], axis=0)))
             ax[1][p].set_ylabel("max [dBcounts]"); ax[1][p].grid(True)
             ax[1][p].set_xlabel("Channel #")
         
@@ -542,9 +306,10 @@ def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
     for scan in h5.__scans_ND__():
         label = "scan %d: '%s'"%(scan[0],scan[1])
         S_ND.append([])
+        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
         for pol in [0,1]:
-            S = np.abs(h5.vis[1:-1,chans,pol]) # Each scan has ON & OFF; discard first & last samples because ND may not be aligned to dump boundaries
-            m = np.median(S,axis=1) > np.median(S) # ON mask where average total power over the cycle is above mean toal power
+            S = vis[1:-1,chans,pol] # Each scan has ON & OFF; discard first & last samples because ND may not be aligned to dump boundaries
+            m = np.nanmedian(S,axis=1) > np.nanmedian(S) # ON mask where average total power over the cycle is above mean toal power
             ON = np.compress(m, S, axis=0)[1:-1,:] # Observe script does not guarantee ND edges to be synchronised to dump boundaries
             OFF = np.compress(~m, S, axis=0)[1:-1,:] # It may be slow in getting on target (OFF is the first phase), but use strict=True for that case
             if (rfifilt is not None):
@@ -590,15 +355,16 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,theta_src,profile_src,null_labels=No
     # Measured SEFD at each null
     print("\nDeriving measured SEFD")
     h5.__select_SEFD__()
+    vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
     el_deg = h5.el.mean()
     chans = chan_idx(h5.channel_freqs, freqrange)
-    vis = np.abs(h5.vis[:,chans,:])
 
     if rfifilt is not None:
         vis = smooth2d(vis, rfifilt, axes=(0,1))
+    
     counts2Jy, SEFD_meas = [], []
     for null in nulls:
-        freqs, c2Jy, sefd = _get_SEFD_(vis, h5.channel_freqs[chans], el_deg, h5.mjd.mean(),
+        freqs, c2Jy, sefd = _get_SEFD_(vis[:,chans,:], h5.channel_freqs[chans], el_deg, h5.mjd.mean(),
                                        bore=bore, nulls=lambda v,t,f:getvis_null(v,null,win_len),
                                        S_src=S_src, theta_src=theta_src, profile_src=profile_src, enviro=h5.sensor)
         counts2Jy.append(c2Jy)
@@ -755,7 +521,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
 
     if (debug_level in (1,3)): # Plot the target signal along with the presumed posistions of the nulls
         bl, bm = beamfits[3:]
-        vis_nb = np.abs(h5.vis[:]) - bl # "Flattened"
+        vis_nb = np.abs(h5.vis[:]) - bl; vis_nb[h5.flags[:]] = np.nan # "Flattened"
         vis_nb /= np.ma.max(bm, axis=0) # Normalise to fitted beam height 
         levels = [-0.1,-0.05,0,0.05,0.1] # Linear scale, fraction
         axes = plt.subplots(1, 2, sharex=True, figsize=(12,6))[1]
@@ -781,28 +547,30 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
         @param nulls_indices: lists of time indices per frequency for each null (source off bore sight)
     """
     h5.__select_SEFD__()
-    def Freq(h5,freqrange=None,ylim=None,select_dumps=None):
+    vis = h5.vis[:]; vis[h5.flags[:]] = np.nan
+    
+    def plotFreq(freqrange=None,ylim=None,select_dumps=None):
         """ Produces frequency spectrum plots of the currently selected dumps.
             @param freqrange: frequency start&stop to subselect (without modifying h5 selection)
             @param select_dumps: None for all time dumps, an integer range or a function(vis,timestamps,frequencies) to allow sub-selection of time interval
             @return: freq [Hz], the average spectra [linear]
         """
-        vis = h5.vis[:]
+        viz = np.array(vis, copy=True)
         if select_dumps is not None:
             if callable(select_dumps):
-                vis = select_dumps(vis, h5.timestamps, h5.channel_freqs)
+                viz = select_dumps(viz, h5.timestamps, h5.channel_freqs)
             else:
-                vis = vis[select_dumps,:]
+                viz = viz[select_dumps,:]
         
         chans = chan_idx(h5.channel_freqs, freqrange)
         x_axis = h5.channel_freqs[chans]
         xlabel = "f [MHz]"
         
-        vis = vis[:,chans,:] # Always restrict freq range after select_dumps
-        vis_mean = vis.mean(axis=0)
+        viz = viz[:,chans,:] # Always restrict freq range after select_dumps
+        vis_mean = viz.nanmean(axis=0)
         
         if ylim is not None:
-            vis_bars = np.dstack((vis_mean-vis.min(axis=0), vis.max(axis=0)-vis_mean))
+            vis_bars = np.dstack((vis_mean-viz.nanmin(axis=0), viz.nanmax(axis=0)-vis_mean))
             plot_data(x_axis/1.0e6,vis_mean,y_lim=ylim,xtag=xlabel,ytag="Radiometer counts",
                       bars=vis_bars.transpose(), errorevery=30)
         return x_axis, vis_mean
@@ -818,15 +586,15 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
     
     # Plot statistics of bore sight data
     bore_indices = np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2)
-    Freq(h5,freqrange=freqrange,select_dumps=bore_indices,ylim='pct')
+    plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim='pct')
     plt.title("Spectrum with source on bore sight")
-    freqs, Son = Freq(h5,freqrange=freqrange,select_dumps=bore_indices,nstd_ylim=[0,3/np.sqrt(BW0*tau)])
+    freqs, Son = plotFreq(freqrange=freqrange,select_dumps=bore_indices,nstd_ylim=[0,3/np.sqrt(BW0*tau)])
     plt.title("Spectrum with source on bore sight")
     
     # Plot statistics of off-source data
     for null in nulls_indices:
-        freqs, Soff = Freq(h5,freqrange=freqrange,nstd_ylim=[0,3/np.sqrt(BW0*tau)],
-                           select_dumps=lambda v,t,f:getvis_null(v,null,win_len))
+        freqs, Soff = plotFreq(freqrange=freqrange,nstd_ylim=[0,3/np.sqrt(BW0*tau)],
+                               select_dumps=lambda v,t,f:getvis_null(v,null,win_len))
         plt.title("Spectrum with source in null away from bore sight")
     
     Psrc = (Son-Soff)
@@ -1038,6 +806,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
     """
     # Select all of the raw data that's relevant
     h5, target = load_vis(f, ant=ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
+    vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
     cleanchans = chan_idx(h5.channel_freqs, fitfreqrange)
     filename = h5.name.split("/")[-1].split(" ")[0]
     ant = h5.ants[0]
@@ -1061,7 +830,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         freqs = h5.channel_freqs[cleanchans]
         plt.figure(figsize=(12,6))
         plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(freqs)/1e6, np.max(freqs)/1e6))
-        plt.plot(np.arange(h5.vis.shape[0]), np.mean(np.abs(h5.vis[:,cleanchans,:]), axis=1)); plt.grid(True)
+        plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,cleanchans,:], axis=1)); plt.grid(True)
         plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % h5.dump_period)
         pp.report_fig(F+1)
     
@@ -1074,8 +843,8 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
     
         if (debug_nulls>2):
             for k in [0,1]: # Check first two nulls are well defined -- ideally prefer to use k >= 1?
-                getvis_null(np.abs(h5.vis[:]), null_l[k], N_bore, debug=True)
-                getvis_null(np.abs(h5.vis[:]), null_r[k], N_bore, debug=True)
+                getvis_null(vis, null_l[k], N_bore, debug=True)
+                getvis_null(vis, null_r[k], N_bore, debug=True)
                 _debug_stats_(h5, bore, (null_l[k], null_r[k]), N_bore) 
     
         # Correct for transit offset relative to bore sight
@@ -1280,7 +1049,8 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
         label = "%s - %s" % (ds.name.split("/")[-1].split()[0], ds.catalogue.targets[0].name)
         # For v4 datasets (using dask) we need to split [time,chans,...] as [time][chans,...]
-        bl,mdl,sigma,mu = fit_bm(np.abs(ds.vis[:]), ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug, debug_label=label)
+        vis = np.abs(ds.vis[:]); vis[ds.flags[:]] = np.nan
+        bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug, debug_label=label)
         sigma *= ds.dump_period # [dumps] -> [seconds]
         T0 = ds.timestamps[0] - float(ds.start_time)
         mu = T0 + mu*ds.dump_period # [dumps] -> [seconds since start]
