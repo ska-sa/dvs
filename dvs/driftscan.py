@@ -10,7 +10,7 @@
     Typical use 2:
         import driftscan
         ds, target = driftscan.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
-        src, theta_src, profile_src, S_src = driftscan.models.describe_source("Taurus A", verbose=True)
+        src, theta_src, profile_src, S_src = driftscan.models.describe_source(target.name, verbose=True)
         
         bore, null_l, null_r, _HPBW, null_w = driftscan.find_nulls(ds, debug_level=1)
         _bore_ = int(np.median(bore))
@@ -159,7 +159,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
 
 
 def _fit_bl_(vis, masks=None, polyorders=[1,1]):
-    """ Fit a simple 2nd order polynomial to the first two axes of the data.
+    """ Fit a (low order) polynomial to the first two axes of the data.
         NB: masking (numpy.ma.masked_array) of the input data is ignored for the fit; only the 'vis-baseline' result
         inherits the masking of the input data.
         
@@ -202,6 +202,7 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
         @param sigmu0: first estimate for [sigma,mu], or None to use default starting estimate (default None)
         @return: [baseline, beam] each shaped like vis; [sigmaH,sigmaV] each shaped like vis axis 1; [muH,muV] like vis axis 1
     """
+    # TODO: add a smoothness constraint for mu over the first two axes (time & frequency)
     G = lambda ampl,sigma,mu: abs(ampl)*np.exp(-1/2.*(t_axis-mu)**2/sigma**2) # 1/sigma/sqrt(2pi)*... is absorbed in amplitude term
     B = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[oH+sH*t_axis + G(aH,sigmaH,muH),
                                                                oV+sV*t_axis + G(aV,sigmaV,muV)]
@@ -268,7 +269,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     """ Fit a Gaussian bump plus a baseline defined by a 2nd order polynomial to the time (spatial) axis and
         a first order polynomial over frequency.
         Note: execution time scales linearly with len(channels)/ch_res, typically at 0.3sec/channel.
-        
+
         @param vis: data arranged as (time,freq,products)
         @param ch_res: for a speed-up, > 0 to fit beams for every "ch_res" frequency bin or <=0 to fit band average only (default 0)
         @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps (default None).
@@ -292,10 +293,10 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     
     if freqchans is not None:
         mask = np.full(vis.shape, True); mask[:,freqchans,:] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask)
+        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
     if timemask is not None:
         mask = np.full(vis.shape, True); mask[timemask,...] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask)
+        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
     vis, tmask, fmask = mask_jumps(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
@@ -319,7 +320,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         if (debug >= 2):
             plot_data(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted", xtag="Time [samples]", ytag="Power [linear]", header=debug_label)
             plot_data(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models", newfig=False)
-        
+
     else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
         sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
         # Reduce resolution before fitting (to speed up)
@@ -337,8 +338,8 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         _sigma = np.nanmedian(sigma)
         mask = ~np.isfinite(sigma) # False to keep data
         mask[~mask] |= (np.abs(sigma[~mask]) > 2*_sigma)  | (np.abs(sigma[~mask]) < 0.5*_sigma) # Split it like this to avoid unnecessary RuntimeWarnings where sigma is nan!
-        sigma = np.ma.masked_array(sigma, mask)
-        mu = np.ma.masked_array(mu, mask)
+        sigma = np.ma.masked_array(sigma, mask, fill_value=np.nan)
+        mu = np.ma.masked_array(mu, mask, fill_value=np.nan)
         if (debug >= 2):
             fig, ax = plt.subplots(2,2, figsize=(12,10))
             fig.suptitle(debug_label)
@@ -369,7 +370,6 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     
     return bl, bm, sigma, mu
 
-
 def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=True, debug=False, **kwargs):
     """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
         Also supplies auxilliary features that are employed in processing steps in this module.
@@ -396,7 +396,7 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
     h5._pol = ["H", "V"]
     if verbose:
         print(h5)
-        print(h5.receivers)
+        print("Receivers:", {ant:h5.receivers[ant]})
     
     # Current observe script sometimes mislabels the first ND scan as "slew"
     h5.select(compscans="noise diode", scans="~stop")
@@ -449,7 +449,7 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, verbose=Tru
         for p,P in enumerate(h5._pol):
             ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
-            ax[0][p].set_title("%s\n%s"%(filename,P)); ax[0][p].set_ylabel("Time [samples]")
+            ax[0][p].set_title("%s\n%s %s"%(filename,ant,P)); ax[0][p].set_ylabel("Time [samples]")
             ax[1][p].plot(chans, 10*np.log10(np.max(vis[:,:,p], axis=0)))
             ax[1][p].set_ylabel("max [dBcounts]"); ax[1][p].grid(True)
             ax[1][p].set_xlabel("Channel #")
@@ -699,7 +699,6 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
                  N_bore is the final window length to employ around bore sight & nulls.
     """
     h5.__select_SEFD__() # Reset select filters.
-    T0 = h5.timestamps[0] - float(h5.start_time)
     t = np.arange(len(h5.timestamps)) # [samples]
     
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
@@ -718,14 +717,15 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     elif callable(HPBW): # Forced as a function
         HPBW = np.vectorize(HPBW)(f)
     
+    # From here on we ignore any difference in bore sight direction between the polarisations
+    bore = np.nanmean(bore, axis=1)
     # Interpolate 'bore' where it is masked, and convert to time samples relative to current selection i.e. timestamp[0]
-    bore = np.mean(bore, axis=1)
     bore = interp.interp1d(f[~bore.mask], bore[~bore.mask], "cubic", axis=0, bounds_error=False, fill_value=np.median(bore))(f)
+    T0 = h5.timestamps[0] - float(h5.start_time)
     bore = np.asarray(np.clip((bore-T0)/h5.dump_period, t[0],t[-1]), int) # [samples]
     
-    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*h5.dump_period) / 16.)) # The beam changes < 1% within +-HPBW/8 interval
-    
     t_bore = int(np.median(bore)) # Representative sample of bore sight transit
+    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*h5.dump_period) / 16.)) # The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
     # Find time indices when the source crosses the k-th null at each frequency
@@ -764,6 +764,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
             im = ax.imshow(vis_nb[...,p], origin='lower', extent=[f[0]/1e6,f[-1]/1e6,t[0],t[-1]], aspect='auto',
                            vmin=-0.15, vmax=0.15, cmap=plt.get_cmap('viridis'))
             ax.contour(vis_nb[...,p], origin='lower', extent=[f[0]/1e6,f[-1]/1e6,t[0],t[-1]], levels=levels[1:-1], colors='C0', alpha=0.5)
+            ax.plot(f/1e6, bore, 'k')
             for null in null_l+null_r:
                 ax.plot(f/1e6, null, 'k')
             ax.set_xlabel("Frequency [MHz]")
@@ -1292,13 +1293,13 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
             np.savez(savetofile, mu=mu.data, sigma=sigma.data, mask=mu.mask, f=f)
             data = np.load(savetofile, allow_pickle=True)
             mask, f = data['mask'], data['f']
-            mu, sigma = np.ma.masked_array(data['mu'],mask), np.ma.masked_array(data['sigma'],mask)
+            mu, sigma = np.ma.masked_array(data['mu'],mask,fill_value=np.nan), np.ma.masked_array(data['sigma'],mask,fill_value=np.nan)
             data.close()
     
     else: # Not a raw dataset so probably the results from a previous run on the raw data
         data = np.load(ds, allow_pickle=True)
         mask, f = data['mask'], data['f']
-        mu, sigma = np.ma.masked_array(data['mu'],mask), np.ma.masked_array(data['sigma'],mask)
+        mu, sigma = np.ma.masked_array(data['mu'],mask,fill_value=np.nan), np.ma.masked_array(data['sigma'],mask,fill_value=np.nan)
         data.close()
     
     return [f, mu, sigma] + extra
