@@ -33,7 +33,7 @@ def _fit_bl_(vis, masks=None, polyorders=[1,1]):
     x_p, y_p = masked(t_mesh), masked(f_mesh)
     
     # The fit seems to be much improved if we remove bias in both the data, as well as in all axes with gaps in it
-    x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.mean(vis, axis=0)
+    x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.nanmean(vis, axis=0)
     z_p = masked(vis - v0)
     model = Polynomial2DFit(polyorders)
     bl = [model.fit([x_p-x0, y_p-y0], z_p[...,p])([t_mesh-x0, f_mesh-y0]) for p in range(N_p)]
@@ -122,7 +122,7 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
 def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
     """ Automatically masks discontinuities in first two axes, independently across fourther axes. Builds on top
         of any existing mask, if present.
-        @param data: N dimensional (N>2), real data.
+        @param data: N dimensional (N>2), real data (must be a masked array).
         @param jump_zone: a single value for both axes, or a tuple; >=0 to blank out this many samples either side of a jump,
                           <0 for no blanking (default 0).
         @param fill_value: fill value for the masked data in the returned array (default numpy.nan)
@@ -131,7 +131,6 @@ def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
     N_t, N_f = data.shape[:2]
     t_axis = np.arange(N_t)
     f_axis = np.arange(N_f)
-###    data = np.ma.masked_array(data, fill_value=fill_value) # If it's not yet a masked array, set up data.mask
     jump_zone = [jump_zone]*2 if np.isscalar(jump_zone) else jump_zone
     
     fmask = np.full([N_f]+list(data.shape[2:]), True)
@@ -205,12 +204,14 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     t_axis = np.arange(N_t)
     f_axis = np.arange(N_f)
     
+    mask = np.isnan(vis) # False to keep data
     if freqchans is not None:
-        mask = np.full(vis.shape, True); mask[:,freqchans,:] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
+        m2 = np.full(vis.shape, True); m2[:,freqchans,:] = False
+        mask |= m2 # Discard those that remain True
     if timemask is not None:
-        mask = np.full(vis.shape, True); mask[timemask,...] = False # False to keep data
-        vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
+        m2 = np.full(vis.shape, True); m2[timemask,...] = False
+        mask |= m2 # Discard those that remain True
+    vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
     vis, tmask, fmask = _mask_jumps_(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
