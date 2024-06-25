@@ -10,7 +10,7 @@
 import numpy as np
 import katdal
 import pickle
-from katselib import as_hackedL
+from .util import hack_dataset
 from pylab import figure, subplots, plot, psd, imshow, colorbar, legend, xlabel, ylabel, subplot, ylim, title, suptitle
 import pylab as plt
 
@@ -488,7 +488,7 @@ if __name__ == "__main__":
     
     h5 = katdal.open(filename, '')
     if opts.hackL:
-        h5 = as_hackedL(h5)
+        h5 = hack_dataset(h5, hackedL=True)
     print(h5)
     print(h5.receivers)
     
