@@ -1,0 +1,88 @@
+# ID | Name(s)                                , tag  ,   RA(J2000),  Dec(J2000), katpoint flux polynomial, katsemodel flux polynomial, linpol(frac), pol angle(deg), mean width(arcmin), shape   , Key for model       , Comments
+# 
+# Targets with flux models, specifically as used for DVS "single dish" tests i.e. may be resolved on long baselines.
+
+# Taurus A: Polarisation from Vinyaikin 2007, linpol agrees with Baars 1973 at <10GHz and angle agrees with Baars 1973 at >=3GHz;Width is Perley & Butler 2017's LAS/3 to be half power width for a Gaussian
+# The best data for temporal scaling [Macias-Perez et al 2010] is -0.18% at ~1 GHz (WMAP 7yr suggests 0.22% at >30 GHz)
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.915 -0.299 0 Y0=1977 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, Baars 1977          , Baars Genzel Pauliny-Toth & Witzel 1977 over 1 - 35 GHz
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.794 -0.278 0 Y0=2000 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, ITU-R S.733-2       , No epoch specified - assumed 2000
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.988 -0.296 0 Y0=2003 inc=-0.0018 coeff_freq=1e9) , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 3yr            , ApJ 711 pp.417-423
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.506 -0.302 0 Y0=2005 inc=-0.0018 coeff_freq=40e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 7yr            , Weiland et al 2011 [arXiv:1001.4731]
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.9516 -0.2173 -0.0473 -0.0674 Y0=2017 inc=-0.0025 coeff_freq=1e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2, 2.7 , gaussian, Perley & Butler 2017,
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.9516 -0.2173 -0.0473 -0.0674 Y0=2017 inc=-0.0018 coeff_freq=1e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2, 2.7 , gaussian, Perley & Butler ~aph, The above but with more accepted secular rate
+
+
+# Orion A: Polarisation from Baars 1973; Width from Felli Churchwell Wilson & Taylor 1993 at 1400MHz; slightly larger than at 14.5GHz from Baars Mezger & Wendker in Zeitschrift Fur Astrophysik 61 of 1965
+J0535-0523 | Orion A | 3C 145 | PKS 0532-05   , radec, 05:35:17.26, -05:23:28.8, (1000.0 10000.0 -0.429874 1.641341 -0.2195152)    , , 0            , 0            , 6                 , gaussian, SARAO               , From sources_all.csv -very close to power law fit to Goudis 1975
+J0535-0523 | Orion A | 3C 145 | PKS 0532-05   , radec, 05:35:17.26, -05:23:28.8, , (3.317 -0.204 0)                                  , 0            , 0            , 6                 , gaussian, ITU-R S.733-2       ,
+
+
+# Hydra A: Polarisation from Baars 1973, Baars 1977 notes 1% lin pol at 5 GHz; Width is Perley & Butler 2017's LAS/3 to be half power width for a Gaussian
+J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, (1408.0 10550.0 4.729 -1.025 0.0130)              , , 0            , 0            , 2.3               , gaussian, Ott 1994            , Less consistent with our engineering results than Baars & Perley's models.
+J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, (405 10700 4.497 -0.910 0)                        , , 0            , 0            , 2.3               , gaussian, Baars 1977          ,
+J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, , (1.7795 -0.9176 -0.0843 -0.0139 0.0295 coeff_freq=1e9), 0        , 0            , 2.3               , gaussian, Perley & Butler 2017, Within 2% of Baars 1977 for f<3GHz  over .5 - 15 GHz
+
+
+# PKS 1934-63: Polarisation below 30 GHz is negligible according to ATCA calibrator database; Width assumed - no information at e.g. <https://ned.ipac.caltech.edu/cgi-bin/objsearch?search_type=Obj_id&objid=77271&objname=1&img_stamp=YES&hconst=73.0&omegam=0.27&omegav=0.73&corr_z=1>
+J1939-6342 | PKS 1934-63                      , radec, 19:39:25.05, -63:42:43.6, (468 8870 13.53 -3.00 0 0 -67.11 -1)              , , 0            , 0            , 1                 , gaussian, Kuhr 1981           , Fitted to data over 468 - 8870 MHz in Kuhr Witzel Pauliny-Toth Nauber [A&A Suppl. Ser. 1981]
+J1939-6342 | PKS 1934-63                      , radec, 19:39:25.05, -63:42:43.6, (480 8600 -30.7667 26.4908 -7.0977 0.605334)      , , 0            , 0            , 1                 , gaussian, Reynolds 1994       , ATNF Tech Memo 1994 specifically 1.4-8.6 GHz and perhaps not "absolute"
+
+
+# Hercules A: Polarisation from Baars 1973 polarisation angle has large uncertainty & Baars 1977 notes 8% lin pol at 5 GHz; Width: Perley & Butler 2017 Fig 13 shows a "bar" of ~2.5arcmin for a scan at constant declination
+J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, (1408.0 10550.0 3.852 -0.361 -0.1053)             , , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Ott 1994            ,
+J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, (405 10700 4.963 -1.052 0)                        , , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Baars 1977          , Baars Genzel Pauliny-Toth & Witzel 1977
+J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, , (1.8298 -1.0247 -0.0951 coeff_freq=1e9)           , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Perley & Butler 2017, Over 0.2 - 12 GHz
+
+
+# Pictor A: Polarisation from Gardner & Davies 1966, but falls off rapidly below 600 MHz (not modeled!); Width from Perley & Butler 2017, Fig 9 shows two peaks separated by ~45sec in RA -> 11arcmin "top-hat" for a scan in HA at constant declination
+J0519-4546 | Pictor A | PKS 0518-45           , radec, 05:19:49.69, -45:46:44.5, (635.0 5009.0 -1.265 3.036 -0.653)                , , 0.0209+0.0034*fGHz, 150, 11                     , disc    , SARAO               , From sources_all.csv
+J0519-4546 | Pictor A | PKS 0518-45           , radec, 05:19:49.69, -45:46:44.5, , (1.9380 -0.7470 -0.0739 coeff_freq=1e9)           , 0.0209+0.0034*fGHz, 150, 11                     , disc    , Perley & Butler 2017, Over 0.2 - 4 GHz
+
+
+# Virgo A: Polarisation < 1% up to 5GHz from Baars 1977; Width from Perley & Butler 2017's LAS/3 as half power width for Gaussian, ignoring complicated structure on scales < 10 arcmin
+J1230+1223 | Virgo A | 3C 274 | M87 | PKS 1228+12, radec, 12:30:49.42, +12:23:28.0, (1408.0 10550.0 4.484 -0.603 -0.0280)          , , 0            , 0            , 4.7               , gaussian, SARAO               , From sources_all.csv
+J1230+1223 | Virgo A | 3C 274 | M87 | PKS 1228+12, radec, 12:30:49.42, +12:23:28.0, , (2.4466 -0.8116 -0.0483 coeff_freq=1e9)        , 0            , 0            , 4.7               , gaussian, Perley & Butler 2017, Over 0.05 - 3 GHz
+
+
+# Copied from github.com/ska-sa/katsdpcatalogues/../cals_Lband.csv on 17/11/2021
+J0010-4153 | 0008-421,radec gaincal,00:10:52.52,-41:53:10.8,(145. 20000. -16.9316 15.3898 -4.2105 0.3496),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0025-2602 | 0023-263,radec gaincal,00:25:49.17,-26:02:12.8,(333. 99000. -8.4450 9.2780 -2.7801 0.2499),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0059+0006 | 0056-001,radec gaincal,00:59:05.53,+00:06:51.5,(74.   8400. -0.9051 1.8362 -0.6141 0.0518),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0137+3309 | 3C48,radec bpcal,01:37:41.29,+33:09:35.13,(50. 50000. 0.5240 1.7377 -0.6396 0.0498),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0203-4349 | 0201-440,radec gaincal,02:03:40.754300,-43:49:50.783,(80.  22000. 1.4053 0.1893 -0.1654 0.0030),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0240-2309 | 0237-233,radec gaincal,02:40:08.14,-23:09:16.0,(365. 43000. -23.5170 20.5047 -5.5855 0.4851),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0252-7104 | 0252-712,radec bpcal,02:52:46.31,-71:04:36.2,(145. 20000. 1.1245 0.7190 -0.2955 0.0096),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0318+1628 | CTA21,radec gaincal,03:18:57.77,16:28:33.1,(318. 43000. -13.4672 12.4587 -3.4110 0.2867),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0405-1308 | 0403-132,radec gaincal,04:05:33.94,-13:08:14.4,(74.  22000. -0.8395 2.4438 -0.9451 0.1006),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0408-6545 | 0408-658,radec bpcal,04:08:20.38,-65:45:09.6,(145. 18000. -0.9790 3.3662 -1.1216 0.0861),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0420-6223 | 0420-625,radec gaincal,04:20:56.19,-62:23:37.6,(145. 20000. 4.7772 -2.1190 0.3788 -0.0433),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0521+1638 | 3C138,radec bpcal,05:21:09.93,+16:38:22.2,(50. 50000. 1.3781 0.1619 -0.0650 -0.0100),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0534+1927 | 0531+194,radec gaincal,05:34:44.51,+19:27:21.7,(74.  22000. -3.4915 5.0261 -1.6476 0.1549),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0616-3456 | 0614-349,radec gaincal,06:16:35.981369,-34:56:16.5633960,(80.  20000. 1.6678 -0.2215 -0.0396 -0.0044),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0825-5010 | 0823-500,radec bpcal,08:25:26.86,-50:10:38.486,(408. 22000. -33.5795 27.9753 -7.3670 0.6198),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0906-6829 | 0906-682,radec gaincal,09:06:52.23,-68:29:39.9,(145. 20000. 0.7680 1.3416 -0.6601 0.0573),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1008+0730 | 3C237,radec gaincal,10:08:00.016,+07:30:16.552,(145. 43000. 3.1549 -1.0771 0.2183 -0.0356),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1051-2023 | 1049-201,radec gaincal,10:51:32.11,-20:23:47.9,(74.  20000. 2.3790 -1.0425 0.2814 -0.0538),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1120-2508 | 1117-248,radec gaincal,11:20:09.14,-25:08:07.2,(74.  20000. -2.3434 2.3685 -0.5616 0.0226),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1130-1449 | 1127-145,radec bpcal,11:30:07.05,-14:49:27.2,(302. 20000. -4.7962 4.3260 -1.0387 0.0710),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1150-0023 | 1148-001,radec gaincal,11:50:43.870761,-00:23:54.204900,(80.  99000. 2.6701 -2.1297 0.7214 -0.0857),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1154-3505 | 1151-348,radec gaincal,11:54:21.76,-35:05:29.4,(75.  43000. -2.9686 3.9700 -1.2009 0.1020),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1311-2216 | 3C283,radec gaincal,13:11:39.33,-22:16:41.74,(60.  43000. -3.3516 6.4132 -2.4230 0.2522),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1318-4620 | 1315-460,radec gaincal,13:18:30.064,-46:20:34.90,(145. 20000. 8.1689 -6.5930 2.0835 -0.2452),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1330+2509 | 3C287,radec gaincal,13:30:37.69,+25:09:10.9,(80 14900 1.0388 0.5265 -0.2145 0.0089),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1331+3030 | 3C286,radec bpcal,13:31:08.288,+30:30:32.959,(50. 50000 0.0181 1.5920 -0.5011 0.0357),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1347+1217 | 1345+125,radec gaincal,13:47:33.36,+12:17:24.238,(333. 99000. 1.4389 -0.2156 0.0345 -0.0130),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1424-4913 | 1421-490,radec gaincal,14:24:32.08,-49:13:50.7,(145. 99000. 6.0550 -4.1963 1.1975 -0.1218),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1501-3918 | 1458-391,radec gaincal,15:01:35,-39:18:39,(408. 20000. 5.7026 -3.9782 1.1342 -0.1271),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1609+2641 | CTD93,radec bpcal,16:09:13.32,+26:41:29.0,(318. 10695. -20.1510 17.1277 -4.4962 0.3670),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1619-8418 | 1607-841,radec gaincal,16:19:33.97,-84:18:19.10,(145. 20000. 2.0880 -0.3067 -0.0602 -0.0109),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1726-5529 | 1722-554,radec gaincal,17:26:49.7,-55:29:38.0,(408. 20000. -22.9922 19.0166 -4.8335 0.3765),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1733-1304 | NRAO530,radec gaincal,17:33:02.66,-13:04:49.1,(408. 99000. -0.1038 1.0514 -0.3499 0.0322),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1744-5144 | 1740-517,radec bpcal,17:44:25.47,-51:44:43.1,(145. 99000. -3.6941 2.7447 -0.3655 -0.015),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1830-3602 | 1827-360,radec gaincal,18:30:58.97,-36:02:31.7,(333. 22000. 0.4218 1.4761 -0.4243 0.0002),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J1859-6615 | 1854-663,radec gaincal,18:59:57.80,-66:15:02.8,(145. 20000. -5.3678 5.9491 -1.7969 0.1492),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J2131-2036 | 2128-208,radec gaincal,21:31:01.52,-20:36:56.1,(74.  20000. 2.9655 -1.1589 0.2196 -0.0380),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J2152-2828 | 2149-287,radec gaincal,21:52:03.78,-28:28:29.0,(74.  20000. -1.3470 2.4134 -0.7681 0.0596),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J2206-1835 | 2203-188,radec gaincal,22:06:10.33,-18:35:39.0,(145. 99000. 2.1847 -0.7118 0.1563 -0.0215),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J2212+0152 | 2210+016,radec gaincal,22:12:37.9770,+01:52:51.151,(145. 11200. 1.3836 -0.7264 0.3491 -0.0681),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J2341-3506 | 2339-353,radec gaincal,23:41:45.8910,-35:06:22.130,(80.  20000. -1.6575 3.4649 -1.2586 0.1128),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
