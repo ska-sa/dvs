@@ -266,7 +266,7 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_sr
         @param enviro: a dictionary of "Enviro/air_*" metadata for atmospheric effects - simply use "h5.sensor"
         @return: (freqs, counts2Jy [per pol], SEFD [total power]) the latter ordered as (freqs,pol 0=H,1=V)
     """
-    vis_on = vis[bore,:,:].mean(axis=0) # Mean over time
+    vis_on = np.nanmean(vis[bore,:,:], axis=0) # Mean over time
     if callable(nulls):
         vis_off = nulls(vis,None,freqs)
     else:
