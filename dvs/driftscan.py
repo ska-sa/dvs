@@ -2,7 +2,7 @@
 """
     Formalisation of earlier SEFD_TauAOrionA.ipynb
     Typical use 1:
-        python driftscan.py /data/132598363.h5 0 "Hydra A"
+        python driftscan.py /data/132598363.h5 0 "Baars 1977"
     which is equivalent to
         from driftscan import analyse
         analyse(sys.argv[1], int(sys.argv[2]), sys.argv[3], saveroot=".")
@@ -16,16 +16,16 @@
         _bore_ = int(np.median(bore))
         
         offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs))
-        hpbw0 = np.nanpercentile(_HPBW, 5)
-        hpbw0_f = np.mean(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
-        C = driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, ds.channel_freqs/1e9)
-        if (np.min(C) < 0.99):
-            print("CAUTION: source transits far from bore sight (%.2fdeg), scaling flus by >=%.3f"%(offbore_deg,np.min(C)))
+        hpbw0 = np.nanmedian(_HPBW); hpbwf0 = np.median(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
+        offbore0 = offbore_deg*np.pi/180 / hpbw0
+        wc_scale = driftscan.models.G_bore(offbore0, hpbwf0, np.max(ds.channel_freqs))
+        if (wc_scale < 0.99):
+            print("CAUTION: source transits far from bore sight, scaling flux by up to %.1f%%"%(100*(1-wc_scale)))
         
         par_angle = ds.parangle[_bore_] * np.pi/180
-        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * np.reshape(driftscan.models.G_bore(offbore_deg/hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
-        
-        freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, El = \
+        Sobs_src = lambda f_GHz,yr: S_src(f_GHz,yr,par_angle) * driftscan.models.G_bore(offbore0, hpbwf0/1e9, np.reshape(f_GHz, (-1,1)))
+                
+        freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
                 driftscan.get_SEFD_ND(ds,bore,[null_l[0],null_r[0]],null_w,
                                       Sobs_src,hpw_src/_HPBW,profile_src,
                                       freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
@@ -132,7 +132,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
         return array2d
 
 
-def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
+def load_vis(f, ant, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
     """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
         Also supplies auxilliary features that are employed in processing steps in this module.
         
@@ -141,6 +141,7 @@ def load_vis(f, ant=0, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,
         attribute as that will not reflect the 'swapped_pol' state. Use the hacked '_pol' attribute instead. 
        
        @param f: filename string, or an already opened h5 file
+       @param ant: either antenna ID (string) or index (int) in the dataset.ants list
        @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
        @param swapped_pol: True to swap the order of H & V pol around (default False)
        @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
@@ -783,7 +784,7 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+def analyse(f, ant, source=None, flux_key, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
               fitfreqrange=None, rfifilt=[1,7], freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
@@ -805,7 +806,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    h5, target = load_vis(f, ant=ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
+    h5, target = load_vis(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
     vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
     cleanchans = chan_idx(h5.channel_freqs, fitfreqrange)
     filename = h5.name.split("/")[-1].split(" ")[0]
@@ -848,12 +849,13 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
         offbore_deg = target_offset(target, h5.timestamps[_bore_], h5.az[_bore_], h5.el[_bore_], np.mean(h5.freqs), "bore sight transit", debug=True)
-        hpbw0, hpbw0_f = np.nanpercentile(_HPBW[cleanchans], 5), np.percentile(h5.channel_freqs[cleanchans], 95) # ~Smallest HPBW at ~highest frequency
-        C = models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, h5.channel_freqs/1e9)
+        hpbw0 = np.nanmedian(_HPBW[cleanchans]); hpbwf0 = np.median(h5.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
+        offbore0 = offbore_deg*np.pi/180/hpbw0
+        C = models.G_bore(offbore0, hpbwf0, h5.channel_freqs)
         print("Scaling source flux for pointing offset, by %.3f - %.3f over frequency range"%(np.max(C), np.min(C)))
         
         par_angle = h5.parangle[_bore_] * np.pi/180
-        Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * np.reshape(models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
+        Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * models.G_bore(offbore0, hpbwf0/1e9, np.reshape(f_GHz, (-1,1)))
         
         freqrange = None # Only omit first and last channels from the results to be returned
         nulls_l = [N[0] for N in nulls if N[0] is not None]
@@ -932,8 +934,6 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
     if saveroot:
         save_data(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg)
     return result
-
-run_SEFD = analyse # Alias
 
 
 def save_data(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, *ig, **nored):
@@ -1170,14 +1170,12 @@ if __name__ == "__main__":
                                    description="Processes a drift scan dataset, using aperture efficiency model from records"
                                                " (if not available for a band, assumes some nominal default value)."
                                                "Results are summarised in figures and processing log in PDF report.")
-    parser.add_option('-a', '--ant', type='int', default=0,
-                      help="Antenna numerical sequence as listed in the dataset - NOT receptor ID (default %default).")
-    parser.add_option('-t', '--target', type='string', default=None,
-                      help="Target name to either look up flux model in katsemodels.py, or from catalogue.")
+    parser.add_option('-a', type='int', default=None,
+                      help="Antenna numerical sequence as listed in the dataset - NOT receptor ID. Alternative for --ant.")
+    parser.add_option('--ant', type='string', default=None,
+                      help="Antenna name as used in the dataset. Alternative for -a.")
     parser.add_option('-x', '--flux-key', type='string', default=None,
-                      help="Identify the flux model to use for the source, or None if the target is loaded from the catalogue (default %default)")
-    parser.add_option('-b', '--hpbw', type='string', default="lambda f: 1.22*(_c_/f)/13.965", # "Nominal best fit" for MeerKAT UHF & L-band
-                      help="None, or a function that defines the half power beamwidth in radians, like 'lambda f_Hz: rad' (default %default)")
+                      help="Identify a specific flux model to use from the catalogue (default %default)")
     parser.add_option('--rfi-mask', type='string', default=None,
                       help="RFI frequency mask as a list of tuples in Hz, e.g. [(925e6,965e6)].")
     parser.add_option('--fit-freq', type='string', default="[580e6,720e6]",
@@ -1189,6 +1187,7 @@ if __name__ == "__main__":
     opts.hpbw = eval(opts.hpbw)
     freqmask = eval(opts.rfi_mask)
     fitfreqrange = eval(opts.fit_freq)
+    ant = opts.ant if (opts.ant is not None) else opts.a
     
-    result = analyse(args[0], opts.ant, opts.target, opts.flux_key, HPBW=opts.hpbw, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
+    result = analyse(args[0], ant, opts.target, opts.flux_key, fitfreqrange=fitfreqrange, freqmask=freqmask, strict=opts.strict, saveroot=".", makepdf=True)
     
