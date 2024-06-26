@@ -188,7 +188,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps (default None).
         @param timemask: selector to filter out samples in time (default None)
         @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
-        @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to show the raw data and 3 for 1+2 (default 0)
+        @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to also show the raw & model data (default 0)
         @param debug_label: text to label debug figures with (default None)
         @return: baseline, beam (Power, same shapes as vis), sigma (Note 1,3), mu (Note 2,3).
                  Note 1: sigma is the standard deviation of duration of main beam transit, per freq, so HPBW = sqrt(8*ln(2))*sigma [in units of time dumps]
@@ -216,7 +216,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
     # 0
-    if (debug >= 3):
+    if (debug >= 2):
         fig, axs = plt.subplots(2,1, figsize=(12,6))
         fig.suptitle(debug_label)
         axs[0].set_title("Provisional baseline fitting")
@@ -229,7 +229,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, and it might not be worthwhile to transform vis to (time, angle/HPBW, prod)
     _tmask = np.array(tmask, copy=True); _tmask[N_t//4:-N_t//4] = False
     bl, vis_nb = _fit_bl_(vis, (_tmask,fmask), polyorders=[1,2])
-    if (debug >= 3):
+    if (debug >= 2):
         axs[0].plot(t_axis, np.mean(bl[:,fmask,:], axis=1))
     
     # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
@@ -284,7 +284,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     # 3. Update the provisional baseline so that bl+mb ~ vis
     bl += dbl
     
-    if (debug & 1): # 1, 3
+    if (debug >= 1):
         fig, axs = plt.subplots(2, 1, figsize=(12,6))
         fig.suptitle(debug_label)
         axs[0].plot(f_axis, mu); axs[0].set_ylabel("Bore sight crossing time 'mu'\n[time samples]"); axs[0].grid(True)
