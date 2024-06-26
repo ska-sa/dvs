@@ -453,7 +453,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on
         @param HPBW: 'lambda f: x' or 1d array [rad] to override fitted widths from the dataset (default None)
-        @param N_bore: Force the number of time samples to average over the bore sight crossing, else uses average of <HPBW>/16 (default -1).
+        @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param hpw_src: the equivalent half-power width [rad] of the target (default 0)
@@ -491,7 +491,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     bore = np.asarray(np.clip((bore-T0)/h5.dump_period, t[0],t[-1]), int) # [samples]
     
     t_bore = int(np.median(bore)) # Representative sample of bore sight transit
-    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*h5.dump_period) / 16.)) # The beam changes < 1% within +-HPBW/8 interval
+    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*h5.dump_period) / 16.)+1) # The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
     # Find time indices when the source crosses the k-th null at each frequency
@@ -793,7 +793,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
         @param HPBW: something like 'lambda f: 1.2*(3e8/f)/D' [rad] to avoid fitting HPBW from the data itself (default None). Used to select data for the beam nulls.
-        @param N_bore: Force the number of time samples to average over the bore sight crossing, else uses average of HPBW/20 (default -1).
+        @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param nulls: pairs of indices of nulls to generate results for, zero-based or None and as (prior to, post transit) (default [(0,0)]).
