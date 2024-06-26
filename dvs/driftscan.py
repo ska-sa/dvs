@@ -511,7 +511,8 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         # plot_data(antaz/D2R,antel/D2R, label="Bore sight", style='x', newfig=False)
         # plt.axes().set_aspect('equal', 'datalim')
 
-        plot_data(t,np.asarray(angles)/D2R, header="Target distance from bore sight [deg]")
+        plot_data(t, np.asarray(angles)/D2R, header="Target trajectory with respect to bore sight and nulls",
+                  xtag="Time [samples]", ytag="Distance from bore sight [deg]")
         cleanchan = h5.channels[23] if (cleanchans is None) else h5.channels[cleanchans][23] # Arbitrarily choose one
         for n in [0,1]: # target in first two nulls vs. time, for some clean channel
             flags_ch = np.abs(angles-Nk[n]*HPBW[cleanchan])<0.1*D2R
@@ -523,7 +524,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     null_l = [find_null(t[t<t_bore],angles[t<t_bore],k) for k in range(len(Nk))] # (k'th null, frequency)
     null_r = [find_null(t[t>t_bore],angles[t>t_bore],k) for k in range(len(Nk))]
 
-    if (debug_level in (1,3)): # Plot the target signal along with the presumed posistions of the nulls
+    if (debug_level in (1,3)): # Plot the intensity map along with the identified posistions of the nulls
         bl, bm = beamfits[3:]
         vis_nb = np.abs(h5.vis[:]) - bl; vis_nb[h5.flags[:]] = np.nan # "Flattened"
         vis_nb /= np.ma.max(bm, axis=0) # Normalise to fitted beam height 
@@ -592,12 +593,12 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
     bore_indices = np.array(np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2), dtype=int)
     plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim='pct')
     plt.title("Spectrum with source on bore sight")
-    freqs, Son = plotFreq(freqrange=freqrange,select_dumps=bore_indices,nstd_ylim=[0,3/np.sqrt(BW0*tau)])
+    freqs, Son = plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim=[0,3/np.sqrt(BW0*tau)])
     plt.title("Spectrum with source on bore sight")
     
     # Plot statistics of off-source data
     for null in nulls_indices:
-        freqs, Soff = plotFreq(freqrange=freqrange,nstd_ylim=[0,3/np.sqrt(BW0*tau)],
+        freqs, Soff = plotFreq(freqrange=freqrange,ylim=[0,3/np.sqrt(BW0*tau)],
                                select_dumps=lambda v,t,f:getvis_null(v,null,win_len))
         plt.title("Spectrum with source in null away from bore sight")
     
@@ -1099,7 +1100,8 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     K = np.sqrt(8*np.log(2)) # hpbw = K*sigma
      
     if debug:
-        plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, xtag="Frequency [MHz]", ytag="HPBW [deg]", y_lim='pct')
+        plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, header="Best fit polynomial for the half power width",
+                  xtag="Frequency [MHz]", ytag="HPBW [deg]", y_lim='pct')
     
     # The data to fit to
     N_freq, N_prod = sigma.shape
