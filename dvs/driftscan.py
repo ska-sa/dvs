@@ -461,7 +461,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param hpw_src: the equivalent half-power width [rad] of the target (default 0)
-        @param debug_level: 0 for no debugging, 1 for some, 2 for some others and 3 for all (default 0)
+        @param debug_level: 0 for no debugging, 1 for some, 2 to add others (default 0)
         @return: (bore, nulls_before_transit, nulls_after_transit, HPBW_fitted, N_bore).
                  'bore' is the time indices while the target crosses bore sight, against frequency (1D).
                  each null_..transit is the time indices while the target is crossing that null, vs (k'th null, frequency) (2D).
@@ -476,7 +476,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # To speed up, fit only to 64 frequency channels
     beamfits = load4hpbw(h5, ch_res=len(h5.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
-    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level)
+    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
     
     if (HPBW is None): # HPBW not forced, so use the fitted positions, filling it in with the fitted function where it is masked
@@ -504,7 +504,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     antaz, antel = h5.az[:,0]*D2R, h5.el[:,0]*D2R # deg->rad, for selected ant=0
     ll, mm = target.sphere_to_plane(antaz,antel,timestamp=h5.timestamps,projection_type="SSN",coord_system="azel") # rad
     angles = 2*np.arcsin((ll**2+mm**2)**0.5 / 2.) # Pointing offset [rad] of target relative to mechanical axis over time. For small angles this is ~ (ll**2+mm**2)**0.5
-    if (debug_level in (2,3)):
+    if (debug_level > 1):
         # Show pointing & target track - TODO sometimes shows up empty?
         # tgtaz,tgtel = target.azel(h5.timestamps)
         # plot_data(np.unwrap(tgtaz)/D2R,tgtel/D2R, label="Target", xtag="Az [deg]", ytag="El [deg]")
@@ -524,7 +524,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     null_l = [find_null(t[t<t_bore],angles[t<t_bore],k) for k in range(len(Nk))] # (k'th null, frequency)
     null_r = [find_null(t[t>t_bore],angles[t>t_bore],k) for k in range(len(Nk))]
 
-    if (debug_level in (1,3)): # Plot the intensity map along with the identified posistions of the nulls
+    if (debug_level > 0): # Plot the intensity map along with the identified positions of the nulls
         bl, bm = beamfits[3:]
         vis_nb = np.abs(h5.vis[:]) - bl; vis_nb[h5.flags[:]] = np.nan # "Flattened"
         vis_nb /= np.ma.max(bm, axis=0) # Normalise to fitted beam height 
@@ -545,15 +545,15 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     return bore, null_l, null_r, HPBW, N_bore
 
 
-def _debug_stats_(vis, channel_freqs, timestamps, bore_indices, nulls_indices, win_len):
+def _debug_stats_(vis, channel_freqs, timestamps, bore_indices, nulls_indices, win_len, title=None):
     """ Plots sigma/mu spectra for bore sight & off-source & compare to expected value
     
         @param bore_indices: time indices for bore sight data per frequency (1D), relative to selection of '__select_SEFD__()'.
         @param nulls_indices: lists of time indices per frequency for each null (source off bore sight)
     """
-    def plotFreq(freqrange=None,ylim=None,select_dumps=None):
+    def plotFreq(ax, freqrange, ylim, select_dumps=None, title=None):
         """ Produces frequency spectrum plots of the currently selected dumps.
-            @param freqrange: frequency start&stop to subselect (without modifying h5 selection)
+            @param freqrange: frequency start&stop to subselect
             @param select_dumps: None for all time dumps, an integer range or a function(vis,timestamps,frequencies) to allow sub-selection of time interval
             @return: freq [Hz], the average spectra [linear]
         """
@@ -571,41 +571,40 @@ def _debug_stats_(vis, channel_freqs, timestamps, bore_indices, nulls_indices, w
         viz = viz[:,chans,:] # Always restrict freq range after select_dumps
         vis_mean = np.nanmean(viz, axis=0)
         
-        if ylim is not None:
-            vis_bars = np.dstack((vis_mean-np.nanmin(viz,axis=0), np.nanmax(viz,axis=0)-vis_mean))
-            plot_data(x_axis/1.0e6,vis_mean,y_lim=ylim,xtag=xlabel,ytag="Radiometer counts",
-                      bars=vis_bars.transpose(), errorevery=30)
+        vis_bars = np.dstack((vis_mean-np.nanmin(viz,axis=0), np.nanmax(viz,axis=0)-vis_mean))
+        ax.set_title(title)
+        ax.errorbar(x_axis/1.0e6, vis_mean, yerr=vis_bars.transpose(), fmt='-', capsize=1, errorevery=30)
+        ax.set_xlabel(xlabel); ax.set_ylabel("Radiometer counts"); ax.grid(True); ax.set_ylim(ylim)
         return x_axis, vis_mean
 
     tau = timestamps[1]-timestamps[0]
     BW0 = abs(channel_freqs[1]-channel_freqs[0])
     freqrange = [np.min(channel_freqs)+BW0,np.max(channel_freqs)-BW0]
     
+    fig, axs = plt.subplots(3,1, figsize=(12,8))
+    fig.suptitle(title)
+    # Plot statistics of bore sight data
+    bore_indices = np.array(np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2), dtype=int)
+    freqs, Son = plotFreq(axs[0], freqrange=freqrange, select_dumps=bore_indices, ylim=[0,3/np.sqrt(BW0*tau)],
+                          title="Spectrum with source on bore sight")
+    
+    # Plot statistics of off-source data
+    for null in nulls_indices:
+        freqs, Soff = plotFreq(axs[1], freqrange=freqrange, ylim=[0,3/np.sqrt(BW0*tau)],
+                               select_dumps=lambda v,t,f:getvis_null(v,null,win_len),
+                               title="Spectrum with source in null away from bore sight")
+    
+    Psrc = (Son-Soff)
+    Psys = Soff
     # In the limit Tsrc << Tsys, sigma = Tsys/sqrt(BW*tau), so sigma/mu = 1/sqrt(BW*tau) = const   (per polarization)
     # However, in case Tsrc >> Tsys we must use the complete sigma = sqrt(Tsys^2+2*Tsys*Tsrc+2*Tsrc^2)/sqrt(BW*tau),
     #   so expect bore sight sigma/mu = sigma/(Tsys+Tsrc) > 1/sqrt(BW*tau)
     _K = lambda Tsys,Tsrc: np.sqrt(Tsys**2+2*Tsys*Tsrc+2*Tsrc**2)/(Tsys+Tsrc)
-    
-    # Plot statistics of bore sight data
-    bore_indices = np.array(np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2), dtype=int)
-    plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim='pct')
-    plt.title("Spectrum with source on bore sight")
-    freqs, Son = plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim=[0,3/np.sqrt(BW0*tau)])
-    plt.title("Spectrum with source on bore sight")
-    
-    # Plot statistics of off-source data
-    for null in nulls_indices:
-        freqs, Soff = plotFreq(freqrange=freqrange,ylim=[0,3/np.sqrt(BW0*tau)],
-                               select_dumps=lambda v,t,f:getvis_null(v,null,win_len))
-        plt.title("Spectrum with source in null away from bore sight")
-    
-    Psrc = (Son-Soff)
-    Psys = Soff
     K = _K(Psys,Psrc).mean(axis=0)
     print("Average bore sight noise factor K=%s" % (K))
-    plot_data(np.dstack([freqs/1e6]*K.shape[0]).squeeze(), _K(Psys,Psrc)/np.sqrt(BW0*tau),
-                 xtag="f [MHz]", ytag=r"$\frac{\sigma}{\mu}$", y_lim=[0,3/np.sqrt(BW0*tau)],
-                 header="std/mu expected from ratios of mean on & off spectra")
+    axs[2].set_title("std/mu expected from ratios of mean on & off spectra")
+    axs[2].plot(np.dstack([freqs/1e6]*K.shape[0]).squeeze(), _K(Psys,Psrc)/np.sqrt(BW0*tau))
+    axs[2].set_xlabel("f [MHz]"); axs[2].set_ylabel(r"$\frac{\sigma}{\mu}$"); axs[2].grid(True); axs[2].set_ylim([0,3/np.sqrt(BW0*tau)])
     
     print("Expected boresight std/mu = %s at %.f MHz" % (K/np.sqrt(BW0*tau), np.average(freqrange)/1e6)) # May have a slope if src flux slopes
     print("Expected off-source std/mu = %s at %.f MHz" % (1/np.sqrt(BW0*tau), np.average(freqrange)/1e6)) # Must not have a slope
@@ -677,7 +676,7 @@ def combine(x, y, x_common=None, pctmask=100):
     return f, y_combi
 
 
-def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, freqmask=None, plot_singles=True, plot_predicted=False, debug=False):
+def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, freqmask=None, plot_singles=True, plot_predicted=False, plot_ratio=False):
     """ Plot results against each other for comparison & combines results onto a common frequency range.
     
         @param results: a list of result sets, each one containing (freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND ...) as generated by get_SEFD_ND()
@@ -743,15 +742,15 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
             ax.plot(x[0]/1e6, x[1][:,p], label=labels[n])
         ax.legend(); ax.set_ylim(_ylim_pct_(x[1][:,p],10,30))
  
-    if debug: # Gain ratios, relative to the first result (but may fail)
-        axes = make_figure(header, "#2Jy Gain ratio")[1]
+    if plot_ratio: # Gain ratios, relative to the first result (but may fail)
+        fig, axes = make_figure(header, "#2Jy Gain ratio")
         try:
             for p,ax in enumerate(axes):
                 for n,x in enumerate(results[1:]):
                     ax.plot(x[0]/1e6, x[1][:,p]/results[0][1][:,p], label="%s/%s"%(labels[n+1],labels[0]))
                 ax.legend(); ax.set_ylim(_ylim_pct_(x[1][:,p]/results[0][1][:,p],10,30))
         except: # May fail if frequency ranges don't match - then just ignore this step
-            pass
+            plt.close(fig)
     
     # SEFD index=2, pSEFD index=3
     f, m_SEFD, p_SEFD = plot_single_and_combi(results, 2, 3, "SEFD [Jy]", labels, 'pct')
@@ -769,7 +768,7 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
     # Tsys
     f, m_TSYS, p_TSYS = plot_single_and_combi(results, 4, 7, "$T_{sys}$ [K]", labels, 'pct')
     
-    # Delta Tsys (measured - predicted)
+    # Tsys residuals (measured - predicted)
     axes = make_figure(header, "$T_{sys}$(meas)-$T_{sys}$(expect) [K]")[1]
     for p,ax in enumerate(axes):
         for n,x in enumerate(results):
@@ -807,7 +806,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    h5, target = load_vis(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=debug)
+    h5, target = load_vis(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=False)
     vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
     cleanchans = chan_idx(h5.channel_freqs, fitfreqrange)
     filename = h5.name.split("/")[-1].split(" ")[0]
@@ -838,14 +837,15 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         bore, null_l, null_r, _HPBW, N_bore = find_nulls(h5, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
-            pp.report_fig(F-1 - (2 if (debug_nulls in (2,3)) else 0)) # The second last figure from find_nulls(debug_level>0):fit_hpbw -> beamwidths
-            pp.report_fig(F) # The last figure from find_nulls(debug_level>0): null traces
+            # 1-> (mu sigma vs time, HPBW fit, map null traces), 2-> (baselines, model residuals, mu sigma vs time, HPBW fit, trajectory, map null traces)
+            pp.report_fig(F-(1 if (debug_nulls==1) else 2)) # Beamwidth fit
+            pp.report_fig(F) # Map of null traces
     
         if (debug_nulls>2):
             for k in [0,1]: # Check first two nulls are well defined -- ideally prefer to use k >= 1?
                 getvis_null(vis, null_l[k], N_bore, debug=True)
                 getvis_null(vis, null_r[k], N_bore, debug=True)
-                _debug_stats_(vis, h5.channel_freqs, h5.timestamps, bore, (null_l[k], null_r[k]), N_bore)
+                _debug_stats_(vis, h5.channel_freqs, h5.timestamps, bore, (null_l[k], null_r[k]), N_bore, title="%dth Nulls"%k)
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
@@ -868,11 +868,11 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
                 get_SEFD_ND(h5,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
         F = np.max(plt.get_fignums())
-        pp.report_fig([F-1, F]) # The last two figures from get_SEFD_ND -> SEFD & ND flux
+        pp.report_fig([F-1, F]) # get_SEFD_ND()-> (SEFD, ND flux)
         
         result = [freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg]
-        summarize([result], pol=h5._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True)
-        pp.report_fig([F+i for i in [2,3,5,6]]) # Figures generated by summarize(debug=False) -> 1=counts2Jy, SEFD, Ae/Tsys, ND_Jy, T_ND, T_sys
+        summarize([result], pol=h5._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
+        pp.report_fig([F+1+i for i in [1,2,4,5,6]]) # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
         
         pp.report_text(r"""
         SEFD is determined from a ~1 hour drift scan of a suitable celestial calibrator.
@@ -1052,7 +1052,7 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
         vis = np.abs(ds.vis[:]); vis[ds.flags[:]] = np.nan
         bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
-        
+         
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
         sigma *= ds.dump_period * np.cos(dec_tgt) # [dumps] -> [seconds along the ecliptic]
@@ -1097,7 +1097,7 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     K = np.sqrt(8*np.log(2)) # hpbw = K*sigma
      
     if debug:
-        plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, header="Best fit polynomial for the half power width",
+        plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, header="Fit to measured half power width",
                   xtag="Frequency [MHz]", ytag="HPBW [deg]", y_lim='pct')
     
     # The data to fit to
