@@ -10,9 +10,9 @@
     Typical use 2:
         import driftscan
         ds, target = driftscan.load_vis("/var/kat/archive/data/RTS/telescope_products/2014/12/02/1417562258.h5", ant=0, ant_rxSN={"m063":"l.0004"}, debug=True)
-        src, theta_src, profile_src, S_src = driftscan.models.describe_source(target.name, verbose=True)
+        src, hpw_src, profile_src, S_src = driftscan.models.describe_source(target.name, verbose=True)
         
-        bore, null_l, null_r, _HPBW, null_w = driftscan.find_nulls(ds, debug_level=1)
+        bore, null_l, null_r, _HPBW, null_w = driftscan.find_nulls(ds, hpw_src=hpw_src, debug_level=1)
         _bore_ = int(np.median(bore))
         
         offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs))
@@ -27,7 +27,7 @@
         
         freqs, counts2Jy, SEFD_meas, SEFD_pred, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, El = \
                 driftscan.get_SEFD_ND(ds,bore,[null_l[0],null_r[0]],null_w,
-                                      Sobs_src,theta_src/60*np.pi/180 / _HPBW,profile_src,
+                                      Sobs_src,hpw_src/_HPBW,profile_src,
                                       freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1088e6)]) # Blank out MUOS, GSM & SSR
         
     @author aph@sarao.ac.za
@@ -443,7 +443,7 @@ def getvis_null(vis, null_indices, win_len=4, debug=False):
     return np.moveaxis(np.asarray(vis_null), 1, 0) # Re-order to [time,freq,prod]
 
 
-def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], theta_src=0, debug_level=0):
+def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], hpw_src=0, debug_level=0):
     """ Finds time indices when the drift scan source passes through nulls and across bore sight.
         All indices are given relative to the time axis set up by '__select_SEFD__()'.
         
@@ -456,7 +456,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         @param N_bore: Force the number of time samples to average over the bore sight crossing, else uses average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
-        @param theta_src: the equivalent half-power width [rad] of the target (default 0)
+        @param hpw_src: the equivalent half-power width [rad] of the target (default 0)
         @param debug_level: 0 for no debugging, 1 for some, 2 for some others and 3 for all (default 0)
         @return: (bore, nulls_before_transit, nulls_after_transit, HPBW_fitted, N_bore).
                  'bore' is the time indices while the target crosses bore sight, against frequency (1D).
@@ -472,7 +472,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # To speed up, fit only to 64 frequency channels
     beamfits = load4hpbw(h5, ch_res=len(h5.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
-    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, theta_src=theta_src, fitchans=cleanchans, debug=debug_level)
+    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
     
     if (HPBW is None): # HPBW not forced, so use the fitted positions, filling it in with the fitted function where it is masked
@@ -820,9 +820,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
         
-        src_ID, theta_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, verbose=True)
-        hpw_src = (np.log(2)/2.)**.5*theta_src if (profile_src == "disc") else theta_src # from Baars 1973
-        hpw_src *= np.pi/(180*60.) # arcmin to [rad]
+        src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, verbose=True)
         pp.header = "Drift scan %s of %s on %s"%(filename, src_ID, ant.name)
         
         # Plot the raw data, integrated over frequency, vs relative time
@@ -835,7 +833,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         pp.report_fig(F+1)
     
         # Identify the bore sight and null transits
-        bore, null_l, null_r, _HPBW, N_bore = find_nulls(h5, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, theta_src=hpw_src, debug_level=debug_nulls)
+        bore, null_l, null_r, _HPBW, N_bore = find_nulls(h5, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
             pp.report_fig(F-1 - (2 if (debug_nulls in (2,3)) else 0)) # The second last figure from find_nulls(debug_level>0):fit_hpbw -> beamwidths
@@ -856,7 +854,6 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         
         par_angle = h5.parangle[_bore_] * np.pi/180
         Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * np.reshape(models.G_bore(offbore_deg*np.pi/180./hpbw0, hpbw0_f/1e9, f_GHz), (-1,1))
-        theta_src = theta_src/60*np.pi/180/_HPBW # arcmin -> fraction of HPBW (very small impact if HPBW includes source extent)
         
         freqrange = None # Only omit first and last channels from the results to be returned
         nulls_l = [N[0] for N in nulls if N[0] is not None]
@@ -866,7 +863,7 @@ def analyse(f, ant, source, flux_key, ant_rxSN={}, swapped_pol=False, strict=Fal
         print("\nNow determining measured and predicted SEFD with target in beam nulls:")
         print("    %s before transit & %s after transit" % (null_labels[:len(nulls_l)], null_labels[len(nulls_l):]))
         freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
-                get_SEFD_ND(h5,bore,null_groups,N_bore,Sobs_src,theta_src,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
+                get_SEFD_ND(h5,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
         F = np.max(plt.get_fignums())
         pp.report_fig([F-1, F]) # The last two figures from get_SEFD_ND -> SEFD & ND flux
         
@@ -1085,18 +1082,18 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
     return [f, mu, sigma] + extra
 
 
-def fit_hpbw(f,mu,sigma, D, theta_src=0, fitchans=None, debug=True):
+def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     """ Finds the best fit polynomial that describes the half power width over frequency. Includes both the beam and source widths!
         
         @param f,mu,sigma: as returned by 'load4hpbw()', or possibly only the set for a single product.
         @param D: the aperture diameter [m] to scale the fitted coefficients to.
-        @param theta_src: the equivalent half-power width [rad] of the target (default 0)
+        @param hpw_src: the equivalent half-power width [rad] of the target (default 0)
         @param fitchans: selector to limit the frequency channels over which to fit the model (default None)
         @return: lambda f: hpw [rad]
     """
-    theta_src = 0 if (theta_src is None) else theta_src
+    hpw_src = 0 if (hpw_src is None) else hpw_src
     # Basic model and constants
-    hpbw = lambda f, p,q: ((p*(_c_/f)**q/D)**2 + theta_src**2)**.5 # rad
+    hpbw = lambda f, p,q: ((p*(_c_/f)**q/D)**2 + hpw_src**2)**.5 # rad
     omega_e = 2*np.pi/(24*60*60.) # rad/sec
     K = np.sqrt(8*np.log(2)) # hpbw = K*sigma
      
