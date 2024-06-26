@@ -178,7 +178,7 @@ def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
     return data, tmask, fmask
 
 
-def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=""):
+def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=None):
     """ Fit a Gaussian bump plus a baseline defined by a 2nd order polynomial to the time (spatial) axis and
         a first order polynomial over frequency.
         Note: execution time scales linearly with len(channels)/ch_res, typically at 0.3sec/channel.
@@ -189,7 +189,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         @param timemask: selector to filter out samples in time (default None)
         @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
         @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to show the raw data and 3 for 1+2 (default 0)
-        @param debug_label: text to label debug figures with (default "")
+        @param debug_label: text to label debug figures with (default None)
         @return: baseline, beam (Power, same shapes as vis), sigma (Note 1,3), mu (Note 2,3).
                  Note 1: sigma is the standard deviation of duration of main beam transit, per freq, so HPBW = sqrt(8*ln(2))*sigma [in units of time dumps]
                  Note 2: mu is times of bore sight transit per frequency [in units of time dumps]
@@ -215,20 +215,22 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     vis, tmask, fmask = _mask_jumps_(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
-    if (debug > 2):
-        fig, ax = plt.subplots(1,1, figsize=(12,6))
+    # 0
+    if (debug >= 3):
+        fig, axs = plt.subplots(2,1, figsize=(12,6))
         fig.suptitle(debug_label)
-        ax.set_title(" Provisional baseline fitting")
-        ax.plot(t_axis, np.nanmean(vis[:,fmask,:], axis=1))
-        ax.plot(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1))
-        ax.set_xlabel("Time [samples]"); ax.set_ylabel("Power [linear]"); ax.grid(True)
+        axs[0].set_title("Provisional baseline fitting")
+        axs[0].plot(t_axis, np.nanmean(vis[:,fmask,:], axis=1))
+        axs[0].plot(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1))
+        axs[0].set_xlabel("Time [samples]"); axs[0].set_ylabel("Power [linear]"); axs[0].grid(True)
+        # axs[1] is completed in steps up to 2 below
     
     # 1. Fit & subtract provisional baseline through first x% and last x% of the time series.
     # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, and it might not be worthwhile to transform vis to (time, angle/HPBW, prod)
     _tmask = np.array(tmask, copy=True); _tmask[N_t//4:-N_t//4] = False
     bl, vis_nb = _fit_bl_(vis, (_tmask,fmask), polyorders=[1,2])
-    if (debug > 2):
-        ax.plot(t_axis, np.mean(bl[:,fmask,:], axis=1))
+    if (debug >= 3):
+        axs[0].plot(t_axis, np.mean(bl[:,fmask,:], axis=1))
     
     # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
     vis0_nb = np.ma.mean(vis_nb[:,fmask,:], axis=1) # Integrated power in H & V, over time
@@ -237,11 +239,10 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     
     if (ch_res <= 0): # Asked for the band average fits are copied across frequency
         if (debug >= 2):
-            fig, ax = plt.subplots(1,1, figsize=(12,6))
-            fig.suptitle(debug_label)
-            ax.plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
-            ax.plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models")
-            ax.set_xlabel("Time [samples]"); ax.set_ylabel("Power [linear]"); ax.grid(True)
+            axs[1].set_title("Baselines subtracted")
+            axs[1].plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
+            axs[1].plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models")
+            axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
 
     else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
         sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
@@ -263,31 +264,31 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         sigma = np.ma.masked_array(sigma, mask, fill_value=np.nan)
         mu = np.ma.masked_array(mu, mask, fill_value=np.nan)
         if (debug >= 2):
-            fig, ax = plt.subplots(2,2, figsize=(12,10))
-            fig.suptitle(debug_label)
-            
-            resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
-            for p in [0,1]:
-                ax[1][p].set_title("Model residuals [%]")
-                im = ax[1][p].imshow(resid[:,:,p], origin="lower", aspect='auto', vmin=-10,vmax=10, cmap=plt.get_cmap('viridis'))
-                ax[1][p].set_xlabel("Frequency [channel]")
-            ax[1][0].set_ylabel("Time [samples]"); plt.colorbar(im, ax=ax[1]) 
-            
-            plt.subplot(2,1,1); plt.title("Baselines subtracted")
+            axs[1].set_title("Baselines subtracted")
             _a, _b = (vis-bl-dbl)[:,fmask,:], bm[:,fmask,:]
             for i in range(2): # Two halves of the band, separately
                 _f = slice(int(i*_a.shape[1]/2), int((i+1)*_a.shape[1]/2))
-                plt.plot(t_axis, np.nanmean(_a[:,_f,:],axis=1), '-', label="Measured %d/2"%(i+1))
-                plt.plot(t_axis, np.nanmean(_b[:,_f,:],axis=1), '--', label="Fitted %d/2"%(i+1))
-            plt.legend(); plt.xlabel("Time [samples]"); plt.ylabel("Power [linear]"); plt.grid(True)
-    
+                axs[1].plot(t_axis, np.nanmean(_a[:,_f,:],axis=1), '-', label="Measured %d/2"%(i+1))
+                axs[1].plot(t_axis, np.nanmean(_b[:,_f,:],axis=1), '--', label="Fitted %d/2"%(i+1))
+            axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
+            
+            fig, axs = plt.subplots(2,2, figsize=(12,10))
+            fig.suptitle(debug_label)
+            resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
+            for p in [0,1]:
+                axs[1][p].set_title("Model residuals P%d [%%]"%p)
+                im = axs[1][p].imshow(resid[:,:,p], origin="lower", aspect='auto', vmin=-10,vmax=10, cmap=plt.get_cmap('viridis'))
+                axs[1][p].set_xlabel("Frequency [channel]")
+            axs[1][0].set_ylabel("Time [samples]"); plt.colorbar(im, ax=axs[1]) 
+            
     # 3. Update the provisional baseline so that bl+mb ~ vis
     bl += dbl
     
     if (debug & 1): # 1, 3
-        fig, ax = plt.subplots(2, 1, figsize=(12,6))
+        fig, axs = plt.subplots(2, 1, figsize=(12,6))
         fig.suptitle(debug_label)
-        ax[0].plot(f_axis, mu); ax[0].grid(True); ax[0].set_ylabel("Bore sight crossing time 'mu'\n[time samples]")
-        ax[1].plot(f_axis, sigma); ax[1].grid(True); ax[1].set_ylabel("HP crossing duration 'sigma'\n[time samples]"); ax[1].set_xlabel("Frequency [channel]")
+        axs[0].plot(f_axis, mu); axs[0].set_ylabel("Bore sight crossing time 'mu'\n[time samples]"); axs[0].grid(True)
+        axs[1].plot(f_axis, sigma); axs[1].set_ylabel("HP crossing duration 'sigma'\n[time samples]"); axs[1].grid(True)
+        axs[1].set_xlabel("Frequency [channel]")
     
     return bl, bm, sigma, mu
