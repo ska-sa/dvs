@@ -222,7 +222,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         axs[0].set_title("Provisional baseline fitting")
         axs[0].plot(t_axis, np.nanmean(vis[:,fmask,:], axis=1))
         axs[0].plot(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1))
-        axs[0].set_xlabel("Time [samples]"); axs[0].set_ylabel("Power [linear]"); axs[0].grid(True)
+        axs[0].set_ylabel("Power [linear]"); axs[0].grid(True)
         # axs[1] is completed in steps up to 2 below
     
     # 1. Fit & subtract provisional baseline through first x% and last x% of the time series.
