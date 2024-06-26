@@ -61,7 +61,7 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
         return ylim
 
 def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,bars=None, style="-", newfig=True, **plotargs):
-    """ @param y_lim: (min,max) limits for y axis, or 'pct,tail,margin', or just 'pct' to base it on 10th & 90th percentiles with 30% margin (default None)
+    """ @param y_lim: (min,max) limits for y axis, or 'pct,tail,margin', or just 'pct' to base it on 5th & 95th percentiles with 20% margin (default None)
         @param x_lim: (min,max) limits for x axis (default None)
         @param bars: If a sequence of shape 2xN, errorbars are drawn at -row1 and +row2 relative to the data.
         @param plotargs: e.g. "errorevery=100" to control placement of error bar ticks
@@ -77,7 +77,7 @@ def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,b
             for Pol in np.arange(len(vis[1,:])):
                 plt.errorbar(x_axis, vis[:,Pol], fmt=style, capsize=1, yerr=bars[:,Pol], **plotargs)
     if y_lim and ('pct' in y_lim):
-        _ypct = [int(i) for i in (y_lim+",10,30").split(",")[1:3]]
+        _ypct = [int(i) for i in (y_lim+",5,20").split(",")[1:3]]
         y_lim = _ylim_pct_(vis, *_ypct)
     if (y_lim is not None) and np.all(np.isfinite(y_lim)):
         plt.ylim(y_lim)
@@ -294,12 +294,13 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_sr
     return (freqs, counts2Jy, SEFD_est)
 
 
-def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=None, y_lim=None):
+def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=None, title=None, y_lim=None):
     """ Isolate Noise cycles to computes the ND spectra, possibly scaled. Generates a figure.
         @param counts2scale: if given (H spectrum, V spectrum) then ND spectra are scaled by this factor (default None)
         @param freqrange: like get_SEFD() & get_SEFD_ND() (default None)
         @param rfifilt: size of smoothing windows in time & freq; time window is limited to < min(ON,OFF)/3 (default None)
-        @param y_lim: y limit for ND plot, as (default None)
+        @param title: title for the figure
+        @param y_lim: y limit for ND plot, as used by plot_data() (default None)
         @return S_ND (H&V spectra) either as a fraction of the background noise, or scaled by counts2scale. Ordered as (time,pol,freq)
     """
     chans = chan_idx(h5.channel_freqs, freqrange)
@@ -322,7 +323,7 @@ def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
             if (counts2scale is not None):
                 ND_delta = ND_delta*counts2scale[:,pol]
             plot_data(h5.channel_freqs[chans]/1e6, ND_delta, label="%s, %s"%(h5._pol[pol],label), newfig=len(S_ND)+len(S_ND[-1])==1,
-                      xtag="Frequency [MHz]", ytag="ND spectral density [%s]"%y_unit, y_lim=y_lim)
+                      xtag="Frequency [MHz]", ytag="ND spectral density [%s]"%y_unit, header=title, y_lim=y_lim)
             S_ND[-1].append(ND_delta)
     
     if (len(S_ND) == 0): # No ND data
@@ -398,11 +399,13 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     Trx_deduced = Tsys_deduced - pText - np.asarray([pTspill]*len(nulls))
     Tspill_deduced = Tsys_deduced - pText - np.asarray([pTrx]*len(nulls))
     
+    target = [t for t in h5.catalogue.targets if t.body_type=='radec'][0]
+    title = "%s - %s\n%s" % (h5.name.split("/")[-1].split()[0], target.name, ant.name)
     pStyle = dict(marker="o", markevery=256, markersize=6)
     for n in range(len(nulls)):
-        _ylim = _ylim_pct_(pSEFD if np.any(np.isfinite(pSEFD)) else SEFD_meas, 0, 10, snap_to=1)
+        _ylim = _ylim_pct_(np.stack([pSEFD, SEFD_meas]), 2.5, 30, snap_to=10) # Range hides at most 5%
         plot_data(freqs/1e6, SEFD_meas[n,:,0], newfig=(n==0), label="H, null "+null_labels[n], color="C%d"%(2*n),
-                  xtag="Frequency [MHz]", ytag="SEFD [Jy]", y_lim=_ylim)
+                  xtag="Frequency [MHz]", ytag="SEFD [Jy]", y_lim=_ylim, header=title)
         plot_data(freqs/1e6, SEFD_meas[n,:,1], newfig=False, label="V, null "+null_labels[n], color="C%d"%(2*n+1), **pStyle)
         plot_data(freqs/1e6, pSEFD[n,:,0], newfig=False, label="Expected H, null "+null_labels[n], color="C%d"%(2*n), style="--")
         plot_data(freqs/1e6, pSEFD[n,:,1], newfig=False, label="Expected V, null "+null_labels[n], color="C%d"%(2*n+1), style="--", **pStyle)
@@ -413,7 +416,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     pTsys, pSEFD = np.mean(pTsys,axis=0), np.mean(pSEFD,axis=0)
 
     # Also get the ND spectra, if there are
-    S_ND = _get_ND_(h5, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, y_lim='pct')
+    S_ND = _get_ND_(h5, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, title=title, y_lim='pct')
     S_ND = np.moveaxis(S_ND, 1, 2) # time,pol,freq -> time,freq,pol
     S_ND = np.ma.mean(S_ND,axis=0) # Average over independent ND measurements
     
