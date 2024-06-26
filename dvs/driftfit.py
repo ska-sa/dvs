@@ -189,7 +189,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
         @param timemask: selector to filter out samples in time (default None)
         @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
         @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to show the raw data and 3 for 1+2 (default 0)
-        @param debug_label: text to label debug information with (default "")
+        @param debug_label: text to label debug figures with (default "")
         @return: baseline, beam (Power, same shapes as vis), sigma (Note 1,3), mu (Note 2,3).
                  Note 1: sigma is the standard deviation of duration of main beam transit, per freq, so HPBW = sqrt(8*ln(2))*sigma [in units of time dumps]
                  Note 2: mu is times of bore sight transit per frequency [in units of time dumps]
@@ -216,14 +216,15 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
     if (debug > 2):
-        ax = plt.subplots(1,1, figsize=(12,6))[1]
-        ax.set_title(debug_label+" Provisional baseline fitting")
+        fig, ax = plt.subplots(1,1, figsize=(12,6))
+        fig.suptitle(debug_label)
+        ax.set_title(" Provisional baseline fitting")
         ax.plot(t_axis, np.nanmean(vis[:,fmask,:], axis=1))
         ax.plot(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1))
         ax.set_xlabel("Time [samples]"); ax.set_ylabel("Power [linear]"); ax.grid(True)
     
     # 1. Fit & subtract provisional baseline through first x% and last x% of the time series.
-    # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, an dit might not be worthwhile to transform vis to (time, angle/HPBW, prod)
+    # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, and it might not be worthwhile to transform vis to (time, angle/HPBW, prod)
     _tmask = np.array(tmask, copy=True); _tmask[N_t//4:-N_t//4] = False
     bl, vis_nb = _fit_bl_(vis, (_tmask,fmask), polyorders=[1,2])
     if (debug > 2):
@@ -236,8 +237,8 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     
     if (ch_res <= 0): # Asked for the band average fits are copied across frequency
         if (debug >= 2):
-            ax = plt.subplots(1,1, figsize=(12,6))[1]
-            ax.set_title(debug_label)
+            fig, ax = plt.subplots(1,1, figsize=(12,6))
+            fig.suptitle(debug_label)
             ax.plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
             ax.plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models")
             ax.set_xlabel("Time [samples]"); ax.set_ylabel("Power [linear]"); ax.grid(True)
