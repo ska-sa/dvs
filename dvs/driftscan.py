@@ -545,15 +545,12 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     return bore, null_l, null_r, HPBW, N_bore
 
 
-def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
+def _debug_stats_(vis, channel_freqs, timestamps, bore_indices, nulls_indices, win_len):
     """ Plots sigma/mu spectra for bore sight & off-source & compare to expected value
     
         @param bore_indices: time indices for bore sight data per frequency (1D), relative to selection of '__select_SEFD__()'.
         @param nulls_indices: lists of time indices per frequency for each null (source off bore sight)
     """
-    h5.__select_SEFD__()
-    vis = h5.vis[:]; vis[h5.flags[:]] = np.nan
-    
     def plotFreq(freqrange=None,ylim=None,select_dumps=None):
         """ Produces frequency spectrum plots of the currently selected dumps.
             @param freqrange: frequency start&stop to subselect (without modifying h5 selection)
@@ -563,12 +560,12 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
         viz = np.array(vis, copy=True)
         if select_dumps is not None:
             if callable(select_dumps):
-                viz = select_dumps(viz, h5.timestamps, h5.channel_freqs)
+                viz = select_dumps(viz, timestamps, channel_freqs)
             else:
                 viz = viz[select_dumps,:]
         
-        chans = chan_idx(h5.channel_freqs, freqrange)
-        x_axis = h5.channel_freqs[chans]
+        chans = chan_idx(channel_freqs, freqrange)
+        x_axis = channel_freqs[chans]
         xlabel = "f [MHz]"
         
         viz = viz[:,chans,:] # Always restrict freq range after select_dumps
@@ -580,14 +577,14 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
                       bars=vis_bars.transpose(), errorevery=30)
         return x_axis, vis_mean
 
-    freqrange = [h5.channel_freqs[1],h5.channel_freqs[-2]]
+    tau = timestamps[1]-timestamps[0]
+    BW0 = abs(channel_freqs[1]-channel_freqs[0])
+    freqrange = [np.min(channel_freqs)+BW0,np.max(channel_freqs)-BW0]
     
     # In the limit Tsrc << Tsys, sigma = Tsys/sqrt(BW*tau), so sigma/mu = 1/sqrt(BW*tau) = const   (per polarization)
     # However, in case Tsrc >> Tsys we must use the complete sigma = sqrt(Tsys^2+2*Tsys*Tsrc+2*Tsrc^2)/sqrt(BW*tau),
     #   so expect bore sight sigma/mu = sigma/(Tsys+Tsrc) > 1/sqrt(BW*tau)
     _K = lambda Tsys,Tsrc: np.sqrt(Tsys**2+2*Tsys*Tsrc+2*Tsrc**2)/(Tsys+Tsrc)
-    tau = h5.dump_period
-    BW0 = abs(h5.channel_freqs[1]-h5.channel_freqs[0])
     
     # Plot statistics of bore sight data
     bore_indices = np.array(np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2), dtype=int)
@@ -848,7 +845,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
             for k in [0,1]: # Check first two nulls are well defined -- ideally prefer to use k >= 1?
                 getvis_null(vis, null_l[k], N_bore, debug=True)
                 getvis_null(vis, null_r[k], N_bore, debug=True)
-                _debug_stats_(h5, bore, (null_l[k], null_r[k]), N_bore)
+                _debug_stats_(vis, h5.channel_freqs, h5.timestamps, bore, (null_l[k], null_r[k]), N_bore)
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
