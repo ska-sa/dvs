@@ -253,15 +253,15 @@ def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
     return (Trec.transpose(), Tspill.transpose(), Text.transpose(), Tsys.transpose(), Eff_area.transpose(), SEFD.transpose()) # pol,freqs -> freqs,pol
 
 
-def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, theta_src=0, profile_src='gaussian', enviro={}):
+def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_src='gaussian', enviro={}):
     """ Returns the frequency spectrum of the deflection from a calibrator source.
         @param vis: the dataset recorded power
         @param freqs: corresponding to the second axis in vis [Hz]
-        @param ant, el, MJD: katpoint.Antenna, elevation in deg & modified Julian date of the observation [days].
+        @param el_deg, MJD: elevation [deg] & modified Julian date of the observation [days].
         @param bore: time indices for source on bore sight, per frequency
         @param nulls: either specific indices or a function with arguments (vis,timestamps,frequencies) identifying the null window.
         @param S_src: 'lambda f_GHz,year' returning flux (HH, VV - corrected for parallactic angle) at the top of the atmosphere [Jy].
-        @param theta_src: Extent (as per 'profile_src') of the source as a fraction of HPBW [fraction] (default 0)
+        @param hpw_src: half power width of the source as a fraction of HPBW [fraction] (default 0)
         @param profile_src: either 'gaussian' or 'disc' (default 'gaussian')
         @param enviro: a dictionary of "Enviro/air_*" metadata for atmospheric effects - simply use "h5.sensor"
         @return: (freqs, counts2Jy [per pol], SEFD [total power]) the latter ordered as (freqs,pol 0=H,1=V)
@@ -278,9 +278,9 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, theta_src=0, profile_
     g_atm = np.exp(-opacity_at_el)
     # Source-to-beam coupling factor e.g. Baars 1973: S -> S*1/K
     if ('gauss' in profile_src.lower()): # Source has a Gaussian intensity distribution, such as Taurus A,Orion A
-        K = 1 + theta_src**2
+        K = 1 + hpw_src**2
     elif ('disc' in profile_src.lower()): # Source with a "top-hat" intensity distribution, such as the Moon, or Pictor A along constant declination
-        K = (theta_src/2/0.6)**2 / (1 - np.exp(-(theta_src/2/0.6)**2)) # theta_src/2 is the radius
+        K = hpw_src**2 / (1 - np.exp(-hpw_src**2)) # hpw_src=R/2/ln(2) is the radius
     
     yr = 1858+(365-31-14)/365.242+MJD/365.242 # Sufficiently accurate fractional year from MJD
     print("Scaling source flux for beam coupling, atmosphere at elevation %.f deg above horizon, and year %.2f"% (el_deg, yr))
@@ -331,7 +331,7 @@ def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
     return np.asarray(S_ND) # time,freq,pol
 
 
-def get_SEFD_ND(h5,bore,nulls,win_len,S_src,theta_src,profile_src,null_labels=None,freqrange=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
+def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None,freqrange=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
     """ Computes spectra of SEFD and Noise Diode equivalent flux. Also generates expected SEFD given certain estimates.
         Returned values reflect SEFD for a BACKGROUND AVERAGED BETWEEN THE NULLS ENCOUNTERED BEFORE AND AFTER TRANSIT.
         
@@ -339,8 +339,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,theta_src,profile_src,null_labels=No
         @param nulls: lists of time indices per frequency for each null (source off bore sight)
         @param win_len: the number of time indices to use around bore sight & the nulls (-1/2,+1/2)
         @param S_src: source flux function ('lambda f_GHz,year' returning flux in [HH, VV] - corrected for parallactic angle) [Jy]
-        @param theta_src: Extent of the source as a fraction of HPBW [fraction]
-        @param theta_src: Extent of the source (as per 'profile_src') as a fraction of HPBW [fraction] (default 0)
+        @param hpw_src: half power width of the source as a fraction of HPBW [fraction]
         @param profile_src: either 'gaussian' or 'disc'.
         @param freqrange: [fmin,fmax] (in Hz) to process & return results for, None to ommit first and last channels only (default None)
         @param rfifilt: size of smoothing windows in time & freq (default None)
@@ -367,7 +366,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,theta_src,profile_src,null_labels=No
     for null in nulls:
         freqs, c2Jy, sefd = _get_SEFD_(vis[:,chans,:], h5.channel_freqs[chans], el_deg, h5.mjd.mean(),
                                        bore=bore, nulls=lambda v,t,f:getvis_null(v,null,win_len),
-                                       S_src=S_src, theta_src=theta_src, profile_src=profile_src, enviro=h5.sensor)
+                                       S_src=S_src, hpw_src=hpw_src, profile_src=profile_src, enviro=h5.sensor)
         counts2Jy.append(c2Jy)
         sefd = mask_where(sefd, freqs, freqmask)
         SEFD_meas.append(sefd)
