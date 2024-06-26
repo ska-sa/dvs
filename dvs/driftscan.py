@@ -5,7 +5,7 @@
         python driftscan.py /data/132598363.h5 0 "Baars 1977"
     which is equivalent to
         from driftscan import analyse
-        analyse(sys.argv[1], int(sys.argv[2]), sys.argv[3], saveroot=".")
+        analyse(sys.argv[1], int(sys.argv[2]), sys.argv[3], saveroot=".", makepdf=True)
         
     Typical use 2:
         import driftscan
@@ -571,10 +571,10 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
         xlabel = "f [MHz]"
         
         viz = viz[:,chans,:] # Always restrict freq range after select_dumps
-        vis_mean = viz.nanmean(axis=0)
+        vis_mean = np.nanmean(viz, axis=0)
         
         if ylim is not None:
-            vis_bars = np.dstack((vis_mean-viz.nanmin(axis=0), viz.nanmax(axis=0)-vis_mean))
+            vis_bars = np.dstack((vis_mean-np.nanmin(viz,axis=0), np.nanmax(viz,axis=0)-vis_mean))
             plot_data(x_axis/1.0e6,vis_mean,y_lim=ylim,xtag=xlabel,ytag="Radiometer counts",
                       bars=vis_bars.transpose(), errorevery=30)
         return x_axis, vis_mean
