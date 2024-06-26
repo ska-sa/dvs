@@ -132,7 +132,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
         return array2d
 
 
-def load_vis(f, ant, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
+def load_vis(f, ant, ant_rxSN={}, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
     """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
         Also supplies auxilliary features that are employed in processing steps in this module.
         
@@ -145,7 +145,7 @@ def load_vis(f, ant, ant_rxSN={}, swapped_pol=False, strict=False, flags="cam,da
        @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
        @param swapped_pol: True to swap the order of H & V pol around (default False)
        @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
-       @param flags: Select which flags are used to clean the data (default "cam,data_lost,ingest_rfi").
+       @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
        @param debug: True to generate figures that may aid in debugging the dataset (default False)
        @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
        @return: (the katdal dataset with data selected & ordered as required, drift target with the antenna set).
@@ -1100,18 +1100,17 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     if debug:
         plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, xtag="Frequency [MHz]", ytag="HPBW [deg]", y_lim='pct')
     
-    # The specified data range
+    # The data to fit to
+    N_freq, N_prod = sigma.shape
     sigma = np.atleast_2d(np.ma.array(sigma, copy=True))
-    sigma[np.isnan(sigma)] = 0 # Avoid warnings in 'ssigma<_s' below if there are nan's
-    N_prod = sigma.shape[1]
+    sigma[np.isnan(sigma)] = np.nanmean(sigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
     fitchans = fitchans if fitchans else slice(None)
-    ff, ssigma = f[fitchans], sigma[fitchans]
-    # Mask out more data which is too far off the expected smooth curve
-    _s = np.stack([smooth(sigma[:,p], sigma.shape[0]//50) for p in range(N_prod)], -1)[fitchans] # ~50 independent windows, balance 'noise' and edge effects
-    ssigma.mask[ssigma<0.9*_s] = True; ssigma.mask[ssigma>1.1*_s] = True
+    # Don't fit to data that is too far off the expected smooth curve
+    _s = np.stack([smooth(sigma[:,p], N_freq//50) for p in range(N_prod)], -1) # ~50 independent windows, balance 'noise' and edge effects
+    ff, ssigma, _s = f[fitchans], sigma[fitchans], _s[fitchans]
+    ssigma.mask[np.abs(ssigma-_s)>0.1] = True
     if debug:
-        plot_data(ff/1e6, K*ssigma*omega_e*180/np.pi, style='.', label="Measured", newfig=False)
-#         plot_data(ff/1e6, K*_s*omega_e*180/np.pi, style='k,', newfig=False)
+        plot_data(ff/1e6, K*ssigma*omega_e*180/np.pi, style='.', label="To fit", newfig=False)
     print("Fitting HPBW over %.f - %.f MHz assuming D=%.2f m"%(np.min(ff[~ssigma.mask[:,0]])/1e6, np.max(ff[~ssigma.mask[:,0]])/1e6, D))
     
     # lambda^1 model
