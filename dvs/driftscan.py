@@ -56,7 +56,7 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
     if (len(_data) == 0):
         return None
     else:
-        ylim = (a*np.percentile(_data,tail_pct), b*np.percentile(_data,100-tail_pct))
+        ylim = (a*np.nanpercentile(_data,tail_pct), b*np.nanpercentile(_data,100-tail_pct))
         ylim = (int(ylim[0]/snap_to)*snap_to, int(ylim[1]/snap_to+0.5)*snap_to)
         return ylim
 
@@ -65,6 +65,7 @@ def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,b
                       just 'pct' to base it on 5th & 95th percentiles with 30% margin (default None)
         @param x_lim: (min,max) limits for x axis (default None)
         @param bars: If a sequence of shape 2xN, errorbars are drawn at -row1 and +row2 relative to the data.
+        @param header: axis "title".
         @param plotargs: e.g. "errorevery=100" to control placement of error bar ticks
     """
     if newfig:
@@ -400,13 +401,11 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     Trx_deduced = Tsys_deduced - pText - np.asarray([pTspill]*len(nulls))
     Tspill_deduced = Tsys_deduced - pText - np.asarray([pTrx]*len(nulls))
     
-    target = [t for t in h5.catalogue.targets if t.body_type=='radec'][0]
-    title = "%s - %s\n%s" % (h5.name.split("/")[-1].split()[0], target.name, ant.name)
     pStyle = dict(marker="o", markevery=256, markersize=6)
     for n in range(len(nulls)):
         _ylim = _ylim_pct_(np.stack([pSEFD, SEFD_meas]), 2.5, 30, snap_to=10) # Range hides at most 5%
         plot_data(freqs/1e6, SEFD_meas[n,:,0], newfig=(n==0), label="H, null "+null_labels[n], color="C%d"%(2*n),
-                  xtag="Frequency [MHz]", ytag="SEFD [Jy]", y_lim=_ylim, header=title)
+                  xtag="Frequency [MHz]", ytag="SEFD [Jy]", y_lim=_ylim)
         plot_data(freqs/1e6, SEFD_meas[n,:,1], newfig=False, label="V, null "+null_labels[n], color="C%d"%(2*n+1), **pStyle)
         plot_data(freqs/1e6, pSEFD[n,:,0], newfig=False, label="Expected H, null "+null_labels[n], color="C%d"%(2*n), style="--")
         plot_data(freqs/1e6, pSEFD[n,:,1], newfig=False, label="Expected V, null "+null_labels[n], color="C%d"%(2*n+1), style="--", **pStyle)
@@ -417,7 +416,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     pTsys, pSEFD = np.mean(pTsys,axis=0), np.mean(pSEFD,axis=0)
 
     # Also get the ND spectra, if there are
-    S_ND = _get_ND_(h5, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, title=title, y_lim='pct')
+    S_ND = _get_ND_(h5, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, y_lim='pct')
     S_ND = np.moveaxis(S_ND, 1, 2) # time,pol,freq -> time,freq,pol
     S_ND = np.ma.mean(S_ND,axis=0) # Average over independent ND measurements
     
@@ -436,10 +435,11 @@ def getvis_null(vis, null_indices, win_len=4, debug=False):
     n_a = null_indices - win_len//2
     n_z = null_indices + (win_len-win_len//2)
     _valid_freq_ = np.arange(vis.shape[1])[np.isfinite(null_indices) & (n_a >= 0) & (n_z <= vis.shape[0])]
-    if debug:
+    if debug: # Show how much the values change over the selected time & frequency points, in this null
         for c in _valid_freq_:
             z = vis[int(n_a[c]):int(n_z[c]),c,:].mean(axis=1)
-            plot_data(range(z.shape[0]), z/z.mean(axis=0), newfig=c==0, header="Normalized values per frequency", xtag="selected time interval")
+            plot_data(range(z.shape[0]), z/z.mean(axis=0), newfig=c==0, header="Stability over selected null",
+                      xtag="Time in null window [#]", ytag="Power, normalized per frequency")
     
     vis_null = np.full((vis.shape[1], win_len, vis.shape[2]), np.nan) # Ordered as [freq,time,prod]
     for c in _valid_freq_:
@@ -505,13 +505,13 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     ll, mm = target.sphere_to_plane(antaz,antel,timestamp=h5.timestamps,projection_type="SSN",coord_system="azel") # rad
     angles = 2*np.arcsin((ll**2+mm**2)**0.5 / 2.) # Pointing offset [rad] of target relative to mechanical axis over time. For small angles this is ~ (ll**2+mm**2)**0.5
     if (debug_level in (2,3)):
-        tgtaz,tgtel = target.azel(h5.timestamps)
-        plot_data(np.unwrap(tgtaz)/D2R,tgtel/D2R, label="Target", xtag="Az [deg]", ytag="El [deg]")
-        plot_data(antaz/D2R,antel/D2R, label="Bore sight", style='x', newfig=False)
-        plt.axes().set_aspect('equal', 'datalim')
+        # Show pointing & target track - TODO sometimes shows up empty?
+        # tgtaz,tgtel = target.azel(h5.timestamps)
+        # plot_data(np.unwrap(tgtaz)/D2R,tgtel/D2R, label="Target", xtag="Az [deg]", ytag="El [deg]")
+        # plot_data(antaz/D2R,antel/D2R, label="Bore sight", style='x', newfig=False)
+        # plt.axes().set_aspect('equal', 'datalim')
 
-        plt.figure(figsize=(12,6)); plt.subplot(2,1,1)
-        plot_data(t,np.asarray(angles)/D2R, header="Target distance from bore sight [deg]", newfig=False)
+        plot_data(t,np.asarray(angles)/D2R, header="Target distance from bore sight [deg]")
         cleanchan = h5.channels[23] if (cleanchans is None) else h5.channels[cleanchans][23] # Arbitrarily choose one
         for n in [0,1]: # target in first two nulls vs. time, for some clean channel
             flags_ch = np.abs(angles-Nk[n]*HPBW[cleanchan])<0.1*D2R
@@ -589,7 +589,7 @@ def _debug_stats_(h5, bore_indices, nulls_indices, win_len):
     BW0 = abs(h5.channel_freqs[1]-h5.channel_freqs[0])
     
     # Plot statistics of bore sight data
-    bore_indices = np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2)
+    bore_indices = np.array(np.nanmedian(bore_indices) + np.arange(-win_len//2,win_len//2), dtype=int)
     plotFreq(freqrange=freqrange,select_dumps=bore_indices,ylim='pct')
     plt.title("Spectrum with source on bore sight")
     freqs, Son = plotFreq(freqrange=freqrange,select_dumps=bore_indices,nstd_ylim=[0,3/np.sqrt(BW0*tau)])
@@ -847,7 +847,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
             for k in [0,1]: # Check first two nulls are well defined -- ideally prefer to use k >= 1?
                 getvis_null(vis, null_l[k], N_bore, debug=True)
                 getvis_null(vis, null_r[k], N_bore, debug=True)
-                _debug_stats_(h5, bore, (null_l[k], null_r[k]), N_bore) 
+                _debug_stats_(h5, bore, (null_l[k], null_r[k]), N_bore)
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
@@ -1052,10 +1052,8 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
         
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        label = "%s - %s\n%s" % (ds.name.split("/")[-1].split()[0], target.name, ds.ants[0].name)
-        # For v4 datasets (using dask) we need to split [time,chans,...] as [time][chans,...]
         vis = np.abs(ds.vis[:]); vis[ds.flags[:]] = np.nan
-        bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug, debug_label=label)
+        bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
         
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
