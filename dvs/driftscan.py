@@ -472,7 +472,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # To speed up, fit only to 64 frequency channels
     beamfits = load4hpbw(h5, ch_res=len(h5.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
-    HPBW_fitted = fit_hpbw(f, bore, sigma, theta_src=theta_src, fitchans=cleanchans, D=h5.ants[0].diameter, debug=debug_level)
+    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, theta_src=theta_src, fitchans=cleanchans, debug=debug_level)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
     
     if (HPBW is None): # HPBW not forced, so use the fitted positions, filling it in with the fitted function where it is masked
@@ -1019,6 +1019,9 @@ def save_Tnd(freqs, T_ND, rx_band,rx_SN, output_dir, rfi_mask=[], ant="TBD", deb
 
 def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cached=False, return_all=False, debug=2):
     """ Processes a raw dataset to determine the beam crossing time instant, as well as the half power crossing duration.
+        Note that the crossing duration is scaled to represent a target on the ecliptic (declination=0), which simplifies
+        further interpretation.
+        
         If those results were previously saved to local disk, this function may be used to load it again.
         Note: This function does not modify the active selection filter of the raw dataset.
          
@@ -1045,13 +1048,20 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
                 pass
         # Not cached, so do all the fitting work...
         
+        target = [t for t in ds.catalogue.targets if t.body_type=='radec'][0]
+        
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        label = "%s - %s" % (ds.name.split("/")[-1].split()[0], ds.catalogue.targets[0].name)
+        label = "%s - %s\n%s" % (ds.name.split("/")[-1].split()[0], target.name, ds.ants[0].name)
         # For v4 datasets (using dask) we need to split [time,chans,...] as [time][chans,...]
         vis = np.abs(ds.vis[:]); vis[ds.flags[:]] = np.nan
         bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug, debug_label=label)
-        sigma *= ds.dump_period # [dumps] -> [seconds]
+        
+        # To simplify further processing, the transit duration is scaled to represent a target at declination=0
+        dec_tgt = target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
+        sigma *= ds.dump_period * np.cos(dec_tgt) # [dumps] -> [seconds along the ecliptic]
+        
+        # Beam crossing time is "at the center of the tangent plane" so does not need to be scaled
         T0 = ds.timestamps[0] - float(ds.start_time)
         mu = T0 + mu*ds.dump_period # [dumps] -> [seconds since start]
         f = ds.channel_freqs
@@ -1089,7 +1099,7 @@ def fit_hpbw(f,mu,sigma, D, theta_src=0, fitchans=None, debug=True):
     hpbw = lambda f, p,q: ((p*(_c_/f)**q/D)**2 + theta_src**2)**.5 # rad
     omega_e = 2*np.pi/(24*60*60.) # rad/sec
     K = np.sqrt(8*np.log(2)) # hpbw = K*sigma
-    
+     
     if debug:
         plot_data(f/1e6, K*sigma*omega_e*180/np.pi, style=',', newfig=True, xtag="Frequency [MHz]", ytag="HPBW [deg]", y_lim='pct')
     
