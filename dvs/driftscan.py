@@ -61,7 +61,8 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=1):
         return ylim
 
 def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,bars=None, style="-", newfig=True, **plotargs):
-    """ @param y_lim: (min,max) limits for y axis, or 'pct,tail,margin', or just 'pct' to base it on 5th & 95th percentiles with 20% margin (default None)
+    """ @param y_lim: (min,max) limits for y axis, or 'pct,tail,margin', or
+                      just 'pct' to base it on 5th & 95th percentiles with 30% margin (default None)
         @param x_lim: (min,max) limits for x axis (default None)
         @param bars: If a sequence of shape 2xN, errorbars are drawn at -row1 and +row2 relative to the data.
         @param plotargs: e.g. "errorevery=100" to control placement of error bar ticks
@@ -77,7 +78,7 @@ def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,b
             for Pol in np.arange(len(vis[1,:])):
                 plt.errorbar(x_axis, vis[:,Pol], fmt=style, capsize=1, yerr=bars[:,Pol], **plotargs)
     if y_lim and ('pct' in y_lim):
-        _ypct = [int(i) for i in (y_lim+",5,20").split(",")[1:3]]
+        _ypct = [int(i) for i in (y_lim+",5,30").split(",")[1:3]]
         y_lim = _ylim_pct_(vis, *_ypct)
     if (y_lim is not None) and np.all(np.isfinite(y_lim)):
         plt.ylim(y_lim)
