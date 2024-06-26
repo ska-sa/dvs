@@ -784,7 +784,7 @@ def summarize(results, labels=None, pol=["H","V"], header=None, pctmask=100, fre
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant, source=None, flux_key, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
               fitfreqrange=None, rfifilt=[1,7], freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
