@@ -940,6 +940,8 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         the following relation
                 $T_{ND,pol} = \frac{S_{ND,pol} \times 10^{-26}}{k_B} A_e$
         """%(str(Nk)[1:-1],), fontsize=9)
+        
+        pp.report_stdout()
     finally:
         pp.close()
     
