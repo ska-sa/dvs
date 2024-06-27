@@ -846,15 +846,15 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(freqs)/1e6, np.max(freqs)/1e6))
         plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,cleanchans,:], axis=1)); plt.grid(True)
         plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % h5.dump_period)
-        pp.report_fig(F+1)
+        pp.report_fig(F+1, orientation="landscape")
     
         # Identify the bore sight and null transits
         bore, null_l, null_r, _HPBW, N_bore = find_nulls(h5, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
             # 1-> (mu sigma vs time, HPBW fit, map null traces), 2-> (baselines, model residuals, mu sigma vs time, HPBW fit, trajectory, map null traces)
-            pp.report_fig(F-(1 if (debug_nulls==1) else 2)) # Beamwidth fit
-            pp.report_fig(F) # Map of null traces
+            pp.report_fig(F-(1 if (debug_nulls==1) else 2), orientation="landscape") # Beamwidth fit
+            pp.report_fig(F, orientation="landscape") # Map of null traces
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
@@ -877,11 +877,12 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
                 get_SEFD_ND(h5,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
         F = np.max(plt.get_fignums())
-        pp.report_fig([F-1, F]) # get_SEFD_ND()-> (SEFD, ND flux)
+        pp.report_fig([F-1, F], orientation="landscape") # get_SEFD_ND()-> (SEFD, ND flux)
         
         result = [freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg]
         summarize([result], pol=h5._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
-        pp.report_fig([F+1+i for i in [1,2,4,5,6]]) # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
+        # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
+        pp.report_fig([F+1+i for i in [1,2,4,5,6]], orientation="landscape")
         
         pp.report_text(r"""
         SEFD is determined from a ~1 hour drift scan of a suitable celestial calibrator.
@@ -894,9 +895,10 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         instant of each null is determined independently for each frequency channel, as follows.
         
         Time is mapped to angular offset of the source from the reported bore sight pointing coordinates.
-        The angular offsets of the nulls are taken to appear at
-                $\Theta_{\pm k} = \pm \{%s\}_{[k]} HPBW$
-        For a circular aperture illuminated by a parabolic taper the coefficients are {1.292,2.136,2.987,3.861}.
+        For the results in this report, the angular offsets of the nulls are taken to appear at
+                $\Theta_{\pm k} = \pm \{%s\}_{[k]} \times HPBW$
+        For a circular aperture illuminated by a parabolic taper the coefficients are expected to be
+        {1.292,2.136,2.987,3.861}.
         
         For each polarisation channel the measured SEFD is determined from the following:
                 $\frac{SEFD_{perpol}}{S_{src@antenna}} = \frac{P_{NULL_k}}{P_{BORE}-P_{NULL_k}} \times 2$
@@ -937,7 +939,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         The above may be scaled to an equivalent noise temperature at the waveguide port, using
         the following relation
                 $T_{ND,pol} = \frac{S_{ND,pol} \times 10^{-26}}{k_B} A_e$
-        """%(str(Nk)[1:-1],))
+        """%(str(Nk)[1:-1],), fontsize=9)
     finally:
         pp.close()
     
