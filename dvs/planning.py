@@ -5,28 +5,39 @@
 """
 import numpy as np
 import pylab as plt
-import time
 import katpoint
 import ephem
 import astropy.coordinates as acoords
 import katsemodels
-hp = katsemodels.hp # healpy, if it could be imported by katsemodels
+try:
+    import healpy as hp
+except:
+    print("WARNING: Failed to load healpy. Continuing with limitations.")
+    hp = None
 
 
 def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
-             catfn='/var/kat/katconfig/user/catalogues/sources_all.csv', listonly=None,
-             observer="m000, -30.713, 21.444, 1050.0", tabulate=True, figsize=(20,12), fontsize=8, **kwargs):
+             catfn='catalogues/sources_all.csv', listonly=None,
+             llh0=('-30.713','21.444',1050), llh1=None, enu1=None, tabulate=True, figsize=(20,12), fontsize=8, **kwargs):
     """ Make a sky plot for the given date, seen from observer's location. Also plot sources visible from catalogue.
         
         @param date: (y,m,d,H,M,S) in UTC, or UTC seconds since epoch.
         @param listonly: if not None, a list of target names to select from the catalogue (default None).
         @param tabulate: True to print a table of all visible sources (default True)
+        @param llh0: lat, lon, height above ellipsoid for nominal observer (default to m000).
+        @param llh1: lat, lon, heights above ellipsoid for baseline endpoint, or None (default None)
+        @param enu1: fallback ALTERNATIVE to llh1, as East,North,up [m]
         @return: the katpoint.Catalogue as set up & filtered for display.
     """
-    catfn = kwargs.get('cataloguefn', catfn) # Support deprecated argument names
+    try:
+        llh_ = list(kwargs['observer'].split(','))
+        llh_[2] = float(llh_[2])
+        llh0 = llh_
+    except:
+        pass
     
     date = katpoint.Timestamp(date).to_ephem_date() if isinstance(date,float) else date
-    refant = katpoint.Antenna(observer)
+    refant = katpoint.Antenna("A0, %s, %s, %.1f, 13.5" % llh0)
     observer = refant.observer
     
     ov = katsemodels.FastGSMObserver() # Employs pygsm.GlobalSkyModel with defaults, i.e. 2008 locked to the 408 MHz map
@@ -47,7 +58,12 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
     if (flux_limit_Jy or el_limit_deg):
         cat = cat.filter(flux_freq_MHz=f_MHz,flux_limit_Jy=flux_limit_Jy,antenna=refant,timestamp=ov.date,el_limit_deg=el_limit_deg)
     if tabulate:
-        cat.visibility_list(timestamp=ov.date, antenna=refant, antenna2=None, flux_freq_MHz=f_MHz)
+        ant1 = None
+        if (llh1 is not None):
+            ant1 = katpoint.Antenna("A1, %s,%s,%.1f, 13.5" % llh1)
+        elif (enu1 is not None): # llh is ignored for delays if enu is given
+            ant1 = katpoint.Antenna(("A1, %s,%s,%.1f, 13.5, " % llh0) + ("%.3f %.3f %.3f 0 0 0" % enu1))
+        cat.visibility_list(timestamp=ov.date, antenna=refant, antenna2=ant1, flux_freq_MHz=f_MHz)
     
     ax = fig.axes[0] # Plot all filtered sources on first axes == orthographic projection
     for a,e,l in [list(tgt.azel(ov.date))+[tgt.name] for tgt in cat]: # rad,rad,string
@@ -81,67 +97,88 @@ def _baseline_endpt_(ant, baseline_pt):
     return baseline_pt
 
 
-def describe_target(target, date, horizon_deg=0, end_date=None, baseline_pt=None, freq=1e9,
-             catfn='/var/kat/katconfig/user/catalogues/sources_all.csv',catant="m000, -30.713, 21.444, 1050.0", **figargs):
+def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(1000,0,0), freq=1e9, show_LST=False,
+             catfn='catalogues/sources_all.csv',catant="m000, -30.713, 21.444, 1050.0", **figargs):
     """ Notes rise & set times and plots the elevation trajectory if end_date is given.
-        Also prints flux density & fringe rate if additional parameters are given. 
+        Also prints the geometric delay rate for the baseline as specified. 
         
-        @param target: a katpoint.Target object as observed by the associated Target.antenna, or a name to retrieve it from the catalogue.
+        @param target: a katpoint.Target object as observed by the associated Target.antenna,
+                       or a name (or multiple 'a|b|..' or '*' for all) to load from the catalogue.
         @param date: (y,m,d,H,M,S) in UTC, or UTC seconds since epoch.
-        @param horizon_deg: angle for horizon limit to apply [deg]
         @param end_date: if given then will evaluate the target over the period from 'date' up to 'end_date' (default None)
-        @param baseline_pt: the reference end point for the baseline to calculate fringe rate, either katpoint.Antenna or (dEast,dNorth,dUp)[m] (default None)
-        @param freq: frequency for calculating flux and fringe rate (default 1e9) [Hz]
-        @param catfn, catant: defaults to use in case target is simply an alias string.
-        @return: target
+        @param horizon_deg: angle for horizon limit to apply [deg]
+        @param baseline_pt: the reference point for a baseline to calculate fringe rate,
+                            either katpoint.Antenna or (dEast,dNorth,dUp)[m] (default (1000,0,0)).
+        @param freq: frequency for calculating fringe rate (default 1e9) [Hz]
+        @param catfn, catant: defaults to use in case target is simply an identifier string.
+        @return: target (a list, if multiple matches)- a katpoint.Target
     """
-    if isinstance(target,str):
-        target = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(catant))[target]
-    
-    ant = target.antenna
-    # Make a copy of the observer to avoid modifying it unexpectedly
-    observer = ephem.Observer()
-    observer.lon, observer.lat, observer.elev = ant.observer.lon, ant.observer.lat, ant.observer.elev 
     date = katpoint.Timestamp(date).to_ephem_date() if isinstance(date,float) else date
-    observer.date = date
-    date = observer.date # ephem.Date
-    observer.horizon = "%g" % horizon_deg # strings for degrees
-    
-    print("Target [%s] as observed by [%s] on %s, at %.f MHz" % (str(target)[:20],ant.name,date,freq/1e6))
-    print("-"*80)
-    
-    if baseline_pt is not None:
-        baseline_pt = _baseline_endpt_(ant, baseline_pt)
-        delay, delay_rate = target.geometric_delay(baseline_pt, katpoint.Timestamp(date), ant)
-        phase_rate = delay_rate * (360*freq) # deg/sec
-        fringe_period = 1. / (delay_rate * freq)
-        print('Delay rate %g [sec/sec].' % delay_rate)
-        print('  At observed frequency: delay rate %.2f [deg/sec], fringe period %.2f [sec]' % (phase_rate, fringe_period))
-    
     if (end_date is not None):
-        end_date = time.mktime(tuple(list(end_date)+[0,0,0]))-time.timezone if isinstance(end_date,tuple) else end_date
-        timestamps = np.arange(katpoint.Timestamp(date).secs,katpoint.Timestamp(end_date).secs, 60)
-        az, el = target.azel(timestamps) # rad
+        end_date = katpoint.Timestamp(end_date).to_ephem_date() if isinstance(end_date,float) else end_date
+    
+    if isinstance(target,str):
+        cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(catant))
+        if (target != "*"):
+            matches = target.split("|")
+            targets = [cat[t] for t in matches]
+        else:
+            targets = cat.targets
+    else:
+        targets = [target]
+    
+    ant = targets[0].antenna
+    # Make a copy of the observer to avoid modifying it unexpectedly
+    observer = ant.observer
+    observer.horizon = "%g" % horizon_deg # strings for degrees
+    def LST(date): # Convert UTC to the sidereal time of the observer
+        d = observer.date; observer.date=date; st = observer.sidereal_time(); observer.date = d
+        return st
+    TC = "LST" if show_LST else "UTC"
+    
+    # Abuse the observer to ensure all dates are parsed if they can be
+    observer.date = date; date = observer.date
+    if end_date is not None:
+        observer.date = end_date; end_date = observer.date
+    timestamps = np.arange(katpoint.Timestamp(date).secs, katpoint.Timestamp(end_date).secs, 60)
+    
+    # Plot sky trajectories
+    if (end_date is not None):
         plt.figure(**figargs)
-        plt.title("Target [%s] as observed by [%s]"%(str(target)[:20],ant.name))
-        plt.plot((timestamps-timestamps[0])/60., el*180/np.pi, 'o')
-        plt.xlabel("time since %s [minutes]"%date)
+        plt.title("Targets as observed by [%s]" % ant.name)
+        dtime = (timestamps-timestamps[0])/3600.
+        for target in targets:
+            names = target.name + ("|"+"|".join(target.aliases) if target.aliases else "")
+            _, el = target.azel(timestamps) # rad
+            plt.plot(dtime, el*180/np.pi, '-', label=names)
+        plt.hlines(horizon_deg, dtime[0], dtime[-1], 'k'); plt.ylim(0, 90)
+        date0 = LST(date) if show_LST else date
+        plt.xlabel(f"Time since {str(date0)} {TC} [hours]"); plt.ylabel("El [deg]")
+        plt.grid(True); plt.legend(fontsize='small')
     
-    try:
-        _rise, _set = observer.previous_rising(target.body), observer.next_setting(target.body)
-        def ST(date):
-            observer.date=date
-            return observer.sidereal_time()
-        print("Rises above %g degEl at %s UTC (sidereal %s)" % (horizon_deg, _rise, ST(_rise)))
-        print("Sets below %g degEl at %s UTC (sidereal %s)" % (horizon_deg, _set, ST(_set)))
-    except ephem.AlwaysUpError:
-        print("This target is always above %g degEl." % (horizon_deg))
     
-    flux = target.flux_density(freq/1e6)
-    if np.isfinite(flux):
-        print("Flux %.2f Jy"%flux)
+    baseline_pt = _baseline_endpt_(ant, baseline_pt) if (baseline_pt is not None) else None
     
-    return target
+    print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{freq/1e9:.0f}GHz]")
+    print("-"*80)
+    for target in targets:
+        _name = target.name
+        # _flux = target.flux_density(freq/1e6) # Not reliably specified in the catalogue files, so omitted
+        try:
+            _rise, _set = observer.previous_rising(target.body), observer.next_setting(target.body)
+            if show_LST:
+                _rise, _set = LST(_rise),  LST(_set)
+        except ValueError: # ephem.AlwaysUpError
+            _rise, _set = np.nan, np.nan
+        _phrate = np.nan
+        if baseline_pt is not None:
+            delay_rate = target.geometric_delay(baseline_pt, timestamps, ant)[1]
+            imax = np.argmax(np.abs(delay_rate))
+            _phrate = delay_rate[imax] * (360*freq) # deg/sec
+        print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:.1f}")
+
+    targets = targets[0] if (len(targets) == 1) else targets
+    return targets
 
 
 def plot_Tant(RA,DEC, freq_MHz, extent,D_g=13.965,ellip=0,projection=None, label="", hold=True, draw=True, **figargs):
