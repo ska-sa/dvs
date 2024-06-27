@@ -14,6 +14,7 @@ try:
 except:
     print("WARNING: Failed to load healpy. Continuing with limitations.")
     hp = None
+from . import cattools
 
 
 def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
@@ -279,3 +280,22 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     plt.plot(hrs, norm(T_e[1::2]), '+-', label="... with Pointing error")
     plt.xlabel("time [hrs]"); plt.legend()
     plt.ylabel("Tsys/mean(Tsys) on sky [K/K]" if normalize else "Tsys on sky [K]")
+
+
+def sim_pointingmeasurements(catfn, Tstart, Hr, S):
+    """ Simulates pointing measurement sessions and makes plots to allow you to see
+        the resulting sky coverage using the specified catalogue.
+        @param catfn: the catalogue file.
+        @param Hr: the duration of a session in hours
+        @param S: the number of consecutive sessions to simulate
+    """
+    cat = katpoint.Catalogue(open(catfn), antenna=katpoint.Antenna('m000, -30.713, 21.444, 1050.0'))
+    print("Using ", catfn)
+    axes = np.ravel(plt.subplots(2,2, subplot_kw=dict(projection='polar'), figsize=(12,12))[1])
+    for n in range(S): # Repeat each "plan" so many times
+        T0 = Tstart + (Hr*n)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
+        cat_n = cattools.filter_separation(cat, T0)
+        T = cattools.plan_targets(cat_n, T0, 5*(30+2), 2, debug=True)[1] # 5-point scans
+        M = int(Hr*60*60/T)+1 # Number of times the plan fits in available hours
+        cattools.plot_skycat(cat_n, T0+np.arange(M)*T, 8*(30+2), ax=axes[n])
+        axes[n].set_title(catfn + ("+ %d hrs"%(Hr*n)))
