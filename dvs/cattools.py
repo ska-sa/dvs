@@ -34,16 +34,13 @@ def remove_overlapping(catalogue, eps=0.1, debug=True):
     return newcat
 
 
-def wrap(angle, period=2*np.pi):
-    return (angle+0.5*period) % period - 0.5*period
-
 def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg=20, ax=None):
     """ Plots distribution of catalogue targets on the sky, at timestamps """
     if (ax is None):
         ax = plt.figure().add_subplot(111, projection='polar')
     ax.set_xticks(np.arange(0,360,90)*D2R)
     ax.set_xticklabels(['E','N','W','S',])
-    angle_formatter = lambda x,pos=None:matplotlib.projections.polar.ThetaFormatter(wrap(np.pi/2-x), pos)
+    angle_formatter = lambda x,pos=None:matplotlib.projections.polar.ThetaFormatter(katpoint.wrap_angle(np.pi/2-x), pos)
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(angle_formatter))
     ax.set_ylim(0, np.pi/2)
     ax.set_yticks(np.arange(0,90,10)*D2R)
