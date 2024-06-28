@@ -3,7 +3,6 @@
     @author aph@sarao.ac.za
 """
 import numpy as np
-import time
 import pylab as plt
 import matplotlib
 import katpoint
@@ -291,7 +290,7 @@ if __name__ == "__main__":
             axes = np.ravel(plt.figure().subplots(2,2, subplot_kw=dict(projection='polar')))
             Hr = 2 # Duration of a session in hours
             for N in range(4): # Repeat each "plan" 4 times
-                T0 = time.time() + (Hr*N)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
+                T0 = katpoint.Timestamp().secs + (Hr*N)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
                 print("\n%s"%catfile)
                 cat = filter_separation(katpoint.Catalogue(open(catroot+catfile), antenna=katpoint.Antenna('m000, -30.713, 21.444, 1050.0')), T0)
                 T = plan_targets(cat, T0, 8*(30+2), 2, debug=True)[1]
