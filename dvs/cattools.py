@@ -165,11 +165,12 @@ def nominal_pos(ska_pad):
     print(name, "llh = (%.6f, %.6f, %.1f)" % (lat, lon, hae), "ENU = (%.1f %.1f %.1f)" % (E, N, U), "; all including pedestal height!")
 
 
-def simulate_pointingmeasurement(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
-                                 rms_error_arcsec=30, env_sigma=0.1, N_rnd=10, randomseed=None, verbose=0):
+def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
+                    rms_error_arcsec=30, env_sigma=0.1, N_rnd=10, randomseed=None, verbose=0):
     """ Simulate pointing measurements with the specified catalogue, to determine the expected
         model fit residual.
         
+        @param catfn: either a filename, or an already loaded catalogue.
         @param duration_min: the time duration to collect a measurement set (default 120) [minutes]
         @param meas_min: the time duration of a single target measurement, including slew time (default 5) [minutes]
         @param enabled_params: pointing model terms to fit (default [1,3,4,5,6,7,8,11])
@@ -183,10 +184,13 @@ def simulate_pointingmeasurement(catfn, el_floor_deg=20, duration_min=120, meas_
     Tstart = katpoint.Timestamp(Tstart)
     rng = np.random.default_rng(randomseed)
     
-    # An antenna in the vicinity of the MeerKAT core
-    ant = katpoint.Antenna('ant, -30:43:17.3, 21:24:38.5, 1038.0, 12.0')
-    # Construct list of target sources from sources_pnt
-    cat = katpoint.Catalogue(open(catfn), antenna=ant)
+    if isinstance(catfn, str):
+        # An antenna in the vicinity of the MeerKAT core
+        ant = katpoint.Antenna('ant, -30:43:17.3, 21:24:38.5, 1038.0, 12.0')
+        cat = katpoint.Catalogue(open(catfn), antenna=ant)
+    else:
+        cat = catfn
+        ant = cat.antenna
     
     # Pick an arbitrary "true" pointing model - which is to be recovered
     true_pm = katpoint.PointingModel('-0:07:53, 0, -0:00:53, -0:05:17, -0:01:36, 0:00:21, -0:02:27, -0:01:1, 0, 0:00:0, 0:01:20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0')
@@ -300,7 +304,7 @@ if __name__ == "__main__":
         nominal_pos(ska_pad=0)
     
     elif True:
-        simulate_pointingmeasurement(catroot+"targets_pnt_L.csv", Tstart=1718604536, randomseed=1, verbose=2)
-        simulate_pointingmeasurement(catroot+"targets_pnt_S.csv", Tstart=1718604536, randomseed=1, verbose=2)
+        sim_pointingfit(catroot+"targets_pnt_L.csv", Tstart=1718604536, randomseed=1, verbose=2)
+        sim_pointingfit(catroot+"targets_pnt_S.csv", Tstart=1718604536, randomseed=1, verbose=2)
         plt.show()
         
