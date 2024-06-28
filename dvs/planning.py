@@ -282,22 +282,25 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     plt.ylabel("Tsys/mean(Tsys) on sky [K/K]" if normalize else "Tsys on sky [K]")
 
 
-def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, verbose=False):
+def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_deg=1, sunmoon_separation_deg=10, verbose=False, **fitkwargs):
     """ Simulates pointing measurement sessions and makes plots to allow you to see
         the resulting sky coverage using the specified catalogue.
         @param catfn: the catalogue file.
         @param Hr: the duration of a session in hours
         @param S: the number of consecutive sessions to simulate
+        @param separation_deg: eliminate targets closer together than this (default 1) [deg]
+        @param sunmoon_separation_deg: omit targets that are closer than this distance from Sun & Moon (default 10) [deg]
+        @param fitkwargs: passed to `cattools.sim_pointingfit()`
     """
     cat = katpoint.Catalogue(open(catfn), antenna=katpoint.Antenna('m000, -30.713, 21.444, 1050.0'))
     print("Using ", catfn)
     axes = np.ravel(plt.subplots(max(1,int(S/2+0.5)),2, subplot_kw=dict(projection='polar'), figsize=(12,12))[1])
     for n in range(S): # Repeat each "plan" so many times
         T0 = Tstart + (Hr*n)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
-        cat_n = cattools.filter_separation(cat, T0, separation_deg=1, sunmoon_separation_deg=10)
+        cat_n = cattools.filter_separation(cat, T0, separation_deg=separation_deg, sunmoon_separation_deg=sunmoon_separation_deg)
         t_observe = 5*(30+2) # 5-point scans
         T = cattools.plan_targets(cat_n, T0, t_observe, 2, el_limit_deg=el_limit_deg, debug=verbose)[1]
         M = int(Hr*60*60/T)+1 # Number of times the plan fits in available hours
-        resid = cattools.sim_pointingfit(catfn, el_limit_deg, Hr*60, t_observe/60+1, Tstart=T0) # +1min for slews
+        resid = cattools.sim_pointingfit(catfn, el_limit_deg, Hr*60, t_observe/60+1, Tstart=T0, **fitkwargs) # +1min for slews
         cattools.plot_skycat(cat_n, T0+np.arange(M)*T, t_observe, ax=axes[n])
         axes[n].set_title("%s T+%d hrs (RMS<%.f'')"%(catfn, Hr*n, np.max(resid)))
