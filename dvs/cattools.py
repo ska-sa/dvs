@@ -5,10 +5,11 @@
 import numpy as np
 import time
 import pylab as plt
-import matplotlib.projections
+import matplotlib
 import katpoint
 
 D2R = np.pi/180
+R2D = 1/D2R
 
 
 def remove_overlapping(catalogue, eps=0.1, debug=True):
@@ -34,17 +35,22 @@ def remove_overlapping(catalogue, eps=0.1, debug=True):
     return newcat
 
 
+class ElevationFormatter(matplotlib.projections.polar.ThetaFormatter):
+    """ Generate tick labels on a matplotlib polar plot, with angles increasing to 90deg at the centre.
+        This is simply the ThetaFormatter, with angles "inverted". """
+    def __call__(self, x, pos=None):
+        return super().__call__(np.pi/2-x, pos)
+
+
 def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg=20, ax=None):
     """ Plots distribution of catalogue targets on the sky, at timestamps """
     if (ax is None):
         ax = plt.figure().add_subplot(111, projection='polar')
     ax.set_xticks(np.arange(0,360,90)*D2R)
     ax.set_xticklabels(['E','N','W','S',])
-    angle_formatter = lambda x,pos=None:matplotlib.projections.polar.ThetaFormatter(katpoint.wrap_angle(np.pi/2-x), pos)
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(angle_formatter))
     ax.set_ylim(0, np.pi/2)
-    ax.set_yticks(np.arange(0,90,10)*D2R)
-    ax.set_yticklabels([])
+    ax.set_yticks(np.arange(0,90,15)*D2R)
+    ax.yaxis.set_major_formatter(ElevationFormatter())
     
     antenna = catalogue.antenna if (antenna is None) else antenna
     for T in timestamps:
@@ -159,6 +165,113 @@ def nominal_pos(ska_pad):
     print(name, "llh = (%.6f, %.6f, %.1f)" % (lat, lon, hae), "ENU = (%.1f %.1f %.1f)" % (E, N, U), "; all including pedestal height!")
 
 
+def simulate_pointingmeasurement(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
+                                 rms_error_arcsec=30, env_sigma=0.1, N_rnd=10, randomseed=None, verbose=0):
+    """ Simulate pointing measurements with the specified catalogue, to determine the expected
+        model fit residual.
+        
+        @param duration_min: the time duration to collect a measurement set (default 120) [minutes]
+        @param meas_min: the time duration of a single target measurement, including slew time (default 5) [minutes]
+        @param enabled_params: pointing model terms to fit (default [1,3,4,5,6,7,8,11])
+        @param Tstart: the start time for the measurement set (defaults to "now") [Unix seconds]
+        @param env_sigma: the 1sigma fractional uncertainty in all environmental state variables (default 0.1)
+        @param rms_error_arcsec: the accuracy with which a centroid can be determined on a single target measurement (default 30) [arcsec]
+        @param N_rnd: the number of times to repeat each single target measurement, to get a representative measurement error (default 10)
+        @param verbose: 1 to print a summary, 2 to also make a plot (default 0)
+        @return: (1sigma residuals of fitted params) [arcsec]
+    """
+    Tstart = katpoint.Timestamp(Tstart)
+    rng = np.random.default_rng(randomseed)
+    
+    # An antenna in the vicinity of the MeerKAT core
+    ant = katpoint.Antenna('ant, -30:43:17.3, 21:24:38.5, 1038.0, 12.0')
+    # Construct list of target sources from sources_pnt
+    cat = katpoint.Catalogue(open(catfn), antenna=ant)
+    
+    # Pick an arbitrary "true" pointing model - which is to be recovered
+    true_pm = katpoint.PointingModel('-0:07:53, 0, -0:00:53, -0:05:17, -0:01:36, 0:00:21, -0:02:27, -0:01:1, 0, 0:00:0, 0:01:20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0')
+    
+    rc = katpoint.RefractionCorrection()
+    temperature_C = 20; pressure_hPa = 900; humidity_percent = 0.3 # ~50% of the time in the Karoo
+    env_delta = env_sigma*rng.normal(size=3)*[temperature_C, pressure_hPa, humidity_percent] # Error assumed for the environmental terms
+    
+    sigma = (rms_error_arcsec/3600)*D2R / np.sqrt(2.) # Per "tangent plane" dimension
+    
+    pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el = [],[],[],[]
+    end_time = Tstart.secs + duration_min*60
+    # Observe each of the targets, one at a time, and repeat as necessary, until the time is up
+    t = Tstart.secs
+    targets = list(cat.targets)
+    while (t < end_time):
+        if (len(targets) == 0):
+            targets = list(cat.targets)
+        tgt = targets.pop(0)
+        # Generate the "true" (az, el) positions of the sources, before pointing errors & refraction
+        src_true_az, src_true_el = tgt.azel(timestamp=t, antenna=ant)
+        if (src_true_el < (el_floor_deg)*D2R):
+            continue
+        
+        # Apply true refraction
+        src_true_rc_el = rc.apply(src_true_el, temperature_C, pressure_hPa, humidity_percent)
+        # Apply true pointing model
+        src_pointm_az, src_pointm_el = true_pm.apply(src_true_az, src_true_rc_el)
+        
+        # The requested "true" (az, el), used to fit the new model, has systematically imperfect knowledge of the environment
+        request_az = src_true_az
+        request_el = rc.apply(src_true_el, temperature_C+env_delta[0], pressure_hPa+env_delta[1], humidity_percent+env_delta[2])
+        
+        # Add random noise representing the residual from a fit to the measured centroid
+        # To get a representative error for this "single measurement", we have to generate repeated random values  
+        for _ in range(N_rnd):
+            src_meas_az = src_pointm_az + sigma*rng.normal()/np.clip(np.cos(src_pointm_el), 1e-6, 1.)
+            src_meas_el = src_pointm_el + sigma*rng.normal()
+            # The desired offset is now the difference between the requested commanded coordinates at the input of the antenna
+            # control system and the ideal (i.e. with a PM applied)
+            pointing_request_az.append(request_az)
+            pointing_request_el.append(request_el)
+            pointing_offset_az.append(katpoint.wrap_angle(src_meas_az - request_az))
+            pointing_offset_el.append(katpoint.wrap_angle(src_meas_el - request_el))
+        
+        t = t + meas_min*60
+    
+    # Fit a new pointing model to the pointing offsets
+    pm = katpoint.PointingModel()
+    pm.fit(pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el, enabled_params=enabled_params)
+    enabled_params = np.asarray(enabled_params)
+    true_pm_values = np.take(true_pm.values(), enabled_params-1)
+    fit_pm_values = np.take(pm.values(), enabled_params-1)
+    resid_pm_values = np.abs(fit_pm_values - true_pm_values) # Should be interpreted as 1sigma?
+    
+    if (verbose > 0):
+        print(catfn, Tstart.local())
+        print("TRUE   model:", true_pm.description)
+        print("FITTED model:", pm.description)
+    
+    if (verbose > 1):
+        fig = plt.figure()
+        fig.suptitle(f"{catfn[-20:]}, from {Tstart.local()}")
+        
+        ax = fig.add_subplot(121, projection='polar')
+        ax.plot(np.pi/2 - np.array(pointing_request_az), np.pi/2 - np.array(pointing_request_el), 'ob')
+        ax.set_xticks(np.arange(0, 360, 90)*D2R)
+        ax.set_xticklabels(['E', 'N', 'W', 'S'])
+        ax.set_ylim(0, np.pi/2)
+        ax.set_yticks(np.arange(0, 90, 15)*D2R)
+        ax.yaxis.set_major_formatter(ElevationFormatter())
+        # ax.set_yticklabels([])
+        
+        ax = fig.add_subplot(122)
+        ax.errorbar(enabled_params, 0*true_pm_values, yerr=resid_pm_values*R2D*3600, fmt='none', ecolor='r', capsize=5)
+        plt.ylabel('$1\sigma$ [arcsec]')
+        # ax.bar(enabled_params, true_pm_values*R2D*60, 1, align='center')
+        # ax.errorbar(enabled_params, true_pm_values*R2D*60, yerr=resid_pm_values*R2D*60, fmt='none', ecolor='r', capsize=5)
+        # plt.ylabel('Value [arcmin]')
+        ax.set_xticks(enabled_params)
+        plt.xlabel('Pointing model terms')
+        plt.grid(True)
+    
+    return resid_pm_values*R2D*3600
+
 
 if __name__ == "__main__":
     catroot = __file__ + "/../../catalogues/"
@@ -185,4 +298,9 @@ if __name__ == "__main__":
 
     elif True: # Print coordinates of an antenna
         nominal_pos(ska_pad=0)
+    
+    elif True:
+        simulate_pointingmeasurement(catroot+"targets_pnt_L.csv", Tstart=1718604536, randomseed=1, verbose=2)
+        simulate_pointingmeasurement(catroot+"targets_pnt_S.csv", Tstart=1718604536, randomseed=1, verbose=2)
+        plt.show()
         
