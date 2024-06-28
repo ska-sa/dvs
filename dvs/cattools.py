@@ -177,7 +177,7 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         @param rms_error_arcsec: the accuracy with which a centroid can be determined on a single target measurement (default 30) [arcsec]
         @param verbose: 1 to print a summary, 2 to also make a plot (default 0)
         @return: (1sigma residuals of fitted params) [arcsec] """
-    randomseed = rnd.get('randomseed', None) # Force the random number generator to a predictable random sequence
+    randomseed = rnd.get('randomseed', 1) # Force a predictable random sequence, so that differences are due to user input variables!
     N_rnd = rnd.get('N_rnd', 20) # The number of Monte Carlo runs to ensure the results are "typical"
     Tstart = katpoint.Timestamp(Tstart)
     rng = np.random.default_rng(randomseed)
