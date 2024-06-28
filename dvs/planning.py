@@ -46,8 +46,9 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
     ov.date = date # PyEphem assumes format as stated above
     ov.generate(f_MHz)
     fig = plt.figure(figsize=figsize)
-    plt.subplot(1,2,1); hp.orthview(np.log10(ov.observed_sky), half_sky=True, unit="log10(K)", hold=True)
-    plt.title("%g MHz sky excl. CMB from OBSERVER on %s UTC / %s LST" % (f_MHz,ov.date, ephem.hours(ov.radec_of(0, np.pi / 2)[0])))
+    plt.subplot(1,2,1); plt.title("%g MHz sky excl. CMB from OBSERVER on %s UTC / %s LST" % (f_MHz,ov.date, ephem.hours(ov.radec_of(0, np.pi / 2)[0])))
+    hp.orthview(np.log10(ov.observed_sky), half_sky=True, unit="log10(K)", hold=True) # Default flip='astro'i.e. east is left
+    ax = plt.gca(); ax.annotate("E", [-1,0], horizontalalignment='right'); ax.annotate("W", [1,0])
     plt.subplot(1,2,2); hp.cartview(np.log10(ov.observed_gsm), coord="G", unit="log10(K)", hold=True)
 
     # What sources are up?
