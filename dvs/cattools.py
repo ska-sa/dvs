@@ -41,10 +41,12 @@ class ElevationFormatter(matplotlib.projections.polar.ThetaFormatter):
         return super().__call__(np.pi/2-x, pos)
 
 
-def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg=20, ax=None):
-    """ Plots distribution of catalogue targets on the sky, at timestamps """
+def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg=20, flip='astro', ax=None):
+    """ Plots distribution of catalogue targets on the sky, at timestamps
+        @param flip: 'astro' (E<- -> W) or 'geo' (W<- ->E) (default 'astro') """
     if (ax is None):
         ax = plt.figure().add_subplot(111, projection='polar')
+    if (flip == 'astro'): ax.set_theta_direction(-1)
     ax.set_xticks(np.arange(0,360,90)*D2R)
     ax.set_xticklabels(['E','N','W','S',])
     ax.set_ylim(0, np.pi/2)
@@ -164,7 +166,7 @@ def nominal_pos(ska_pad):
 
 
 def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
-                    rms_error_arcsec=30, env_sigma=0.1, verbose=0, **rnd):
+                    rms_error_arcsec=30, env_sigma=0.1, verbose=0, flip='astro', **rnd):
     """ Simulate pointing measurements with the specified catalogue, to determine the expected
         model fit residual.
         
@@ -176,6 +178,7 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         @param env_sigma: the 1sigma fractional uncertainty in all environmental state variables (default 0.1)
         @param rms_error_arcsec: the accuracy with which a centroid can be determined on a single target measurement (default 30) [arcsec]
         @param verbose: 1 to print a summary, 2 to also make a plot (default 0)
+        @param flip: 'astro' (E<- -> W) or 'geo' (W<- ->E) (default 'astro')
         @return: (1sigma residuals of fitted params) [arcsec] """
     randomseed = rnd.get('randomseed', 1) # Force a predictable random sequence, so that differences are due to user input variables!
     N_rnd = rnd.get('N_rnd', 20) # The number of Monte Carlo runs to ensure the results are "typical"
@@ -256,6 +259,7 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         fig.suptitle(f"{catfn[-20:]}, from {Tstart.local()}")
         
         ax = fig.add_subplot(121, projection='polar')
+        if (flip == 'astro'): ax.set_theta_direction(-1)
         ax.plot(np.pi/2 - np.array(pointing_request_az), np.pi/2 - np.array(pointing_request_el), 'ob')
         ax.set_xticks(np.arange(0, 360, 90)*D2R)
         ax.set_xticklabels(['E', 'N', 'W', 'S'])
