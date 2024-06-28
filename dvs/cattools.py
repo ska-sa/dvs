@@ -110,8 +110,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
         @param dAdt: angular rate when slewing [deg/sec]
         @param antenna: None to use the catalogue's antenna (default None) [katpoint.Antenna or str]
         @param el_limit_deg: observation elevation limit (default 15) [deg]
-        @return: [list of Targets], expected duration in seconds
-    """
+        @return: [list of Targets], expected duration in seconds """
     antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
     antenna = catalogue.antenna if (antenna is None) else antenna
     todo = list(catalogue.targets)
@@ -165,7 +164,7 @@ def nominal_pos(ska_pad):
 
 
 def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
-                    rms_error_arcsec=30, env_sigma=0.1, N_rnd=10, randomseed=None, verbose=0):
+                    rms_error_arcsec=30, env_sigma=0.1, verbose=0, **rnd):
     """ Simulate pointing measurements with the specified catalogue, to determine the expected
         model fit residual.
         
@@ -176,10 +175,10 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         @param Tstart: the start time for the measurement set (defaults to "now") [Unix seconds]
         @param env_sigma: the 1sigma fractional uncertainty in all environmental state variables (default 0.1)
         @param rms_error_arcsec: the accuracy with which a centroid can be determined on a single target measurement (default 30) [arcsec]
-        @param N_rnd: the number of times to repeat each single target measurement, to get a representative measurement error (default 10)
         @param verbose: 1 to print a summary, 2 to also make a plot (default 0)
-        @return: (1sigma residuals of fitted params) [arcsec]
-    """
+        @return: (1sigma residuals of fitted params) [arcsec] """
+    randomseed = rnd.get('randomseed', None) # Force the random number generator to a predictable random sequence
+    N_rnd = rnd.get('N_rnd', 20) # The number of Monte Carlo runs to ensure the results are "typical"
     Tstart = katpoint.Timestamp(Tstart)
     rng = np.random.default_rng(randomseed)
     
@@ -193,6 +192,8 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
     
     # Pick an arbitrary "true" pointing model - which is to be recovered
     true_pm = katpoint.PointingModel('-0:07:53, 0, -0:00:53, -0:05:17, -0:01:36, 0:00:21, -0:02:27, -0:01:1, 0, 0:00:0, 0:01:20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0')
+    enabled_params = np.asarray(enabled_params)
+    true_pm_values = np.take(true_pm.values(), enabled_params-1)
     
     rc = katpoint.RefractionCorrection()
     temperature_C = 20; pressure_hPa = 900; humidity_percent = 0.3 # ~50% of the time in the Karoo
@@ -200,32 +201,32 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
     
     sigma = (rms_error_arcsec/3600)*D2R / np.sqrt(2.) # Per "tangent plane" dimension
     
-    pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el = [],[],[],[]
-    end_time = Tstart.secs + duration_min*60
-    # Observe each of the targets, one at a time, and repeat as necessary, until the time is up
-    t = Tstart.secs
-    targets = list(cat.targets)
-    while (t < end_time):
-        if (len(targets) == 0):
-            targets = list(cat.targets)
-        tgt = targets.pop(0)
-        # Generate the "true" (az, el) positions of the sources, before pointing errors & refraction
-        src_true_az, src_true_el = tgt.azel(timestamp=t, antenna=ant)
-        if (src_true_el < (el_floor_deg)*D2R):
-            continue
-        
-        # Apply true refraction
-        src_true_rc_el = rc.apply(src_true_el, temperature_C, pressure_hPa, humidity_percent)
-        # Apply true pointing model
-        src_pointm_az, src_pointm_el = true_pm.apply(src_true_az, src_true_rc_el)
-        
-        # The requested "true" (az, el), used to fit the new model, has systematically imperfect knowledge of the environment
-        request_az = src_true_az
-        request_el = rc.apply(src_true_el, temperature_C+env_delta[0], pressure_hPa+env_delta[1], humidity_percent+env_delta[2])
-        
-        # Add random noise representing the residual from a fit to the measured centroid
-        # To get a representative error for this "single measurement", we have to generate repeated random values  
-        for _ in range(N_rnd):
+    resid_pm_values = []
+    for _ in range(N_rnd): # Repeat the simulation to ensure results are "typical"
+        pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el = [],[],[],[]
+        end_time = Tstart.secs + duration_min*60
+        # Observe each of the targets, one at a time, and repeat as necessary, until the time is up
+        t = Tstart.secs
+        targets = list(cat.targets)
+        while (t < end_time):
+            if (len(targets) == 0):
+                targets = list(cat.targets)
+            tgt = targets.pop(0)
+            # Generate the "true" (az, el) positions of the sources, before pointing errors & refraction
+            src_true_az, src_true_el = tgt.azel(timestamp=t, antenna=ant)
+            if (src_true_el < (el_floor_deg)*D2R):
+                continue
+            
+            # Apply true refraction
+            src_true_rc_el = rc.apply(src_true_el, temperature_C, pressure_hPa, humidity_percent)
+            # Apply true pointing model
+            src_pointm_az, src_pointm_el = true_pm.apply(src_true_az, src_true_rc_el)
+            
+            # The requested "true" (az, el), used to fit the new model, has systematically imperfect knowledge of the environment
+            request_az = src_true_az
+            request_el = rc.apply(src_true_el, temperature_C+env_delta[0], pressure_hPa+env_delta[1], humidity_percent+env_delta[2])
+            
+            # Add random noise representing the residual from a fit to the measured centroid
             src_meas_az = src_pointm_az + sigma*rng.normal()/np.clip(np.cos(src_pointm_el), 1e-6, 1.)
             src_meas_el = src_pointm_el + sigma*rng.normal()
             # The desired offset is now the difference between the requested commanded coordinates at the input of the antenna
@@ -234,16 +235,16 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
             pointing_request_el.append(request_el)
             pointing_offset_az.append(katpoint.wrap_angle(src_meas_az - request_az))
             pointing_offset_el.append(katpoint.wrap_angle(src_meas_el - request_el))
+            
+            t = t + meas_min*60
         
-        t = t + meas_min*60
-    
-    # Fit a new pointing model to the pointing offsets
-    pm = katpoint.PointingModel()
-    pm.fit(pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el, enabled_params=enabled_params)
-    enabled_params = np.asarray(enabled_params)
-    true_pm_values = np.take(true_pm.values(), enabled_params-1)
-    fit_pm_values = np.take(pm.values(), enabled_params-1)
-    resid_pm_values = np.abs(fit_pm_values - true_pm_values) # Should be interpreted as 1sigma?
+        # Fit a new pointing model to the pointing offsets
+        pm = katpoint.PointingModel()
+        pm.fit(pointing_request_az, pointing_request_el, pointing_offset_az, pointing_offset_el, enabled_params=enabled_params)
+        fit_pm_values = np.take(pm.values(), enabled_params-1)
+        resid_pm_values.append((fit_pm_values - true_pm_values)**2) # ~ 1sigma variance
+    # Get the "typical" 1sigma values
+    resid_pm_values = np.mean(resid_pm_values, axis=0)**.5
     
     if (verbose > 0):
         print(catfn, Tstart.local())
@@ -261,7 +262,6 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         ax.set_ylim(0, np.pi/2)
         ax.set_yticks(np.arange(0, 90, 15)*D2R)
         ax.yaxis.set_major_formatter(ElevationFormatter())
-        # ax.set_yticklabels([])
         
         ax = fig.add_subplot(122)
         ax.errorbar(enabled_params, 0*true_pm_values, yerr=resid_pm_values*R2D*3600, fmt='none', ecolor='r', capsize=5)
@@ -303,7 +303,12 @@ if __name__ == "__main__":
         nominal_pos(ska_pad=0)
     
     elif True:
-        sim_pointingfit(catroot+"targets_pnt_L.csv", Tstart=1718604536, randomseed=1, verbose=2)
-        sim_pointingfit(catroot+"targets_pnt_S.csv", Tstart=1718604536, randomseed=1, verbose=2)
+        sim_pointingfit(catroot+"targets_pnt_L.csv", Tstart=1718604536, verbose=2)
+        # Confirm that the default value for N_rnd is reasonable - expect both max & mean to be stable
+        N_rnd = np.arange(1,200,10)
+        R = [sim_pointingfit(catroot+"targets_pnt_L.csv", Tstart=1718604536, randomseed=1, N_rnd=N) for N in N_rnd]
+        plt.figure(); plt.title("Convergence check for sim_pointingfit()")
+        plt.plot(N_rnd, np.mean(R, axis=1), '.', N_rnd, np.max(R, axis=1), '^')
+        plt.xlabel("N_rnd")
         plt.show()
         
