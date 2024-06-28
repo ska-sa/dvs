@@ -46,7 +46,7 @@ def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg
         @param flip: 'astro' (E<- -> W) or 'geo' (W<- ->E) (default 'astro') """
     if (ax is None):
         ax = plt.figure().add_subplot(111, projection='polar')
-    if (flip == 'astro'): ax.set_theta_direction(-1)
+    if (flip == 'astro'): ax.set_theta_direction(-1); ax.set_theta_zero_location('W')
     ax.set_xticks(np.arange(0,360,90)*D2R)
     ax.set_xticklabels(['E','N','W','S',])
     ax.set_ylim(0, np.pi/2)
@@ -259,7 +259,7 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
         fig.suptitle(f"{catfn[-20:]}, from {Tstart.local()}")
         
         ax = fig.add_subplot(121, projection='polar')
-        if (flip == 'astro'): ax.set_theta_direction(-1)
+        if (flip == 'astro'): ax.set_theta_direction(-1); ax.set_theta_zero_location('W')
         ax.plot(np.pi/2 - np.array(pointing_request_az), np.pi/2 - np.array(pointing_request_el), 'ob')
         ax.set_xticks(np.arange(0, 360, 90)*D2R)
         ax.set_xticklabels(['E', 'N', 'W', 'S'])
