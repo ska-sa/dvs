@@ -291,7 +291,7 @@ def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, verbose=Fals
     """
     cat = katpoint.Catalogue(open(catfn), antenna=katpoint.Antenna('m000, -30.713, 21.444, 1050.0'))
     print("Using ", catfn)
-    axes = np.ravel(plt.subplots(2,2, subplot_kw=dict(projection='polar'), figsize=(12,12))[1])
+    axes = np.ravel(plt.subplots(max(1,int(S/2+0.5)),2, subplot_kw=dict(projection='polar'), figsize=(12,12))[1])
     for n in range(S): # Repeat each "plan" so many times
         T0 = Tstart + (Hr*n)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
         cat_n = cattools.filter_separation(cat, T0, separation_deg=1, sunmoon_separation_deg=10)
