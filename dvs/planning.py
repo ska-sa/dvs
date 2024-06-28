@@ -282,7 +282,7 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     plt.ylabel("Tsys/mean(Tsys) on sky [K/K]" if normalize else "Tsys on sky [K]")
 
 
-def sim_pointingmeasurements(catfn, Tstart, Hr, S, verbose=False):
+def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, verbose=False):
     """ Simulates pointing measurement sessions and makes plots to allow you to see
         the resulting sky coverage using the specified catalogue.
         @param catfn: the catalogue file.
@@ -295,7 +295,9 @@ def sim_pointingmeasurements(catfn, Tstart, Hr, S, verbose=False):
     for n in range(S): # Repeat each "plan" so many times
         T0 = Tstart + (Hr*n)*60*60 # Session at intervals of Hr hours (hope the plan fits in that time)
         cat_n = cattools.filter_separation(cat, T0, separation_deg=1, sunmoon_separation_deg=10)
-        T = cattools.plan_targets(cat_n, T0, 5*(30+2), 2, debug=verbose)[1] # 5-point scans
+        t_observe = 5*(30+2) # 5-point scans
+        T = cattools.plan_targets(cat_n, T0, t_observe, 2, el_limit_deg=el_limit_deg, debug=verbose)[1]
         M = int(Hr*60*60/T)+1 # Number of times the plan fits in available hours
-        cattools.plot_skycat(cat_n, T0+np.arange(M)*T, 8*(30+2), ax=axes[n])
-        axes[n].set_title(catfn + ("+ %d hrs"%(Hr*n)))
+        resid = cattools.sim_pointingfit(catfn, el_limit_deg, Hr*60, t_observe/60+1, Tstart=T0) # +1min for slews
+        cattools.plot_skycat(cat_n, T0+np.arange(M)*T, t_observe, ax=axes[n])
+        axes[n].set_title("%s T+%d hrs (RMS<%.f'')"%(catfn, Hr*n, np.max(resid)))
