@@ -4,20 +4,20 @@
     Also compares measurement with expected results, if the necesary engineering data exists.
     
     Typical use 1:
-        python driftscan.py /data/132598363.h5 0 "Baars 1977"
+        python driftscan.py /var/data/132598363.h5 0 "Baars 1977"
     which is equivalent to
         from driftscan import analyse
         analyse(sys.argv[1], int(sys.argv[2]), sys.argv[3], saveroot=".", makepdf=True)
         
     Advanced use:
         import driftscan
-        ds, target = driftscan.load_vis("/data/1417562258.h5", ant="m063", ant_rxSN={"m063":"l.0004"}, debug=True)
-        src, hpw_src, profile_src, S_src = driftscan.models.describe_source(target.name, verbose=True)
+        ds = driftscan.DriftDataset("/var/data/1417562258.h5", ant="m063", ant_rxSN={"m063":"l.0004"}, debug=True)
+        src, hpw_src, profile_src, S_src = driftscan.models.describe_source(ds.target.name, verbose=True)
         
         bore, null_l, null_r, _HPBW, null_w = driftscan.find_nulls(ds, hpw_src=hpw_src, debug_level=1)
         _bore_ = int(np.median(bore))
         
-        offbore_deg = driftscan.target_offset(target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.freqs))
+        offbore_deg = driftscan.target_offset(ds.target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.channel_freqs))
         hpbw0 = np.nanmedian(_HPBW); hpbwf0 = np.median(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
         offbore0 = offbore_deg*np.pi/180 / hpbw0
         wc_scale = driftscan.models.G_bore(offbore0, hpbwf0, np.max(ds.channel_freqs))
@@ -54,7 +54,7 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=None):
         @param snap_to: limits are rounded to integer multiples of this number (default 1).
         @return (min,max) or possibly None """
     lower_pct = tail_pct; upper_pct = 100-tail_pct 
-    snap_to = None if (snap_to <= 0) else snap_to
+    snap_to = None if (snap_to is None) or (snap_to <= 0) else snap_to
     _data = np.ma.compressed(data) if isinstance(data, np.ma.masked_array) else data[np.isfinite(data)]
     if (len(_data) == 0):
         return None
@@ -138,99 +138,141 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
         return array2d
 
 
-def load_vis(f, ant, ant_rxSN={}, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", verbose=True, debug=False, **kwargs):
-    """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
-        Also supplies auxilliary features that are employed in processing steps in this module.
+class DriftDataset(object):
+    """ A container for the raw measurement data, to optimise data retrieval behaviour. """
+    def __init__(self, ds, ant, ant_rxSN={}, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=True, **kwargs):
+        """
+           @param ds: filename string, or an already opened katdal.Dataset
+           @param ant: either antenna ID (string) or index (int) in the dataset.ants list
+           @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
+           @param pol_labels: two comma-separated characters e.g. 'H,V' to load the corresponding autocorrelation data in that sequence.
+           @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
+           @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
+           @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
+           @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
+        """
+        self._pol = pol_labels.split(",")
+        self.ds = ds = katdal.open(ds, **kwargs) if isinstance(ds, str) else ds
+        self.name = ds.name.split("/")[-1].split(".")[0] # Without extension
+        for a,sn in ant_rxSN.items():
+            ds.receivers[a] = sn
+        if (isinstance(ant, int)):
+            ant = ds.ants[ant].name
+        ds.select(ants=ant)
+        self.ants = [ds.ants[0]] # "Ducktyping" so this DriftDataset looks like a katdal.Dataset to models.fit_bg()
+        self.ant = ds.ants[0]
+        self.RxSN = ds.receivers[self.ant.name]
+        self.target = [t for t in ds.catalogue.targets if t.body_type=='radec'][0]
+        self.target.antenna = ds.ants[0]
         
-        The returned dataset has data filtered and arranged as required for processing. It specifically comprises
-        only two products (third index of dataset), arranged as [0=antHH, 1=antVV]. DO NOT use the 'corr_products'
-        attribute as that will not reflect the 'swapped_pol' state. Use the hacked '_pol' attribute instead. 
-       
-       @param f: filename string, or an already opened h5 file
-       @param ant: either antenna ID (string) or index (int) in the dataset.ants list
-       @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
-       @param swapped_pol: True to swap the order of H & V pol around (default False)
-       @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
-       @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
-       @param debug: True to generate figures that may aid in debugging the dataset (default False)
-       @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
-       @return: (the katdal dataset with data selected & ordered as required, drift target with the antenna set).
-    """
-    h5 = katdal.open(f, **kwargs) if isinstance(f,str) else f
-    h5.select(flags=flags)
-    
-    for a,sn in ant_rxSN.items():
-        h5.receivers[a] = sn
-    if (isinstance(ant,int)):
-        ant = h5.ants[ant].name
-    h5.select(ants=ant, pol=('VV','HH') if swapped_pol else ('HH','VV'), reset="T")
-    h5._pol = ["H", "V"]
-    if verbose:
-        print(h5)
-        print("Receivers:", {ant:h5.receivers[ant]})
-    
-    # Current observe script sometimes mislabels the first ND scan as "slew"
-    h5.select(compscans="noise diode", scans="~stop")
-    ND_scans = h5.scan_indices # Converted from list -> tuple of lists below
-    if (len(ND_scans) == 3):
-        ND_scans = (ND_scans[:2],ND_scans[-1:]) if (np.diff(ND_scans)[0]==1) else (ND_scans[:1],ND_scans[1:])
-    else:
-        ND_scans = (ND_scans[:1],ND_scans[-1:])
-    def __scans_ND__():
-        for scans in ND_scans:
-            h5.select(scans=scans)
-            yield (scans[0], h5.sensor["Antennas/array/activity"][0], h5.sensor["Observation/target"][0])
-    h5.__scans_ND__ = __scans_ND__
+        self.channel_freqs = ds.channel_freqs
+        self.channels = ds.channels
+        self.dump_period = ds.dump_period
         
-    # Current observe script generates compscans with blank labels - these are spurious
-    # Current observe script generates two (s="track", cs="drift") scans, but the first one is spurious and sometimes is on the
-    # other side of the azimuth wrap, which causes issues with tangent plane projection in find_nulls()
-    spurious_scans = [] # Scan indices that should always be ignored
-    h5.select(reset="T")
-    for cs in h5.compscans(): # (index,label,target)
-        if (cs[1].strip() == ''):
-            spurious_scans.extend([s[0] for s in h5.scans()])
-        elif (cs[1] == 'drift'):
-            si = [s[0] for s in h5.scans() if (s[1]=='track')]
-            if (len(si) > 1): # Multiple s=track,cs=drift 
-                spurious_scans.append(si[0]) # The first of these is spurious
-    
-    # Basic select rules for extracting SEFD
-    def __select_SEFD__(**selectkwargs): # If strict then just 'track', else everything except 'slew'. Filters out spurious scans.
-        if strict:
-            h5.select(scans="track", **selectkwargs)
-            sscan_indices = set(h5.scan_indices)-set(spurious_scans)
-            if (len(sscan_indices) < len(h5.scan_indices)):
-                h5.select(reset='', scans=sscan_indices) # Ideally (scans=~spurious_scans)  but that doesn't work. This workaround has draw back that it resets dumps & timerange. 
+        self._load_vis_(swapped_pol, strict, flags, debug)
+        # These values are always as per the last "select()" - should be __selectSEFD_()
+        self.az = ds.az
+        self.el = ds.el
+        self.parangle = ds.parangle
+        self.timestamps = ds.timestamps
+        self.start_time = ds.start_time
+        self.sensor = ds.sensor
+        
+        if debug:
+            self.debug()
+
+
+    def _load_vis_(self, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", verbose=True):
+        """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
+            Also supplies auxilliary features that are employed in processing steps in this module.
+            
+            The returned dataset has data filtered and arranged as required for processing. It specifically comprises
+            only two products (third index of dataset), arranged as [0=antHH, 1=antVV]. DO NOT use the 'corr_products'
+            attribute as that will not reflect the 'swapped_pol' state. Use the hacked '_pol' attribute instead. 
+           
+           @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
+           @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
+           @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
+        """
+        h5 = self.ds
+        h5.select(flags=flags)
+        
+        pol_labels = reversed(self._pol) if swapped_pol else self._pol
+        h5.select(pol=[_*2 for _ in pol_labels], reset="T")
+        if verbose:
+            print(h5)
+            print("Receivers:", {self.ant.name: h5.receivers[self.ant.name]})
+        
+        # Current observe script sometimes mislabels the first ND scan as "slew"
+        h5.select(compscans="noise diode", scans="~stop")
+        ND_scans = h5.scan_indices # Converted from list -> tuple of lists below
+        if (len(ND_scans) == 3):
+            ND_scans = (ND_scans[:2],ND_scans[-1:]) if (np.diff(ND_scans)[0]==1) else (ND_scans[:1],ND_scans[1:])
         else:
-            h5.select(scans="~slew", **selectkwargs)
-    h5.__select_SEFD__ = __select_SEFD__
-    
-    h5.__select_SEFD__()
-    
-    target = [t for t in h5.catalogue.targets if t.body_type=='radec'][0]
-    target.antenna = h5.ants[0]
-    
-    if debug:
-        filename = h5.name.split("/")[-1].split(".")[0] # Without extension
-        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan # Using vis[:] here and everywhere else for speed up (dask lazy loaded data)
-        vis_ = vis/np.nanpercentile(vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
-        chans = h5.channels
+            ND_scans = (ND_scans[:1],ND_scans[-1:])
+        def __scans_ND__():
+            for scans in ND_scans:
+                h5.select(scans=scans)
+                yield (scans[0], h5.sensor["Antennas/array/activity"][0], h5.sensor["Observation/target"][0])
+        h5.__scans_ND__ = __scans_ND__
+        
+        # Current observe script generates compscans with blank labels - these are spurious
+        # Current observe script generates two (s="track", cs="drift") scans, but the first one is spurious and sometimes is on the
+        # other side of the azimuth wrap, which causes issues with tangent plane projection in find_nulls()
+        spurious_scans = [] # Scan indices that should always be ignored
+        h5.select(reset="T")
+        for cs in h5.compscans(): # (index,label,target)
+            if (cs[1].strip() == ''):
+                spurious_scans.extend([s[0] for s in h5.scans()])
+            elif (cs[1] == 'drift'):
+                si = [s[0] for s in h5.scans() if (s[1]=='track')]
+                if (len(si) > 1): # Multiple s=track,cs=drift 
+                    spurious_scans.append(si[0]) # The first of these is spurious
+        
+        # Basic select rules for extracting SEFD
+        def __select_SEFD__(**selectkwargs): # If strict then just 'track', else everything except 'slew'. Filters out spurious scans.
+            if strict:
+                h5.select(scans="track", **selectkwargs)
+                sscan_indices = set(h5.scan_indices)-set(spurious_scans)
+                if (len(sscan_indices) < len(h5.scan_indices)):
+                    h5.select(reset='', scans=sscan_indices) # Ideally (scans=~spurious_scans)  but that doesn't work. This workaround has draw back that it resets dumps & timerange. 
+            else:
+                h5.select(scans="~slew", **selectkwargs)
+        h5.__select_SEFD__ = __select_SEFD__
+        
+        # Cache the raw data to avoid costly network access
+        self.nd_vis = {}
+        for scan in h5.__scans_ND__():
+            label = "scan %d: '%s'"%(scan[0],scan[1])
+            vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
+            self.nd_vis[label] = vis
+        
+        h5.__select_SEFD__()
+        self.vis = np.abs(h5.vis[:])
+        self.vis[h5.flags[:]] = np.nan
+        
+        # These values represent the state as per __select_SEFD__()!
+        self.el_deg = np.median(h5.el)
+        self.mjd = np.median(h5.mjd)
+
+
+    def debug(self):
+        vis_ = self.vis/np.nanpercentile(self.vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
+        chans = self.channels
         ax = plt.subplots(2,2, sharex=True, gridspec_kw={'height_ratios':[2,1]}, figsize=(16,8))[1]
-        for p,P in enumerate(h5._pol):
+        for p,P in enumerate(self._pol):
             ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
-            ax[0][p].set_title("%s\n%s %s"%(filename,ant,P)); ax[0][p].set_ylabel("Time [samples]")
-            ax[1][p].plot(chans, 10*np.log10(np.nanmax(vis[:,:,p], axis=0)))
+            ax[0][p].set_title("%s\n%s %s"%(self.name,self.ant.name,P)); ax[0][p].set_ylabel("Time [samples]")
+            ax[1][p].plot(chans, 10*np.log10(np.nanmax(self.vis[:,:,p], axis=0)))
             ax[1][p].set_ylabel("max [dBcounts]"); ax[1][p].grid(True)
             ax[1][p].set_xlabel("Channel #")
         
-        freqs = h5.channel_freqs/1e6
+        freqs = self.channel_freqs/1e6
         for i in [0,1]:
             alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0]),
                                                                lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0])))
             alt_x.set_xlabel("Frequency [MHz]")
-    return h5, target
 
 
 def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
@@ -269,7 +311,7 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_sr
         @param S_src: 'lambda f_GHz,year' returning flux (HH, VV - corrected for parallactic angle) at the top of the atmosphere [Jy].
         @param hpw_src: half power width of the source as a fraction of HPBW [fraction] (default 0)
         @param profile_src: either 'gaussian' or 'disc' (default 'gaussian')
-        @param enviro: a dictionary of "Enviro/air_*" metadata for atmospheric effects - simply use "h5.sensor"
+        @param enviro: a dictionary of "Enviro/air_*" metadata for atmospheric effects - simply use "ds.sensor"
         @return: (freqs, counts2Jy [per pol], SEFD [total power]) the latter ordered as (freqs,pol 0=H,1=V)
     """
     vis_on = np.nanmean(vis[bore,:,:], axis=0) # Mean over time
@@ -300,7 +342,7 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_sr
     return (freqs, counts2Jy, SEFD_est)
 
 
-def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=None, title=None, y_lim=None):
+def _get_ND_(ds, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=None, title=None, y_lim=None):
     """ Isolate Noise cycles to computes the ND spectra, possibly scaled. Generates a figure.
         @param counts2scale: if given (H spectrum, V spectrum) then ND spectra are scaled by this factor (default None)
         @param freqrange: like get_SEFD() & get_SEFD_ND() (default None)
@@ -309,12 +351,10 @@ def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
         @param y_lim: y limit for ND plot, as used by plot_data() (default None)
         @return S_ND (H&V spectra) either as a fraction of the background noise, or scaled by counts2scale. Ordered as (time,pol,freq)
     """
-    chans = chan_idx(h5.channel_freqs, freqrange)
+    chans = chan_idx(ds.channel_freqs, freqrange)
     S_ND = []
-    for scan in h5.__scans_ND__():
-        label = "scan %d: '%s'"%(scan[0],scan[1])
+    for label,vis in ds.nd_vis.items():
         S_ND.append([])
-        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
         for pol in [0,1]:
             S = vis[1:-1,chans,pol] # Each scan has ON & OFF; discard first & last samples because ND may not be aligned to dump boundaries
             m = np.nanmedian(S,axis=1) > np.nanmedian(S) # ON mask where average total power over the cycle is above mean toal power
@@ -328,17 +368,17 @@ def _get_ND_(h5, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
             ND_delta = np.mean(ON,axis=0) - np.mean(OFF,axis=0) # ON-OFF spectrum for this pol
             if (counts2scale is not None):
                 ND_delta = ND_delta*counts2scale[:,pol]
-            plot_data(h5.channel_freqs[chans]/1e6, ND_delta, label="%s, %s"%(h5._pol[pol],label), newfig=len(S_ND)+len(S_ND[-1])==1,
+            plot_data(ds.channel_freqs[chans]/1e6, ND_delta, label="%s, %s"%(ds._pol[pol],label), newfig=len(S_ND)+len(S_ND[-1])==1,
                       xtag="Frequency [MHz]", ytag="ND spectral density [%s]"%y_unit, header=title, y_lim=y_lim)
             S_ND[-1].append(ND_delta)
     
     if (len(S_ND) == 0): # No ND data
-        S_ND = [[0*h5.channel_freqs, 0*h5.channel_freqs]]
+        S_ND = [[0*ds.channel_freqs, 0*ds.channel_freqs]]
 
     return np.asarray(S_ND) # time,freq,pol
 
 
-def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None,freqrange=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
+def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None,freqrange=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
     """ Computes spectra of SEFD and Noise Diode equivalent flux. Also generates expected SEFD given certain estimates.
         Returned values reflect SEFD for a BACKGROUND AVERAGED BETWEEN THE NULLS ENCOUNTERED BEFORE AND AFTER TRANSIT.
         
@@ -361,29 +401,28 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     
     # Measured SEFD at each null
     print("\nDeriving measured SEFD")
-    h5.__select_SEFD__()
-    vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
-    el_deg = h5.el.mean()
-    chans = chan_idx(h5.channel_freqs, freqrange)
+    vis = ds.vis
+    el_deg = ds.el_deg
+    chans = chan_idx(ds.channel_freqs, freqrange)
 
     if rfifilt is not None:
         vis = smooth2d(vis, rfifilt, axes=(0,1))
     
     counts2Jy, SEFD_meas = [], []
     for null in nulls:
-        freqs, c2Jy, sefd = _get_SEFD_(vis[:,chans,:], h5.channel_freqs[chans], el_deg, h5.mjd.mean(),
+        freqs, c2Jy, sefd = _get_SEFD_(vis[:,chans,:], ds.channel_freqs[chans], el_deg, ds.mjd,
                                        bore=bore, nulls=lambda v,t,f:getvis_null(v,null,win_len),
-                                       S_src=S_src, hpw_src=hpw_src, profile_src=profile_src, enviro=h5.sensor)
+                                       S_src=S_src, hpw_src=hpw_src, profile_src=profile_src, enviro=ds.sensor)
         counts2Jy.append(c2Jy)
         sefd = mask_where(sefd, freqs, freqmask)
         SEFD_meas.append(sefd)
     
     # Predicted results for assumed background (single polarization)
-    ant = h5.ants[0]
-    RxSN = h5.receivers[ant.name]
-    fTgal = lambda n: Tgal if Tgal else models.fit_bg(h5, np.nanmedian(nulls[n]), D=ant.diameter, debug=True)[0]
+    ant = ds.ant
+    RxSN = ds.RxSN
+    fTgal = lambda n: Tgal if Tgal else models.fit_bg(ds, np.nanmedian(nulls[n]), D=ant.diameter, debug=True)[0]
     if (Tatm is None):
-        Tatm = lambda freqs, el_deg: 275*(1-np.exp(-models.opacity(freqs, h5.sensor)/np.sin(el_deg*np.pi/180))) # ITU-R P.372-11 suggests 275 as a typical number, NASA's propagation handbook 1108(02) suggests 280 K [p 7-8]
+        Tatm = lambda freqs, el_deg: 275*(1-np.exp(-models.opacity(freqs, ds.sensor)/np.sin(el_deg*np.pi/180))) # ITU-R P.372-11 suggests 275 as a typical number, NASA's propagation handbook 1108(02) suggests 280 K [p 7-8]
     pText, pTsys, pSEFD, Tsys_deduced = [], [], [], []
     for n in range(len(nulls)):
         print("\nPredicting SEFD at null "+null_labels[n])
@@ -420,7 +459,7 @@ def get_SEFD_ND(h5,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     pTsys, pSEFD = np.mean(pTsys,axis=0), np.mean(pSEFD,axis=0)
 
     # Also get the ND spectra, if there are
-    S_ND = _get_ND_(h5, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, y_lim='pct')
+    S_ND = _get_ND_(ds, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, y_lim='pct')
     S_ND = np.moveaxis(S_ND, 1, 2) # time,pol,freq -> time,freq,pol
     S_ND = np.ma.mean(S_ND,axis=0) # Average over independent ND measurements
     
@@ -453,7 +492,7 @@ def getvis_null(vis, null_indices, win_len=4, debug=False):
     return np.moveaxis(np.asarray(vis_null), 1, 0) # Re-order to [time,freq,prod]
 
 
-def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], hpw_src=0, debug_level=0):
+def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], hpw_src=0, debug_level=0):
     """ Finds time indices when the drift scan source passes through nulls and across bore sight.
         All indices are given relative to the time axis set up by '__select_SEFD__()'.
         
@@ -474,15 +513,14 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
                  'HPBW_fitted' gives the half power beam widths [rad] employed, 1D across frequency.
                  N_bore is the final window length to employ around bore sight & nulls.
     """
-    h5.__select_SEFD__() # Reset select filters.
-    t = np.arange(len(h5.timestamps)) # [samples]
+    t = np.arange(len(ds.timestamps)) # [samples]
     
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
     # To speed up, fit only to 64 frequency channels
-    beamfits = load4hpbw(h5, ch_res=len(h5.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
+    beamfits = load4hpbw(ds, ch_res=len(ds.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
-    HPBW_fitted = fit_hpbw(f, bore, sigma, h5.ants[0].diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
+    HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
     
     if (HPBW is None): # HPBW not forced, so use the fitted positions, filling it in with the fitted function where it is masked
@@ -497,29 +535,28 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     bore = np.nanmean(bore, axis=1)
     # Interpolate 'bore' where it is masked, and convert to time samples relative to current selection i.e. timestamp[0]
     bore = interp.interp1d(f[~bore.mask], bore[~bore.mask], "cubic", axis=0, bounds_error=False, fill_value=np.median(bore))(f)
-    T0 = h5.timestamps[0] - float(h5.start_time)
-    bore = np.asarray(np.clip((bore-T0)/h5.dump_period, t[0],t[-1]), int) # [samples]
+    T0 = ds.timestamps[0] - float(ds.start_time)
+    bore = np.asarray(np.clip((bore-T0)/ds.dump_period, t[0],t[-1]), int) # [samples]
     
     t_bore = int(np.median(bore)) # Representative sample of bore sight transit
-    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*h5.dump_period) / 16.)+1) # The beam changes < 1% within +-HPBW/8 interval
+    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*ds.dump_period) / 16.)+1) # The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
     # Find time indices when the source crosses the k-th null at each frequency
-    target = [_t for _t in h5.catalogue.targets if _t.body_type=='radec'][0] # h5.select doesn't filter the catalogue
     D2R = np.pi/180.
-    antaz, antel = h5.az[:,0]*D2R, h5.el[:,0]*D2R # deg->rad, for selected ant=0
-    ll, mm = target.sphere_to_plane(antaz,antel,timestamp=h5.timestamps,projection_type="SSN",coord_system="azel") # rad
+    antaz, antel = ds.az[:,0]*D2R, ds.el[:,0]*D2R # deg->rad, for selected ant=0
+    ll, mm = ds.target.sphere_to_plane(antaz,antel,timestamp=ds.timestamps,projection_type="SSN",coord_system="azel") # rad
     angles = 2*np.arcsin((ll**2+mm**2)**0.5 / 2.) # Pointing offset [rad] of target relative to mechanical axis over time. For small angles this is ~ (ll**2+mm**2)**0.5
     if (debug_level > 1):
         # Show pointing & target track - TODO sometimes shows up empty?
-        # tgtaz,tgtel = target.azel(h5.timestamps)
+        # tgtaz,tgtel = target.azel(ds.timestamps)
         # plot_data(np.unwrap(tgtaz)/D2R,tgtel/D2R, label="Target", xtag="Az [deg]", ytag="El [deg]")
         # plot_data(antaz/D2R,antel/D2R, label="Bore sight", style='x', newfig=False)
         # plt.axes().set_aspect('equal', 'datalim')
 
         plot_data(t, np.asarray(angles)/D2R, header="Target trajectory with respect to bore sight and nulls",
                   xtag="Time [samples]", ytag="Distance from bore sight [deg]")
-        cleanchan = h5.channels[23] if (cleanchans is None) else h5.channels[cleanchans][23] # Arbitrarily choose one
+        cleanchan = ds.channels[23] if (cleanchans is None) else ds.channels[cleanchans][23] # Arbitrarily choose one
         for n in [0,1]: # target in first two nulls vs. time, for some clean channel
             flags_ch = np.abs(angles-Nk[n]*HPBW[cleanchan])<0.1*D2R
             plot_data(t[flags_ch], angles[flags_ch]/D2R, style='.', label="Null %d @ channel %d"%(n,cleanchan), newfig=False)
@@ -531,13 +568,13 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     null_r = [find_null(t[t>t_bore],angles[t>t_bore],k) for k in range(len(Nk))]
 
     if (debug_level > 0): # Plot the intensity map along with the identified positions of the nulls
-        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
+        vis = ds.vis
         
         bl, bm = beamfits[3:]
         vis_nb = (vis - bl) / np.ma.max(bm, axis=0) # "Flattened" and normalised to fitted beam height 
         levels = [-0.1,-0.05,0,0.05,0.1] # Linear scale, fraction
         axes = plt.subplots(1, 2, sharex=True, figsize=(12,6))[1]
-        axes[0].set_title("Target contribution & postulated nulls, %s (left) & %s (right). Contour spacing 0.05    [peak fraction]"%(*h5._pol,), loc='left')
+        axes[0].set_title("Target contribution & postulated nulls, %s (left) & %s (right). Contour spacing 0.05    [peak fraction]"%(*ds._pol,), loc='left')
         for p,ax in enumerate(axes):
             im = ax.imshow(vis_nb[...,p], origin='lower', extent=[f[0]/1e6,f[-1]/1e6,t[0],t[-1]], aspect='auto',
                            vmin=-0.15, vmax=0.15, cmap=plt.get_cmap('viridis'))
@@ -553,7 +590,7 @@ def find_nulls(h5, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
             for k in [0,1]: # Check first two nulls are well defined
                 getvis_null(vis, null_l[k], N_bore, debug=True)
                 getvis_null(vis, null_r[k], N_bore, debug=True)
-                _debug_stats_(vis, h5.channel_freqs, h5.timestamps, bore, (null_l[k], null_r[k]), N_bore, title="%dth Nulls"%k)
+                _debug_stats_(vis, ds.channel_freqs, ds.timestamps, bore, (null_l[k], null_r[k]), N_bore, title="%dth Nulls"%k)
 
     return bore, null_l, null_r, HPBW, N_bore
 
@@ -807,7 +844,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
-        @param f: filename string, or an already opened h5 file, to be passed to 'load_vis()'.
+        @param f: filename string, or an already opened katdal.Dataset
         @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'load_vis()'.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
@@ -824,17 +861,17 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    h5, target = load_vis(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug, debug=False)
-    vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
-    cleanchans = chan_idx(h5.channel_freqs, fitfreqrange)
-    filename = h5.name.split("/")[-1].split(" ")[0]
-    ant = h5.ants[0]
-    source = source if source else target.name
+    ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug)
+    vis = ds.vis
+    cleanchans = chan_idx(ds.channel_freqs, fitfreqrange)
+    filename = ds.name
+    ant = ds.ant
+    source = source if source else ds.target.name
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
         pp.capture_stdout(echo=True)
-        print("Processing drift scan %s on %s with receiver %s." % (filename, ant.name, h5.receivers[ant.name]))
+        print("Processing drift scan %s on %s with receiver %s." % (filename, ant.name, ds.RxSN))
         if swapped_pol:
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
@@ -844,15 +881,15 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         
         # Plot the raw data, integrated over frequency, vs relative time
         F = np.max([0]+plt.get_fignums())
-        freqs = h5.channel_freqs[cleanchans]
+        freqs = ds.channel_freqs[cleanchans]
         plt.figure(figsize=(12,6))
         plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(freqs)/1e6, np.max(freqs)/1e6))
         plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,cleanchans,:], axis=1)); plt.grid(True)
-        plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % h5.dump_period)
+        plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % ds.dump_period)
         pp.report_fig(F+1, orientation="landscape")
     
         # Identify the bore sight and null transits
-        bore, null_l, null_r, _HPBW, N_bore = find_nulls(h5, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
+        bore, null_l, null_r, _HPBW, N_bore = find_nulls(ds, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
             # 1-> (mu sigma vs time, HPBW fit, map null traces), 2-> (baselines, model residuals, mu sigma vs time, HPBW fit, trajectory, map null traces)
@@ -861,13 +898,13 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
-        offbore_deg = target_offset(target, h5.timestamps[_bore_], h5.az[_bore_], h5.el[_bore_], np.mean(h5.freqs), "bore sight transit", debug=True)
-        hpbw0 = np.nanmedian(_HPBW[cleanchans]); hpbwf0 = np.median(h5.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
+        offbore_deg = target_offset(ds.target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.channel_freqs), "bore sight transit", debug=True)
+        hpbw0 = np.nanmedian(_HPBW[cleanchans]); hpbwf0 = np.median(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
         offbore0 = offbore_deg*np.pi/180/hpbw0
-        C = models.G_bore(offbore0, hpbwf0, h5.channel_freqs)
+        C = models.G_bore(offbore0, hpbwf0, ds.channel_freqs)
         print("Scaling source flux for pointing offset, by %.3f - %.3f over frequency range"%(np.max(C), np.min(C)))
         
-        par_angle = h5.parangle[_bore_] * np.pi/180
+        par_angle = ds.parangle[_bore_] * np.pi/180
         Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * models.G_bore(offbore0, hpbwf0/1e9, np.reshape(f_GHz, (-1,1)))
         
         freqrange = None # Only omit first and last channels from the results to be returned
@@ -878,16 +915,16 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         print("\nNow determining measured and predicted SEFD with target in beam nulls:")
         print("    %s before transit & %s after transit" % (null_labels[:len(nulls_l)], null_labels[len(nulls_l):]))
         freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
-                get_SEFD_ND(h5,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
+                get_SEFD_ND(ds,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
         F = np.max(plt.get_fignums())
         pp.report_fig([F-1, F], orientation="landscape") # get_SEFD_ND()-> (SEFD, ND flux)
         
         result = [freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg]
-        summarize([result], pol=h5._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
+        summarize([result], pol=ds._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
         # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
         pp.report_fig([F+1+i for i in [1,2,4,5,6]], orientation="landscape")
         
-        duration = (h5.timestamps[-1]-h5.timestamps[0])/60.
+        duration = (ds.timestamps[-1]-ds.timestamps[0])/60.
         pp.report_text(r"""
         SEFD is determined from a %.f minute long drift scan of a suitable celestial calibrator.
         
@@ -1051,7 +1088,7 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
     
     if hasattr(ds, "channel_freqs"): # A raw dataset (might still be cached)
         if not savetofile: # Default savetofile name
-            savetofile = "%s_%d.npz" % (ds.name.split("/")[-1].split(".")[0], ch_res)
+            savetofile = "%s_%d.npz" % (ds.name, ch_res)
     
         if cached and savetofile and not return_all: # We don't cache the extras
             try:
@@ -1060,15 +1097,12 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
                 pass
         # Not cached, so do all the fitting work...
         
-        target = [t for t in ds.catalogue.targets if t.body_type=='radec'][0]
-        
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        vis = np.abs(ds.vis[:]); vis[ds.flags[:]] = np.nan
-        bl,mdl,sigma,mu = driftfit.fit_bm(vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
+        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
          
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
-        dec_tgt = target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
+        dec_tgt = ds.target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
         sigma *= ds.dump_period * np.cos(dec_tgt) # [dumps] -> [seconds along the ecliptic]
         
         # Beam crossing time is "at the center of the tangent plane" so does not need to be scaled
