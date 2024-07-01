@@ -159,9 +159,9 @@ class DriftDataset(object):
         if (isinstance(ant, int)):
             ant = ds.ants[ant].name
         ds.select(ants=ant)
-        self.ants = [ds.ants[0]] # "Ducktyping" so this DriftDataset looks like a katdal.Dataset to models.fit_bg()
         self.ant = ds.ants[0]
         self.RxSN = ds.receivers[self.ant.name]
+        self.ants = [self.ant] # "Ducktyping" so this DriftDataset looks like a katdal.Dataset to models.fit_bg()
         # Targets are listed in the time sequence of the dataset.
         # Reverse the order to avoid there historic bug where the first scan was associated with the target from the previous observation. 
         self.target = [t for t in reversed(ds.catalogue.targets) if t.body_type=='radec'][0]
@@ -179,6 +179,10 @@ class DriftDataset(object):
         self.timestamps = ds.timestamps
         self.start_time = ds.start_time
         self.sensor = ds.sensor
+        
+        # Ensure dish diameter is as assumed in models (relied upon in this module)
+        self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
+        self.ant.diameter = models.aperture_efficiency_models(band=self.band).D_g
         
         if debug:
             self.debug()
@@ -277,7 +281,7 @@ class DriftDataset(object):
             alt_x.set_xlabel("Frequency [MHz]")
 
 
-def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
+def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, band):
     """ Computes Tsys & SEFD from predicted values & standard models.
         @param freqs: frequencies [Hz]
         @param Tcmb: either a constant or a vector matching 'freqs' [K]
@@ -285,8 +289,7 @@ def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
         @param Tatm: a function of (frequency[Hz],elevation[deg]) [K]
         @param el_deg: elevation angle [deg]
         @param RxID: receiver ID / serial number, to load expected receiver noise profiles.
-        @param D: only used if models.aperture_efficiency_models().D is undefined; diameter [m] to convert
-                  aperture efficiency to effective area (default None).
+        @param band: the band to assume for the engineering models.
         @return (eff_area [m^2], Trx [K], Tspill [K], Tsys [K], SEFD [Jy]) ordered as (freqs,pol 0=H,1=V)
     """
     Tgal = Tgal(freqs)
@@ -295,8 +298,8 @@ def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, D=None):
     Trec = np.asarray(models.get_lab_Trec(freqs/1e6,RxID))
     Tsys = Text+Tspill+Trec
     
-    ant_eff = models.aperture_efficiency_models(band=models.band(freqs/1e6))
-    D = ant_eff.D if (ant_eff.D > 0) else D
+    ant_eff = models.aperture_efficiency_models(band=band)
+    D = ant_eff.D
     Eff_area = np.asarray([ant_eff.eff["HH"](freqs/1e6), ant_eff.eff["VV"](freqs/1e6)])*(np.pi*D**2/4)
     SEFD = 2*_kB_*Tsys/Eff_area /1e-26
     
@@ -428,7 +431,7 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     pText, pTsys, pSEFD, Tsys_deduced = [], [], [], []
     for n in range(len(nulls)):
         print("\nPredicting SEFD at null "+null_labels[n])
-        pTrx, pTspill, _pText, _pTsys, _pEffArea, _pSEFD = pred_SEFD(freqs,Tcmb,fTgal(n),Tatm,el_deg,RxSN, D=ant.diameter)
+        pTrx, pTspill, _pText, _pTsys, _pEffArea, _pSEFD = pred_SEFD(freqs,Tcmb,fTgal(n),Tatm,el_deg,RxSN,ds.band)
         pSEFD.append( _pSEFD )
         pTsys.append( _pTsys )
         pText.append( _pText )
