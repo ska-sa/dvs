@@ -182,7 +182,7 @@ class DriftDataset(object):
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
-        self.ant.diameter = models.aperture_efficiency_models(band=self.band).D_g
+        self.ant.diameter = models.aperture_efficiency_models(band=self.band).D
         
         if debug:
             self.debug()
@@ -850,7 +850,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
         @param f: filename string, or an already opened katdal.Dataset
-        @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'load_vis()'.
+        @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'DriftDataset()'.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
         @param HPBW: something like 'lambda f: 1.2*(3e8/f)/D' [rad] to avoid fitting HPBW from the data itself (default None). Used to select data for the beam nulls.
@@ -1079,7 +1079,7 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
         If those results were previously saved to local disk, this function may be used to load it again.
         Note: This function does not modify the active selection filter of the raw dataset.
          
-        @param ds: either a raw drift scan dataset (preferably from 'load_vis()') or an npz file name
+        @param ds: either a raw drift scan dataset or an npz file name
         @param savetofile: npz filename to save the data to (default None)
         @param ch_res: > 0 to fit beams for every "ch_res" frequency bin or <=0 to fit band average only (default 16).
         @param cleanchans: clean channels to use to auto-detect and mask out "jumps" (default None).
