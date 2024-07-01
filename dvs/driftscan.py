@@ -182,7 +182,7 @@ class DriftDataset(object):
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
-        self.ant.diameter = models.aperture_efficiency_models(band=self.band).D
+        self.ant.diameter = models.Ap_Eff(band=self.band).D
         
         if debug:
             self.debug()
@@ -292,15 +292,17 @@ def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, band):
         @param band: the band to assume for the engineering models.
         @return (eff_area [m^2], Trx [K], Tspill [K], Tsys [K], SEFD [Jy]) ordered as (freqs,pol 0=H,1=V)
     """
+    f_MHz = freqs/1e6
+    
     Tgal = Tgal(freqs)
     Text = np.asarray([Tcmb+Tgal+Tatm(freqs,el_deg)]*2)
-    Tspill = np.asarray(models.get_tip_curve_prediction(el_deg, freqs/1e6))
-    Trec = np.asarray(models.get_lab_Trec(freqs/1e6,RxID))
+    Tspill = models.Spill_Temp(band=band)(el_deg, f_MHz)
+    Trec = np.asarray(models.get_lab_Trec(f_MHz, RxID))
     Tsys = Text+Tspill+Trec
     
-    ant_eff = models.aperture_efficiency_models(band=band)
+    ant_eff = models.Ap_Eff(band=band)
     D = ant_eff.D
-    Eff_area = np.asarray([ant_eff.eff["HH"](freqs/1e6), ant_eff.eff["VV"](freqs/1e6)])*(np.pi*D**2/4)
+    Eff_area = ant_eff(f_MHz)/100 * (np.pi*D**2/4)
     SEFD = 2*_kB_*Tsys/Eff_area /1e-26
     
     return (Trec.transpose(), Tspill.transpose(), Text.transpose(), Tsys.transpose(), Eff_area.transpose(), SEFD.transpose()) # pol,freqs -> freqs,pol
