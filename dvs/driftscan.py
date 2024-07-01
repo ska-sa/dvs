@@ -162,7 +162,9 @@ class DriftDataset(object):
         self.ants = [ds.ants[0]] # "Ducktyping" so this DriftDataset looks like a katdal.Dataset to models.fit_bg()
         self.ant = ds.ants[0]
         self.RxSN = ds.receivers[self.ant.name]
-        self.target = [t for t in ds.catalogue.targets if t.body_type=='radec'][0]
+        # Targets are listed in the time sequence of the dataset.
+        # Reverse the order to avoid there historic bug where the first scan was associated with the target from the previous observation. 
+        self.target = [t for t in reversed(ds.catalogue.targets) if t.body_type=='radec'][0]
         self.target.antenna = ds.ants[0]
         
         self.channel_freqs = ds.channel_freqs
