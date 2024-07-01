@@ -8,9 +8,8 @@
 """
 
 import numpy as np
-import katdal
 import pickle
-from .util import hack_dataset
+from .util import open_dataset
 from pylab import figure, subplots, plot, psd, imshow, colorbar, legend, xlabel, ylabel, subplot, ylim, title, suptitle
 import pylab as plt
 
@@ -486,9 +485,7 @@ if __name__ == "__main__":
     ant = opts.ant
     t_spike_start, t_spike_end = opts.spike_start, opts.spike_end
     
-    h5 = katdal.open(filename, '')
-    if opts.hackL:
-        h5 = hack_dataset(h5, hackedL=True)
+    h5 = open_dataset(filename, ref_ant=ant, hackedL=opts.hackL)
     print(h5)
     print(h5.receivers)
     
