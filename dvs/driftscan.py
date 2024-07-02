@@ -60,7 +60,7 @@ def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=None):
         return None
     else:
         ylim = [(1-margin_pct/100.)*np.nanpercentile(_data,lower_pct), (1+margin_pct/100.)*np.nanpercentile(_data,upper_pct)]
-        if (snap_to is not None):
+        if np.all(np.isfinite(ylim)) and (snap_to is not None):
             ylim = (int(ylim[0]/snap_to)*snap_to, int(ylim[1]/snap_to+0.5)*snap_to)
         return ylim
 
