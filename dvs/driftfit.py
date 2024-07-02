@@ -272,7 +272,7 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
                 axs[1].plot(t_axis, np.nanmean(_b[:,_f,:],axis=1), '--', label="Fitted %d/2"%(i+1))
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
             
-            fig, axs = plt.subplots(1,2, figsize=(12,10))
+            fig, axs = plt.subplots(1,2, figsize=(12,6))
             fig.suptitle(debug_label)
             resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
             for p in [0,1]:
