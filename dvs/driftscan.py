@@ -869,7 +869,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug)
+    ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, debug=debug)
     vis = ds.vis
     filename = ds.name
     ant = ds.ant
