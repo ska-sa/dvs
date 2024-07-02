@@ -276,10 +276,10 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
             fig.suptitle(debug_label)
             resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
             for p in [0,1]:
-                axs[1][p].set_title("Model residuals P%d [%%]"%p)
-                im = axs[1][p].imshow(resid[:,:,p], origin="lower", aspect='auto', vmin=-10,vmax=10, cmap=plt.get_cmap('viridis'))
-                axs[1][p].set_xlabel("Frequency [channel]")
-            axs[1][0].set_ylabel("Time [samples]"); plt.colorbar(im, ax=axs[1]) 
+                axs[p].set_title("Model residuals P%d [%%]"%p)
+                im = axs[p].imshow(resid[:,:,p], origin="lower", aspect='auto', vmin=-10,vmax=10, cmap=plt.get_cmap('viridis'))
+                axs[p].set_xlabel("Frequency [channel]")
+            axs[0].set_ylabel("Time [samples]"); plt.colorbar(im, ax=axs[1]) 
             
     # 3. Update the provisional baseline so that bl+mb ~ vis
     bl += dbl
