@@ -251,12 +251,12 @@ class DriftDataset(object):
         self.nd_vis = {}
         for scan in h5.__scans_ND__():
             label = "scan %d: '%s'"%(scan[0],scan[1])
-            vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan
+            vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan; vis[:,0,:] = np.nan
             self.nd_vis[label] = vis
         
         h5.__select_SEFD__()
-        self.vis = np.abs(h5.vis[:])
-        self.vis[h5.flags[:]] = np.nan
+        vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan; vis[:,0,:] = np.nan
+        self.vis = vis
         
         # These values represent the state as per __select_SEFD__()!
         self.el_deg = np.median(h5.el)
