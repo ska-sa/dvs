@@ -847,7 +847,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
 
 
 def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
-              fitfreqrange=None, rfifilt=[1,7], freqmask=[(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
+              fitfreqrange=None, rfifilt=[1,7], freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
@@ -862,7 +862,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @param nulls: pairs of indices of nulls to generate results for, zero-based or None and as (prior to, post transit) (default [(0,0)]).
         @param fitfreqrange: frequency range [Hz] that is sufficiently free from interference to be used to fit spectral baseline, or None for all (default None).
         @param rfifilt: median filter lengths for final de-noising over the time & frequency axes (default [1,7]).
-        @param freqmask: list of 2-vectors for frequency bands to mask out in results, default covers MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)
+        @param freqmask: list of 2-vectors for frequency bands to mask out in results, default covers 0-200MHz, MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)
         @param saveroot: root folder on filesystem to save files to (default None).
         @param debug_nulls: 1 to plot null traces, 2 to plot advanced statistics (default 1).
         @return: same products as get_SEFD_ND() + [offbore_deg]
@@ -870,10 +870,18 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
     # Select all of the raw data that's relevant
     ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, verbose=debug)
     vis = ds.vis
-    cleanchans = chan_idx(ds.channel_freqs, fitfreqrange)
     filename = ds.name
     ant = ds.ant
     source = source if source else ds.target.name
+    
+    # Combine fitfreqrange and freqmask
+    fitchans = chan_idx(ds.channel_freqs, fitfreqrange)
+    if (freqmask is not None):
+        mask = np.full(ds.channel_freqs.shape, True)
+        mask[fitchans] = False
+        for fnot in freqmask:
+            mask[chan_idx(ds.channel_freqs, fnot)] = True
+        fitchans = ~mask
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
@@ -888,15 +896,15 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         
         # Plot the raw data, integrated over frequency, vs relative time
         F = np.max([0]+plt.get_fignums())
-        freqs = ds.channel_freqs[cleanchans]
         plt.figure(figsize=(12,6))
-        plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(freqs)/1e6, np.max(freqs)/1e6))
-        plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,cleanchans,:], axis=1)); plt.grid(True)
+        fitfreqs = ds.channel_freqs[fitchans]
+        plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(fitfreqs)/1e6, np.max(fitfreqs)/1e6))
+        plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,fitchans,:], axis=1)); plt.grid(True)
         plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % ds.dump_period)
         pp.report_fig(F+1, orientation="landscape")
     
         # Identify the bore sight and null transits
-        bore, null_l, null_r, _HPBW, N_bore = find_nulls(ds, cleanchans=cleanchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
+        bore, null_l, null_r, _HPBW, N_bore = find_nulls(ds, cleanchans=fitchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
             # 1-> (mu sigma vs time, HPBW fit, map null traces), 2-> (baselines, model residuals, mu sigma vs time, HPBW fit, trajectory, map null traces)
@@ -905,8 +913,8 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
     
         # Correct for transit offset relative to bore sight
         _bore_ = int(np.median(bore)) # Calculate offbore_deg only for typical frequency, since offbore_deg gets slow 
-        offbore_deg = target_offset(ds.target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.channel_freqs), "bore sight transit", debug=True)
-        hpbw0 = np.nanmedian(_HPBW[cleanchans]); hpbwf0 = np.median(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
+        offbore_deg = target_offset(ds.target, ds.timestamps[_bore_], ds.az[_bore_], ds.el[_bore_], np.mean(ds.channel_freqs[fitchans]), "bore sight transit", debug=True)
+        hpbw0 = np.nanmedian(_HPBW[fitchans]); hpbwf0 = np.median(ds.channel_freqs[np.abs(_HPBW/hpbw0-1)<0.01])
         offbore0 = offbore_deg*np.pi/180/hpbw0
         C = models.G_bore(offbore0, hpbwf0, ds.channel_freqs)
         print("Scaling source flux for pointing offset, by %.3f - %.3f over frequency range"%(np.max(C), np.min(C)))
