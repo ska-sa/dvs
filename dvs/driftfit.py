@@ -241,7 +241,7 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
         if (debug >= 2):
             axs[1].set_title("Baselines subtracted")
             axs[1].plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
-            axs[1].plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted beam models")
+            axs[1].plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted models")
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
 
     else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
@@ -272,7 +272,7 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
                 axs[1].plot(t_axis, np.nanmean(_b[:,_f,:],axis=1), '--', label="Fitted %d/2"%(i+1))
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
             
-            fig, axs = plt.subplots(2,2, figsize=(12,10))
+            fig, axs = plt.subplots(1,2, figsize=(12,10))
             fig.suptitle(debug_label)
             resid = ((vis-bm-bl-dbl)/np.max(bm,axis=0) * 100) # Percentage, masked
             for p in [0,1]:
@@ -287,7 +287,7 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
     if (debug >= 1):
         fig, axs = plt.subplots(2, 1, figsize=(12,6))
         fig.suptitle(debug_label)
-        axs[0].plot(f_axis, mu); axs[0].set_ylabel("Bore sight crossing time 'mu'\n[time samples]"); axs[0].grid(True)
+        axs[0].plot(f_axis, mu); axs[0].set_ylabel("Peak response time 'mu'\n[time samples]"); axs[0].grid(True)
         axs[1].plot(f_axis, sigma); axs[1].set_ylabel("HP crossing duration 'sigma'\n[time samples]"); axs[1].grid(True)
         axs[1].set_xlabel("Frequency [channel]")
     
