@@ -182,7 +182,8 @@ class DriftDataset(object):
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
-        self.ant.diameter = models.Ap_Eff(band=self.band).D
+        D_models = models.Ap_Eff(band=self.band).D
+        if (D_models > 0): self.ant.diameter = D_models
         
         if debug:
             self.debug()
