@@ -178,13 +178,13 @@ def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
     return data, tmask, fmask
 
 
-def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=None):
+def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=None):
     """ Fit a Gaussian bump plus a baseline defined by a 2nd order polynomial to the time (spatial) axis and
         a first order polynomial over frequency.
-        Note: execution time scales linearly with len(channels)/ch_res, typically at 0.3sec/channel.
+        Note: execution time scales linearly with n_chunks, typically at 0.3sec/channel.
 
         @param vis: data arranged as (time,freq,products)
-        @param ch_res: for a speed-up, > 0 to fit beams for every "ch_res" frequency bin or <=0 to fit band average only (default 0)
+        @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 0).
         @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps (default None).
         @param timemask: selector to filter out samples in time (default None)
         @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
@@ -211,7 +211,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     if timemask is not None:
         m2 = np.full(vis.shape, True); m2[timemask,...] = False
         mask |= m2 # Discard those that remain True
-    vis = np.ma.masked_array(vis, mask, fill_value=np.nan)
+    vis = np.ma.masked_array(vis, mask, fill_value=np.nan) # No need for copy=True because vis never gets modified
     vis, tmask, fmask = _mask_jumps_(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
     tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
     fmask = ~np.any(fmask, axis=1) # Includes freqchans
@@ -237,7 +237,7 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
     dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
     dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0) # Repeat along (existing) freq axis
     
-    if (ch_res <= 0): # Asked for the band average fits are copied across frequency
+    if (n_chunks <= 0): # Asked for the band average fits are copied across frequency
         if (debug >= 2):
             axs[1].set_title("Baselines subtracted")
             axs[1].plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
@@ -245,9 +245,9 @@ def fit_bm(vis, ch_res=0, freqchans=None, timemask=None, jump_zone=0, debug=0, d
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
 
     else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
+        ch_res = int(len(f_axis[fmask])/n_chunks)
         sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
         # Reduce resolution before fitting (to speed up)
-        ch_res = int(ch_res)
         chans = np.asarray(downsample(f_axis[fmask], ch_res, method=np.nanmean, trunc=True), int)
         vis_nb = downsample(vis_nb[:,fmask,:], ch_res, axis=1, method=np.nanmean, trunc=True)
         # Fit each remaining channel independently, with NaN's where fit doesn't converge

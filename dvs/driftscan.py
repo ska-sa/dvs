@@ -123,7 +123,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
         @param axis: specify which axis of array2d the domain relates to, in case it is not obvious (default -1)
         @return: masked array representation of array2d
     """
-    if domainmask:
+    if (domainmask is not None) and (len(domainmask) > 0):
         if (axis < 0):
             axis = 0 if (len(domain1d)==array2d.shape[0]) else 1 # This is ambiguous for square arrays
         N_i = array2d.shape[1-axis] if (len(array2d.shape)>1) else 1
@@ -525,7 +525,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
     # To speed up, fit only to 64 frequency channels
-    beamfits = load4hpbw(ds, ch_res=len(ds.channels)//64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
+    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, jump_zone=1, cached=debug_level==0, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
     HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
@@ -1081,7 +1081,7 @@ def save_Tnd(freqs, T_ND, rx_band,rx_SN, output_dir, rfi_mask=[], ant="TBD", deb
         outfile.close()
 
 
-def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cached=False, return_all=False, debug=2):
+def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, cached=False, return_all=False, debug=2):
     """ Processes a raw dataset to determine the beam crossing time instant, as well as the half power crossing duration.
         Note that the crossing duration is scaled to represent a target on the ecliptic (declination=0), which simplifies
         further interpretation.
@@ -1091,7 +1091,7 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
          
         @param ds: either a raw drift scan dataset or an npz file name
         @param savetofile: npz filename to save the data to (default None)
-        @param ch_res: > 0 to fit beams for every "ch_res" frequency bin or <=0 to fit band average only (default 16).
+        @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 64).
         @param cleanchans: clean channels to use to auto-detect and mask out "jumps" (default None).
         @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 0)
         @param cached: True to load from 'savetofile' if it exists (default False)
@@ -1103,7 +1103,7 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
     
     if hasattr(ds, "channel_freqs"): # A raw dataset (might still be cached)
         if not savetofile: # Default savetofile name
-            savetofile = "%s_%d.npz" % (ds.name, ch_res)
+            savetofile = "%s_%d.npz" % (ds.name, n_chunks)
     
         if cached and savetofile and not return_all: # We don't cache the extras
             try:
@@ -1114,8 +1114,8 @@ def load4hpbw(ds, savetofile=None, ch_res=16, cleanchans=None, jump_zone=0, cach
         
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, ch_res=ch_res, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
-         
+        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, n_chunks=n_chunks, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
+        
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = ds.target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
         sigma *= ds.dump_period * np.cos(dec_tgt) # [dumps] -> [seconds along the ecliptic]
@@ -1167,7 +1167,7 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     N_freq, N_prod = sigma.shape
     sigma = np.atleast_2d(np.ma.array(sigma, copy=True))
     sigma[np.isnan(sigma)] = np.nanmean(sigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
-    fitchans = fitchans if fitchans else slice(None)
+    fitchans = fitchans if (fitchans is not None) else slice(None)
     # Don't fit to data that is too far off the expected smooth curve
     _s = np.stack([smooth(sigma[:,p], N_freq//50) for p in range(N_prod)], -1) # ~50 independent windows, balance 'noise' and edge effects
     ff, ssigma, _s = f[fitchans], sigma[fitchans], _s[fitchans]
