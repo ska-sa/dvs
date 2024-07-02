@@ -4,12 +4,12 @@
 
 # Taurus A: Polarisation from Vinyaikin 2007, linpol agrees with Baars 1973 at <10GHz and angle agrees with Baars 1973 at >=3GHz;Width is Perley & Butler 2017's LAS/3 to be half power width for a Gaussian
 # The best data for temporal scaling [Macias-Perez et al 2010] is -0.18% at ~1 GHz (WMAP 7yr suggests 0.22% at >30 GHz)
-J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.915 -0.299 0 Y0=1977 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, Baars 1977          , Baars Genzel Pauliny-Toth & Witzel 1977 over 1 - 35 GHz
-J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.794 -0.278 0 Y0=2000 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, ITU-R S.733-2       , No epoch specified - assumed 2000
-J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.988 -0.296 0 Y0=2003 inc=-0.0018 coeff_freq=1e9) , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 3yr            , ApJ 711 pp.417-423
-J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.506 -0.302 0 Y0=2005 inc=-0.0018 coeff_freq=40e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 7yr            , Weiland et al 2011 [arXiv:1001.4731]
 J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.9516 -0.2173 -0.0473 -0.0674 Y0=2017 inc=-0.0025 coeff_freq=1e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2, 2.7 , gaussian, Perley & Butler 2017,
 J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.9516 -0.2173 -0.0473 -0.0674 Y0=2017 inc=-0.0018 coeff_freq=1e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2, 2.7 , gaussian, Perley & Butler ~aph, The above but with more accepted secular rate
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.506 -0.302 0 Y0=2005 inc=-0.0018 coeff_freq=40e9), 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 7yr            , Weiland et al 2011 [arXiv:1001.4731]
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (2.988 -0.296 0 Y0=2003 inc=-0.0018 coeff_freq=1e9) , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, WMAP 3yr            , ApJ 711 pp.417-423
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.915 -0.299 0 Y0=1977 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, Baars 1977          , Baars Genzel Pauliny-Toth & Witzel 1977 over 1 - 35 GHz
+J0534+2200 | Taurus A | 3C 144 | PKS 0531+21  , radec, 05:34:31.97, +22:00:52.1, , (3.794 -0.278 0 Y0=2000 inc=-0.0018)                , 0.31*(30/fGHz)**-0.98, 147-122.4/fGHz**2               , 2.7 , gaussian, ITU-R S.733-2       , No epoch specified - assumed 2000
 
 
 # Orion A: Polarisation from Baars 1973; Width from Felli Churchwell Wilson & Taylor 1993 at 1400MHz; slightly larger than at 14.5GHz from Baars Mezger & Wendker in Zeitschrift Fur Astrophysik 61 of 1965
@@ -18,36 +18,36 @@ J0535-0523 | Orion A | 3C 145 | PKS 0532-05   , radec, 05:35:17.26, -05:23:28.8,
 
 
 # Hydra A: Polarisation from Baars 1973, Baars 1977 notes 1% lin pol at 5 GHz; Width is Perley & Butler 2017's LAS/3 to be half power width for a Gaussian
+J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, , (1.7795 -0.9176 -0.0843 -0.0139 0.0295 coeff_freq=1e9), 0        , 0            , 2.3               , gaussian, Perley & Butler 2017, Within 2% of Baars 1977 for f<3GHz  over .5 - 15 GHz
 J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, (300 10550.0 4.729 -1.025 0.0130)                 , , 0            , 0            , 2.3               , gaussian, Ott 1994            , Less consistent with our engineering results than Baars & Perley's models.
 J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, (300 10700 4.497 -0.910 0)                        , , 0            , 0            , 2.3               , gaussian, Baars 1977          ,
-J0918-1205 | Hydra A | 3C 218 | PKS 0915-11   , radec, 09:18:05.28, -12:05:48.9, , (1.7795 -0.9176 -0.0843 -0.0139 0.0295 coeff_freq=1e9), 0        , 0            , 2.3               , gaussian, Perley & Butler 2017, Within 2% of Baars 1977 for f<3GHz  over .5 - 15 GHz
 
 
 # PKS 1934-63: Polarisation below 30 GHz is negligible according to ATCA calibrator database; Width assumed - no information at e.g. <https://ned.ipac.caltech.edu/cgi-bin/objsearch?search_type=Obj_id&objid=77271&objname=1&img_stamp=YES&hconst=73.0&omegam=0.27&omegav=0.73&corr_z=1>
-J1939-6342 | PKS 1934-63                      , radec, 19:39:25.05, -63:42:43.6, (300 8870 13.53 -3.00 0 0 -67.11 -1)              , , 0            , 0            , 1                 , gaussian, Kuhr 1981           , Fitted to data over 468 - 8870 MHz in Kuhr Witzel Pauliny-Toth Nauber [A&A Suppl. Ser. 1981]
 J1939-6342 | PKS 1934-63                      , radec, 19:39:25.05, -63:42:43.6, (300 8600 -30.7667 26.4908 -7.0977 0.605334)      , , 0            , 0            , 1                 , gaussian, Reynolds 1994       , ATNF Tech Memo 1994 specifically 1.4-8.6 GHz and perhaps not "absolute"
+J1939-6342 | PKS 1934-63                      , radec, 19:39:25.05, -63:42:43.6, (300 8870 13.53 -3.00 0 0 -67.11 -1)              , , 0            , 0            , 1                 , gaussian, Kuhr 1981           , Fitted to data over 468 - 8870 MHz in Kuhr Witzel Pauliny-Toth Nauber [A&A Suppl. Ser. 1981]
 
 
 # Hercules A: Polarisation from Baars 1973 polarisation angle has large uncertainty & Baars 1977 notes 8% lin pol at 5 GHz; Width: Perley & Butler 2017 Fig 13 shows a "bar" of ~2.5arcmin for a scan at constant declination
+J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, , (1.8298 -1.0247 -0.0951 coeff_freq=1e9)           , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Perley & Butler 2017, Over 0.2 - 12 GHz
 J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, (300 10550.0 3.852 -0.361 -0.1053)                , , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Ott 1994            ,
 J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, (300 10700 4.963 -1.052 0)                        , , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Baars 1977          , Baars Genzel Pauliny-Toth & Witzel 1977
-J1651+0459 | Hercules A | 3C 348 | PKS 1648+05, radec, 16:51:08.02, +04:59:34.9, , (1.8298 -1.0247 -0.0951 coeff_freq=1e9)           , 0.006+0.018*fGHz, 50        , 2.5               , disc    , Perley & Butler 2017, Over 0.2 - 12 GHz
 
 
 # Pictor A: Polarisation from Gardner & Davies 1966, but falls off rapidly below 600 MHz (not modeled!); Width from Perley & Butler 2017, Fig 9 shows two peaks separated by ~45sec in RA -> 11arcmin "top-hat" for a scan in HA at constant declination
-J0519-4546 | Pictor A | PKS 0518-45           , radec, 05:19:49.69, -45:46:44.5, (300 5009.0 -1.265 3.036 -0.653)                  , , 0.0209+0.0034*fGHz, 150, 11                     , disc    , SARAO               , From sources_all.csv
 J0519-4546 | Pictor A | PKS 0518-45           , radec, 05:19:49.69, -45:46:44.5, , (1.9380 -0.7470 -0.0739 coeff_freq=1e9)           , 0.0209+0.0034*fGHz, 150, 11                     , disc    , Perley & Butler 2017, Over 0.2 - 4 GHz
+J0519-4546 | Pictor A | PKS 0518-45           , radec, 05:19:49.69, -45:46:44.5, (300 5009.0 -1.265 3.036 -0.653)                  , , 0.0209+0.0034*fGHz, 150, 11                     , disc    , SARAO               , From sources_all.csv
 
 
 # Virgo A: Polarisation < 1% up to 5GHz from Baars 1977; Width from Perley & Butler 2017's LAS/3 as half power width for Gaussian, ignoring complicated structure on scales < 10 arcmin
-J1230+1223 | Virgo A | 3C 274 | M87 | PKS 1228+12, radec, 12:30:49.42, +12:23:28.0, (300 10550.0 4.484 -0.603 -0.0280)             , , 0            , 0            , 4.7               , gaussian, SARAO               , From sources_all.csv
 J1230+1223 | Virgo A | 3C 274 | M87 | PKS 1228+12, radec, 12:30:49.42, +12:23:28.0, , (2.4466 -0.8116 -0.0483 coeff_freq=1e9)        , 0            , 0            , 4.7               , gaussian, Perley & Butler 2017, Over 0.05 - 3 GHz
+J1230+1223 | Virgo A | 3C 274 | M87 | PKS 1228+12, radec, 12:30:49.42, +12:23:28.0, (300 10550.0 4.484 -0.603 -0.0280)             , , 0            , 0            , 4.7               , gaussian, SARAO               , From sources_all.csv
 
 
 # PKS 0408-65: Polarisation < 0.02% at 1.4GHz from Taylor & Legodi 2021; Width assumed 0 since it's a Quasar used in the ICRF
-J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:09.1, (145. 18000. -0.9790 3.3662 -1.1216 0.0861)   , , 0            , 0            , 0                 , gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:09.1, (200 12000 3.061 -0.09748 -0.1612)            , , 0            , 0            , 0                 , gaussian, PKSCAT90, katpoint/scripts/pkscat90_source_list.csv
 J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:09.1, (468 5009 4.82 -1.15)                         , , 0            , 0            , 0                 , gaussian, Kuhr 1981, A Catalog of Extragalactic Radio Sources Having Flux Densities Greater Than 1 Jy at 5 GHz
+J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:09.1, (145. 18000. -0.9790 3.3662 -1.1216 0.0861)   , , 0            , 0            , 0                 , gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 
 
 # Copied from github.com/ska-sa/katsdpcatalogues/../cals_Lband.csv on 17/11/2021
