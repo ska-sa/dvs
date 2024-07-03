@@ -140,7 +140,7 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
 
 class DriftDataset(object):
     """ A container for the raw measurement data, to optimise data retrieval behaviour. """
-    def __init__(self, ds, ant, ant_rxSN={}, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=True, **kwargs):
+    def __init__(self, ds, ant, ant_rxSN={}, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=False, **kwargs):
         """
            @param ds: filename string, or an already opened katdal.Dataset
            @param ant: either antenna ID (string) or index (int) in the dataset.ants list
@@ -847,7 +847,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+def analyse(f, ant=0, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
               fitfreqrange=None, rfifilt=[1,7], freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
@@ -869,7 +869,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    if (isinstance(f, DriftDataset) and (ant == f.ant.name)): # Avoid re-loading the data - doesn't work if ant is an index. 
+    if (isinstance(f, DriftDataset) and (ant in [0, f.ant.name])): # Avoid re-loading the data - doesn't work if ant is an index. 
         ds = f
     else:
         ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, debug=debug)
