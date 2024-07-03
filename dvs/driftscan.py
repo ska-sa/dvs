@@ -1003,11 +1003,11 @@ def analyse(f, ant=0, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False
         pp.close()
     
     if saveroot:
-        save_data(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg)
+        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg)
     return result
 
 
-def save_data(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, *ig, **nored):
+def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, *ig, **nored):
     """ Saves data products to CSV files named as 'root/dataset-ant-product.csv
         @param root: root folder on filesystem to save files to.
         @param dataset_fname: the filename of the raw dataset.
@@ -1022,7 +1022,7 @@ def save_data(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pS
         np.savetxt(fnroot+fn+".csv", data, delimiter=",",
                    header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
 
-def load_data(fids, product="SEFD", root=""):
+def load_results(fids, product="SEFD", root=""):
     """ Loads the results stored when analyse() completes. Re-grids all data onto a common frequency grid.
         @param fids: list of file ID's (e.g. "{epoch seconds}_sdp_l0-s0000")
         @param product: "SEFD"|"S_ND"|"counts2Jy" (default "SEFD")
@@ -1066,7 +1066,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
     # Mask & write to file
         
     for pol,Tdiode in enumerate([TndH,TndV]):
-        Tdiode = mask_where(Tdiode, freqs, rfi_mask+[(0,np.min(freqs)),(np.max(freqs),np.inf)]) # Mask out RFI-contaminated bits & always the "DC" bin
+        Tdiode = mask_where(Tdiode, freqs, rfi_mask+[(0,np.min(freqs)+1),(np.max(freqs)-1,np.inf)]) # Mask out RFI-contaminated bits & always the "DC" bin
         
         # Scape currently blunders if the file contains nan or --, so only write valid numbers
         notmasked = ~Tdiode.mask & np.isfinite(Tdiode)
@@ -1110,10 +1110,9 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, ca
     extra = []
     
     if hasattr(ds, "channel_freqs"): # A raw dataset (might still be cached)
-        if not savetofile: # Default savetofile name
-            savetofile = "%s_load4hpbw_%d.npz" % (ds.name, n_chunks)
-    
-        if cached and savetofile and not return_all: # We don't cache the extras
+        if cached and not return_all: # We don't cache the extras
+            if not savetofile: # Default savetofile name
+                savetofile = "%s_%s_load4hpbw_%d.npz" % (ds.name, ds.ant.name, n_chunks)
             try:
                 return load4hpbw(ds=savetofile)
             except:
