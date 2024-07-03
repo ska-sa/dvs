@@ -852,7 +852,7 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
               saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
-        @param f: filename string, or an already opened katdal.Dataset
+        @param f: filename string, or an already opened katdal.Dataset or DriftDataset
         @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'DriftDataset()'.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
@@ -869,7 +869,10 @@ def analyse(f, ant, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, 
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, debug=debug)
+    if (isinstance(f, DriftDataset) and (ant == f.ant.name)): # Avoid re-loading the data - doesn't work if ant is an index. 
+        ds = f
+    else:
+        ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, debug=debug)
     vis = ds.vis
     filename = ds.name
     ant = ds.ant
