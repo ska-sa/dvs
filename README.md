@@ -3,7 +3,7 @@ Observation &amp; reduction tools for the Dish Verification System, as used to i
 
 The RTS (Receptor Test System) was originally developed by SARAO, for the MeerKAT telescope project. Now revamped as the DVS for the SKA-MID telescope project, this repository re-purposes and expands on the RTS tools and frameworks.
 
-Use of any and all of these resources is governed by the terms of the license agreement!
+Use of any and all of these resources is governed by the terms of the license agreement.
 
 
 
@@ -18,9 +18,13 @@ Instructions for analysing captured data, to generate results for tests.
 
 ## /catalogues
 Catalogue files used either for observations and/or reductions.
-* Celestial targets used for telescope observations.
+* Celestial targets used for telescope observations, and flux models used in reduction.
 * Database of antenna coordinates
 
 
 ## /libraries
 A repository of non-standard code libraries that may be used for either observations or reductions.
+
+
+# Installation
+Explicit instructions for installation are contained - in easily readable form - in [install_venvs.sh](./install_venvs.sh).
