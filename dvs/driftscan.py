@@ -1042,17 +1042,20 @@ def load_data(fids, product="SEFD", root=""):
     return f, d_H, d_V
 
 
-def save_Tnd(freqs, T_ND, rx_band,rx_SN, output_dir, rfi_mask=[], ant="TBD", debug=False):
+def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=False):
     """ Save noise diode equivalent temperatures to a model file, in the standard MeerKAT format.
         If there are lists of frequencies & T_ND then the data series will automatically be combined.
         
         @param freqs: (lists of) frequencies [Hz]
         @param T_ND: (lists of) Noise diode equivalent temperatures [K], arranged as (freqs,pol)
-        @param rx_band, rx_SN: band (e.g. "u","l") & serial number (e.g. "004")
+        @param rx_band_SN: either a tuple (band, serialno) or a string as "band.serialno"; 'band' is a single letter e.g. "u","l".
         @param output_dir: folder where csv files will be stored
+        @param info: a short bit of text to include in the header, e.g. 'As measured on m012'.
         @param rfi_mask: list of frequency [Hz] ranges to omit from plots e.g. [(924.5e6,960e6)] (default [])
-        @param ant: antenna on which the data was measured (default "TBD")
     """
+    if isinstance(rx_band_SN, str):
+        rx_band, rx_SN = rx_band_SN.split(".")
+    
     if (np.ndim(freqs[0]) == 0):
         TndH, TndV = T_ND[:,0], T_ND[:,1]
     else: # Lists to be combined
@@ -1068,7 +1071,7 @@ def save_Tnd(freqs, T_ND, rx_band,rx_SN, output_dir, rfi_mask=[], ant="TBD", deb
         # Scape currently blunders if the file contains nan or --, so only write valid numbers
         notmasked = ~Tdiode.mask & np.isfinite(Tdiode)
         _f, _T = np.compress(notmasked, freqs), np.compress(notmasked, Tdiode)
-        if (rx_band.upper() == "U"): # Automatically skip low freq garbage
+        if (rx_band.lower() == "u"): # Automatically skip low freq garbage
             _f, _T = _f[_f>540e6], _T[_f>540e6]
         
         if debug:
@@ -1078,7 +1081,8 @@ def save_Tnd(freqs, T_ND, rx_band,rx_SN, output_dir, rfi_mask=[], ant="TBD", deb
         #np.savetxt('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), # TODO: use this rather than below
         #           np.c_[_f,_T], delimiter=",", fmt='%.2f')
         outfile = open('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), 'w')
-        outfile.write('#Noise Diode table based on measurements on %s\n# Frequency [Hz], Temperature [K]\n'%ant)
+        outfile.write('#Noise Diode table - %s\n'%info)
+        outfile.write('# Frequency [Hz], Temperature [K]\n')
         if (_f[-1] < _f[0]): # unflip the flipped first nyquist ordering
             _f, _T = np.flipud(_f), np.flipud(_T)
         outfile.write(''.join(['%s, %s\n' % (entry[0], entry[1]) for entry in zip(_f,_T)]))
