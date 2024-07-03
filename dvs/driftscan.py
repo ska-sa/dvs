@@ -1066,7 +1066,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
     # Mask & write to file
         
     for pol,Tdiode in enumerate([TndH,TndV]):
-        Tdiode = mask_where(Tdiode, freqs, rfi_mask+[(0,1)]) # Mask out RFI-contaminated bits & always the "DC" bin
+        Tdiode = mask_where(Tdiode, freqs, rfi_mask+[(0,np.min(freqs)),(np.max(freqs),np.inf)]) # Mask out RFI-contaminated bits & always the "DC" bin
         
         # Scape currently blunders if the file contains nan or --, so only write valid numbers
         notmasked = ~Tdiode.mask & np.isfinite(Tdiode)
