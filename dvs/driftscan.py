@@ -139,19 +139,18 @@ def mask_where(array2d, domain1d, domainmask, axis=-1):
 
 class DriftDataset(object):
     """ A container for the raw measurement data, to optimise data retrieval behaviour. """
-    def __init__(self, ds, ant, ant_rxSN={}, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=False, **kwargs):
+    def __init__(self, ds, ant, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=False, **kwargs):
         """
            @param ds: filename string, or an already opened katdal.Dataset
            @param ant: either antenna ID (string) or index (int) in the dataset.ants list
-           @param ant_rxSN: {antname:rxband.sn} Early system did not reflect correct receiver ID, so override
            @param pol_labels: two comma-separated characters e.g. 'H,V' to load the corresponding autocorrelation data in that sequence.
            @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
            @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
-           @param kwargs: Passed to utils.open_dataset(). E.g. 'hackedL=True', or 'centre_freq=...'[Hz] to override.
+           @param kwargs: Passed to utils.open_dataset(). E.g. 'hackedL=True', or 'ant_rx_override={antname:rxband.sn}' to override.
         """
         self._pol = pol_labels.split(",")
-        self.ds = ds = util.open_dataset(ds, ref_ant=ant, ant_rx_override=ant_rxSN, **kwargs)
+        self.ds = ds = util.open_dataset(ds, ref_ant=ant, **kwargs)
         self.name = ds.name.split("/")[-1].split(".")[0] # Without extension
         if (isinstance(ant, int)):
             ant = ds.ants[ant].name
@@ -169,7 +168,8 @@ class DriftDataset(object):
         self.dump_period = ds.dump_period
         
         self._load_vis_(swapped_pol, strict, flags, debug)
-        # These values are always as per the last "select()" - should be __selectSEFD_()
+        self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags) # If needed by future select()
+        # These values are not "cached" so will be affected if a select() is performed
         self.az = ds.az
         self.el = ds.el
         self.parangle = ds.parangle
@@ -258,6 +258,12 @@ class DriftDataset(object):
         # These values represent the state as per __select_SEFD__()!
         self.el_deg = np.median(h5.el)
         self.mjd = np.median(h5.mjd)
+
+
+    def select(self, *args, **kwargs):
+        """ Update the dataset selection & re-loads the DriftDataset data. """
+        self.ds.select(*args, **kwargs)
+        self._load_vis_(verbose=False, **self.__loadargs__)
 
 
     def debug(self):
@@ -871,7 +877,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     if (isinstance(f, DriftDataset) and (ant in [0, f.ant.name])): # Avoid re-loading the data - doesn't work if ant is an index. 
         ds = f
     else:
-        ds = DriftDataset(f, ant, ant_rxSN=ant_rxSN, swapped_pol=swapped_pol, strict=strict, debug=debug)
+        ds = DriftDataset(f, ant, swapped_pol=swapped_pol, strict=strict, ant_rx_override=ant_rxSN, debug=debug)
     vis = ds.vis
     filename = ds.name
     ant = ds.ant
