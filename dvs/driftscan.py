@@ -894,7 +894,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
         
-        src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key, verbose=True, **({} if (cat_file) else {'cat_file':cat_file}))
+        src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key, verbose=True, **({'cat_file':cat_file} if (cat_file) else {}))
         pp.header = "Drift scan %s of %s on %s"%(filename, src_ID, ant.name)
         
         # Plot the raw data, integrated over frequency, vs relative time
