@@ -5,9 +5,10 @@
         python analyze_tipping.py /data/132598363.h5 m008 900,1200,1700
         
     Typical use 2:
-        import analyze_tipping as tip
-        h5 = tip.open_dataset("/data/132598363.h5")
-        ru = tip.process(h5, "m008", 900,1700, freq_mask='', PLANE="antenna",spec_sky=True)
+        import tipcurve as tip
+        import util
+        ds = util.open_dataset("/data/132598363.h5", "m008")
+        ru = tip.process(ds, "m008", 900,1700, freq_mask='', PLANE="antenna",spec_sky=True)
         tip.report("m008", h5.name.split()[0].split(" ")[0], *ru, select_freq=[900,1200,1700])
         
     @author aph@sarao.ac.za
@@ -26,10 +27,10 @@ import time
 from matplotlib.offsetbox import AnchoredText
 
 import scape
-import katdal, logging; logging.disable(logging.DEBUG) # This is necessary for katdal
-from katselib import load_frequency_mask
-import katsemat as mat
-from . import util, models, modelsroot
+from . import util, modelsroot
+from analysis.katselib import load_frequency_mask
+from analysis import katsemat as mat
+from analysis import katsemodels as models
 
 # Noise Diode Models that are not yet "deployed in the telescope"
 nd_models_folder = modelsroot + '/noise-diode-models'
@@ -93,6 +94,8 @@ class Sky_temp:
                     hp.cartview(ov.observed_gsm+Tcmb,coord='G', norm=norm,unit=unit,fig=fig.number)
                 else:
                     hp.orthview(ov.observed_sky+Tcmb,coord='G', half_sky=True, norm=norm,unit=unit,fig=fig.number)
+                    # Default flip='astro'i.e. east is left
+                    ax = plt.gca(); ax.annotate("E", [-1,0], horizontalalignment='right'); ax.annotate("W", [1,0])
             plt.title("Continuum Brightness including CMB, at %.fMHz"%self.nu)
             #hp.graticule()
         
@@ -429,15 +432,16 @@ def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=No
     freq_list = np.zeros((len(chunks)))
     for j,chunk in enumerate(chunks):freq_list[j] = h5.channel_freqs[chunk].mean()/1e6
     print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw, freq_list.min(),freq_list.max()) )
-    band = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
+    band_input = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
     # APH use h5 below instead of filename -- permits overriding of h5 attributes
-    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,channel_range=freq_chans,band_input=band, freq_mask=freq_mask, debug=debug)
+    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,channel_range=freq_chans,band_input=band_input, freq_mask=freq_mask, debug=debug)
     # Update after loading has possibly discarded masked-out chunks
     freq_list = np.asarray([d.freqs[j] for j in range(len(d.freqs))]) # APH re-phrased this to fix bug 082018
     
-    aperture_efficiency = models.aperture_efficiency_models(band=models.band(freq_list))
+    band = models.band(freq_list, ant)
+    aperture_efficiency = models.Ap_Eff(band=band)
     bm_floor_dBi = -6 # From as-built predicted paterns, -6dBi is ball park for MeerKAT UHF & L-band, also SKA SPFB1 & B2. TODO: Can this be estimated from aperture_efficiency?
-    SpillOver = models.Spill_Temp(band=models.band(freq_list), default=0) # Set to 0K if not known
+    SpillOver = models.Spill_Temp(band=band, default=0) # Set to 0K if not known
     receiver  = models.Rec_Temp(RxID=rec)
     elevation = np.array([np.average(scan_el) for scan_el in scape.extract_scan_data(d.scans,'el').data])
     ra        = np.array([np.average(scan_ra) for scan_ra in scape.extract_scan_data(d.scans,'ra').data])
@@ -756,21 +760,6 @@ def report(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency,
     return nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE
 
 
-def open_dataset(filename, band=None, hackedL=False, ant_rx_SN={}, verbose=True, **kwargs):
-    """ Convenience method for opening a dataset.
-        @param band: None to let 'models' guess the band from frequencies, or force to e.g. "B1", "u", "l" (default None)
-        @param hackedL: True if the dataset was recorded with the "hacked L-band digitiser".
-        @param ant_rxSN: {antname:rxband.sn} If the metadata does not reflect correct receiver ID, override it here.
-        @param kwargs: Passed to katdal, e.g. to change the centre freq, pass 'centre_freq=...Hz'.
-        @return: the katdal dataset with data selected & ordered as required. """
-    ds = katdal.open(filename, **kwargs) if isinstance(filename,str) else filename
-    ds = util.hack_dataset(ds, hackedL=hackedL, ant_rx_override=ant_rx_SN, verbose=verbose)
-    if hackedL:
-        ds.select(freqrange=(300e6,856.5e6))
-    models.BAND = band # Provide a hint for models.band()
-    return ds
-
-
 if __name__ == "__main__":
     import optparse
     parser = optparse.OptionParser(usage="%prog [opts] <dataset filename>",
@@ -778,11 +767,19 @@ if __name__ == "__main__":
     parser.add_option("-a", "--ants", dest="ants", help="The name(s) of the specific antenna(s) in the dataset to process, or 'all'")
     parser.add_option("--select-freq", dest="select_freq", help="Comma-separated list of frequencies, including limits in MHz, e.g. '900,1000,1400,1600'")
     parser.add_option("--freq-mask", dest="freq_mask", default="", help="Filename for frequency mask, either text or pickle format.")
+    parser.add_option("--hackL", action='store_true',
+                      help="Open the data file as if it was recorded with an L-band digitiser sampling in the 1st Nyquist zone.")
     opts, args = parser.parse_args()
     
-    ds = open_dataset(args[0])
-    ants = [a.name for a in ds.ants] if (opts.ant=="all") else opts.ants.split(',')
+    filename = args[0]
+    if (opts.ant=="all"):
+        ants = [a.name for a in util.open_dataset(filename).ants]
+    else:
+        ants = opts.ants.split(',')
     select_freq = map(float, opts.select_freq.split(","))
     for ant in ants:
-        ru = process(ds, ant, min(select_freq), max(select_freq), freq_mask=opts.freq_mask, PLANE="antenna",spec_sky=True)
+        ds = util.open_dataset(filename, ant, hackedL=opts.hackL)
+        if opts.hackedL:
+            ds.select(freqrange=(330e6,856.5e6))
+        ru = process(filename, ant, min(select_freq), max(select_freq), freq_mask=opts.freq_mask, PLANE="antenna",spec_sky=True)
         report(ant, ds.name.split()[0].split(" ")[0], *ru, select_freq=select_freq)
