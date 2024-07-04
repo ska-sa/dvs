@@ -8,13 +8,13 @@ import pylab as plt
 import katpoint
 import ephem
 import astropy.coordinates as acoords
-import katsemodels
+from analysis import katsemodels
+from . import cattools
 try:
     import healpy as hp
 except:
     print("WARNING: Failed to load healpy. Continuing with limitations.")
     hp = None
-from . import cattools
 
 
 def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,

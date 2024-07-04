@@ -24,9 +24,8 @@ import itertools as iter
 import copy
 import time
 import dvsholog as katholog # (a special release of katholog)
-import logging; logging.disable(logging.DEBUG) # This is necessary for katdal
 import katpoint
-import katselib, katsemat
+from analysis import katselib, katsemat
 import zernike
 
 import pylab as plt

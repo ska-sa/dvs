@@ -33,7 +33,7 @@ wget -O i~/venv-py3/lib/$py/site-packages/pygsm/gsm2016_components.h5 https://ze
 git clone git@github.com:ska-sa/dvs.git
 # TODO: At present, this required package is private - a temporary situation.
 git clone git@github.com:ska-sa/systems-analysis.git
-ln -s systems-analysis/analysis dvs/libraries/systemsanalysis
+ln -s `pwd`/systems-analysis/analysis dvs/libraries/analysis
 
 ipython3 kernel install --name "dvs" --user
 jupyter kernelspec list | grep dvs

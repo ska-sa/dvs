@@ -39,13 +39,12 @@ import numpy as np
 import warnings
 import scipy.optimize as sop
 import scipy.interpolate as interp
-import katdal
 import katpoint
-import katsemodels as models
-from katsemodels import _kB_, _c_
-from katsemat import smooth, smooth2d
-from . import driftfit
-from katselib import PDFReport
+from . import driftfit, util
+from analysis import katsemodels as models
+from analysis.katsemodels import _kB_, _c_
+from analysis.katsemat import smooth, smooth2d
+from analysis.katselib import PDFReport
 
 
 def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=None):
@@ -149,13 +148,11 @@ class DriftDataset(object):
            @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
            @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
-           @param kwargs: Early system did not reflect correct centre freq, so pass 'centre_freq='[Hz] to override
+           @param kwargs: Passed to utils.open_dataset(). E.g. 'hackedL=True', or 'centre_freq=...'[Hz] to override.
         """
         self._pol = pol_labels.split(",")
-        self.ds = ds = katdal.open(ds, **kwargs) if isinstance(ds, str) else ds
+        self.ds = ds = util.open_dataset(ds, ref_ant=ant, ant_rx_override=ant_rxSN, **kwargs)
         self.name = ds.name.split("/")[-1].split(".")[0] # Without extension
-        for a,sn in ant_rxSN.items():
-            ds.receivers[a] = sn
         if (isinstance(ant, int)):
             ant = ds.ants[ant].name
         ds.select(ants=ant)
@@ -1081,7 +1078,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
         #np.savetxt('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), # TODO: use this rather than below
         #           np.c_[_f,_T], delimiter=",", fmt='%.2f')
         outfile = open('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), 'w')
-        outfile.write('#Noise Diode table - %s\n'%info)
+        outfile.write('#Noise Diode table. %s\n'%info)
         outfile.write('# Frequency [Hz], Temperature [K]\n')
         if (_f[-1] < _f[0]): # unflip the flipped first nyquist ordering
             _f, _T = np.flipud(_f), np.flipud(_T)

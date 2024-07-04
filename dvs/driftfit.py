@@ -6,7 +6,7 @@
 import numpy as np
 import scipy.optimize as sop
 import scipy.interpolate as interp
-from katsemat import Polynomial2DFit, downsample
+from analysis.katsemat import Polynomial2DFit, downsample
 import pylab as plt
 
 
