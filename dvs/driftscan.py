@@ -1176,13 +1176,13 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     
     # The data to fit to
     N_freq, N_prod = sigma.shape
-    sigma = np.atleast_2d(np.ma.array(sigma, copy=True))
-    sigma[np.isnan(sigma)] = np.nanmean(sigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
+    sigma = np.ma.array(sigma, copy=True)
+    sigma[np.isnan(sigma) | sigma.mask] = np.nanmean(sigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
     fitchans = fitchans if (fitchans is not None) else slice(None)
     # Don't fit to data that is too far off the expected smooth curve
-    _s = np.stack([smooth(sigma[:,p], N_freq//50) for p in range(N_prod)], -1) # ~50 independent windows, balance 'noise' and edge effects
+    _s = np.stack([smooth(sigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
     ff, ssigma, _s = f[fitchans], sigma[fitchans], _s[fitchans]
-    ssigma.mask[np.abs(ssigma-_s)>0.1*_s] = True
+    ssigma.mask[np.abs(ssigma-_s)>0.05*_s] = True
     if debug:
         plot_data(ff/1e6, K*ssigma*omega_e*180/np.pi, style='.', label="To fit", newfig=False)
     print("Fitting HPBW over %.f - %.f MHz assuming D=%.2f m"%(np.min(ff[~ssigma.mask[:,0]])/1e6, np.max(ff[~ssigma.mask[:,0]])/1e6, D))
