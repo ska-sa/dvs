@@ -844,16 +844,18 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant=0, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False, strict=False, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
-              fitfreqrange=None, rfifilt=[1,7], freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
-              saveroot=None, makepdf=False, debug=False, debug_nulls=1):
+def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, swapped_pol=False, strict=False,
+            HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+            fitfreqrange=None, rfifilt=[1,7], freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
+            saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
         @param f: filename string, or an already opened katdal.Dataset or DriftDataset
         @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'DriftDataset()'.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
-        @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()'.
-        @param HPBW: something like 'lambda f: 1.2*(3e8/f)/D' [rad] to avoid fitting HPBW from the data itself (default None). Used to select data for the beam nulls.
+        @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()' (default None).
+        @param cat_file: if given, overrides the default filename used by 'models.describe_source()' (default None).
+        @param HPBW: if given, like 'lambda f: 1.2*(3e8/f)/D' [rad], this is used instead of HPBW fitted from the data, fore selection of data in beam nulls (default None).
         @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
@@ -892,7 +894,7 @@ def analyse(f, ant=0, source=None, flux_key=None, ant_rxSN={}, swapped_pol=False
             print("Note: The dataset has been adjusted to correct for a polarisation swap!")
         print("")
         
-        src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key=flux_key, verbose=True)
+        src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key, verbose=True, **({} if (cat_file) else {'cat_file':cat_file}))
         pp.header = "Drift scan %s of %s on %s"%(filename, src_ID, ant.name)
         
         # Plot the raw data, integrated over frequency, vs relative time
