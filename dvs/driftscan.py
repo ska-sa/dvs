@@ -163,19 +163,11 @@ class DriftDataset(object):
         self.target = [t for t in reversed(ds.catalogue.targets) if t.body_type=='radec'][0]
         self.target.antenna = ds.ants[0]
         
-        self.channel_freqs = ds.channel_freqs
-        self.channels = ds.channels
+        self.start_time = ds.start_time
         self.dump_period = ds.dump_period
         
         self._load_vis_(swapped_pol, strict, flags, debug)
         self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags) # If needed by future select()
-        # These values are not "cached" so will be affected if a select() is performed
-        self.az = ds.az
-        self.el = ds.el
-        self.parangle = ds.parangle
-        self.timestamps = ds.timestamps
-        self.start_time = ds.start_time
-        self.sensor = ds.sensor
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
@@ -255,6 +247,13 @@ class DriftDataset(object):
         vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan; vis[:,0,:] = np.nan
         self.vis = vis
         
+        self.channel_freqs = h5.channel_freqs
+        self.channels = h5.channels
+        self.az = h5.az
+        self.el = h5.el
+        self.parangle = h5.parangle
+        self.timestamps = h5.timestamps
+        self.sensor = h5.sensor
         # These values represent the state as per __select_SEFD__()!
         self.el_deg = np.median(h5.el)
         self.mjd = np.median(h5.mjd)
