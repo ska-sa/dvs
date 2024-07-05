@@ -99,42 +99,39 @@ def plot_data(x_axis,vis,y_lim=None,x_lim=None,header=None,xtag=None,ytag=None,b
         plt.legend(loc='best', fontsize='small', framealpha=0.8)
 
 
-def chan_idx(channels, bounds):
-    """ @param bounds: a list or tuple of min,max channels (same units as channels) or None to pass all.
-        @return: a selector based on the indices where channels fall within the bounds """
-    if bounds is None:
-        return slice(None) # range(0,len(freqs))
+def _idx(domain1d, bounds):
+    """ @param bounds: a list or tuple of min,max values (same units as domain1d) or None to pass all.
+        @return: a boolean index with True where domain1d fall within the bounds, or no bounds given """
+    if (bounds is None) or (len(bounds) == 0):
+        return np.full(np.shape(domain1d), True)
     else:
-        idx = np.argwhere(np.logical_and(channels>=np.min(bounds),
-                                         channels<=np.max(bounds)))
-        if (len(idx) > 0):
-            return slice(np.min(idx),np.max(idx)+1) # range(np.min(idx),np.max(idx))
-        else:
-            return slice(0,0)
+        return np.logical_and(domain1d>=np.min(bounds), domain1d<=np.max(bounds))
 
 
-def mask_where(array2d, domain1d, domainmask, axis=-1):
+def mask_where(array_nd, domain1d, domainmask, axis=-1):
     """ Generates a masked array from mask intervals specified for domain1d.
         
-        @param array2d: 1d or 2d array
+        @param array_nd: an array to mask (1-dimensional or higher)
         @param domain1d: the values of the domain for the axis to apply the mask over
         @param domainmask: list of (start,stop) intervals of values in domain1d which must be masked out, inclusive
         @param axis: specify which axis of array2d the domain relates to, in case it is not obvious (default -1)
         @return: masked array representation of array2d
     """
     if (domainmask is not None) and (len(domainmask) > 0):
+        array_nd = np.atleast_1d(array_nd)
         if (axis < 0):
-            axis = 0 if (len(domain1d)==array2d.shape[0]) else 1 # This is ambiguous for square arrays
-        N_i = array2d.shape[1-axis] if (len(array2d.shape)>1) else 1
-        indices = np.arange(len(domain1d))
-        masked_indices = []
+            axis = [i for i,n in enumerate(array_nd.shape) if (len(domain1d)==n)]
+            assert (len(axis) > 0), "None of the axes match the mask - you must explicitly pick one."
+            assert (len(axis) == 1), "Multiple axes can match the mask - you must explicitly pick one."
+            axis = axis[0]
+        mask1d = np.full(len(domain1d), False)
         for minmax in domainmask:
-            masked_indices.extend(indices[chan_idx(domain1d, minmax)])
-        indices[masked_indices] = -1
-        mask = np.stack([indices<0]*N_i, axis=1-axis)
-        return np.ma.masked_array(array2d, mask, fill_value=np.nan)
+            mask1d |= _idx(domain1d, minmax)
+        mask = np.full(array_nd.shape, False)
+        mask = np.apply_along_axis(lambda a:mask1d, axis, mask)
+        return np.ma.masked_array(array_nd, mask|np.isnan(array_nd), fill_value=np.nan)
     else:
-        return array2d
+        return np.ma.masked_array(array_nd, np.isnan(array_nd), fill_value=np.nan)
 
 
 class DriftDataset(object):
@@ -352,22 +349,22 @@ def _get_SEFD_(vis, freqs, el_deg, MJD, bore,nulls, S_src, hpw_src=0, profile_sr
     return (freqs, counts2Jy, SEFD_est)
 
 
-def _get_ND_(ds, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=None, title=None, y_lim=None):
+def _get_ND_(ds, counts2scale=None, y_unit="counts", freqmask=None, rfifilt=None, title=None, y_lim=None):
     """ Isolate Noise cycles to computes the ND spectra, possibly scaled. Generates a figure.
         @param counts2scale: if given (H spectrum, V spectrum) then ND spectra are scaled by this factor (default None)
-        @param freqrange: like get_SEFD() & get_SEFD_ND() (default None)
+        @param freqmask: list of frequency [Hz] ranges to omit from ON-OFF detection and from plots e.g. [(924.5e6,960e6)] (default None)
         @param rfifilt: size of smoothing windows in time & freq; time window is limited to < min(ON,OFF)/3 (default None)
         @param title: title for the figure
         @param y_lim: y limit for ND plot, as used by plot_data() (default None)
-        @return S_ND (H&V spectra) either as a fraction of the background noise, or scaled by counts2scale. Ordered as (time,pol,freq)
+        @return S_ND (H&V spectra) either as a fraction of the background noise, or scaled by counts2scale. Ordered as (time,freq,pol)
     """
-    chans = chan_idx(ds.channel_freqs, freqrange)
+    chans = mask_where(np.full(ds.channel_freqs.shape,True), ds.channel_freqs, freqmask)
     S_ND = []
     for label,vis in ds.nd_vis.items():
         S_ND.append([])
         for pol in [0,1]:
-            S = vis[1:-1,chans,pol] # Each scan has ON & OFF; discard first & last samples because ND may not be aligned to dump boundaries
-            m = np.nanmedian(S,axis=1) > np.nanmedian(S) # ON mask where average total power over the cycle is above mean toal power
+            S = vis[1:-1,:,pol] # Each scan has ON & OFF; discard first & last samples because ND may not be aligned to dump boundaries
+            m = np.nanmedian(S[:,chans],axis=1) > np.nanmedian(S[:,chans]) # ON mask where average total power over the cycle is above mean total power
             ON = np.compress(m, S, axis=0)[1:-1,:] # Observe script does not guarantee ND edges to be synchronised to dump boundaries
             OFF = np.compress(~m, S, axis=0)[1:-1,:] # It may be slow in getting on target (OFF is the first phase), but use strict=True for that case
             if (rfifilt is not None):
@@ -385,10 +382,10 @@ def _get_ND_(ds, counts2scale=None, y_unit="counts", freqrange=None, rfifilt=Non
     if (len(S_ND) == 0): # No ND data
         S_ND = [[0*ds.channel_freqs, 0*ds.channel_freqs]]
 
-    return np.asarray(S_ND) # time,freq,pol
+    return np.moveaxis(S_ND, 1, 2) # time,pol,freq -> time,freq,pol
 
 
-def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None,freqrange=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
+def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None,rfifilt=None,freqmask=None,Tcmb=2.73,Tatm=None,Tgal=None):
     """ Computes spectra of SEFD and Noise Diode equivalent flux. Also generates expected SEFD given certain estimates.
         Returned values reflect SEFD for a BACKGROUND AVERAGED BETWEEN THE NULLS ENCOUNTERED BEFORE AND AFTER TRANSIT.
         
@@ -398,7 +395,6 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
         @param S_src: source flux function ('lambda f_GHz,year' returning flux in [HH, VV] - corrected for parallactic angle) [Jy]
         @param hpw_src: half power width of the source as a fraction of HPBW [fraction]
         @param profile_src: either 'gaussian' or 'disc'.
-        @param freqrange: [fmin,fmax] (in Hz) to process & return results for, None to ommit first and last channels only (default None)
         @param rfifilt: size of smoothing windows in time & freq (default None)
         @param freqmask: list of frequency [Hz] ranges to omit from plots e.g. [(924.5e6,960e6)] (default None)
         @param Tcmb: CMB temperature (not included in Tgal) (default 2.73) [K]
@@ -413,19 +409,19 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     print("\nDeriving measured SEFD")
     vis = ds.vis
     el_deg = ds.el_deg
-    chans = chan_idx(ds.channel_freqs, freqrange)
 
     if rfifilt is not None:
         vis = smooth2d(vis, rfifilt, axes=(0,1))
     
     counts2Jy, SEFD_meas = [], []
     for null in nulls:
-        freqs, c2Jy, sefd = _get_SEFD_(vis[:,chans,:], ds.channel_freqs[chans], el_deg, ds.mjd,
+        freqs, c2Jy, sefd = _get_SEFD_(vis, ds.channel_freqs, el_deg, ds.mjd,
                                        bore=bore, nulls=lambda v,t,f:getvis_null(v,null,win_len),
                                        S_src=S_src, hpw_src=hpw_src, profile_src=profile_src, enviro=ds.sensor)
         counts2Jy.append(c2Jy)
-        sefd = mask_where(sefd, freqs, freqmask)
         SEFD_meas.append(sefd)
+    counts2Jy = mask_where(counts2Jy, freqs, freqmask, axis=1) # time,freq,pol
+    SEFD_meas = mask_where(SEFD_meas, freqs, freqmask, axis=1)
     
     # Predicted results for assumed background (single polarization)
     ant = ds.ant
@@ -443,8 +439,6 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
         Tsys_deduced.append( SEFD_meas[n]*_pEffArea/2.0/_kB_*1e-26 )
     # pTrx, pTspill are the same for all nulls
     
-    counts2Jy = np.ma.asarray(counts2Jy) # time,freq,pol
-    SEFD_meas = np.ma.asarray(SEFD_meas)
     pSEFD = np.asarray(pSEFD)
     pTsys = np.asarray(pTsys)
     pText = np.asarray(pText)
@@ -469,9 +463,9 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     pTsys, pSEFD = np.mean(pTsys,axis=0), np.mean(pSEFD,axis=0)
 
     # Also get the ND spectra, if there are
-    S_ND = _get_ND_(ds, counts2scale=counts2Jy, y_unit="Jy", freqrange=freqrange, rfifilt=rfifilt, y_lim='pct')
-    S_ND = np.moveaxis(S_ND, 1, 2) # time,pol,freq -> time,freq,pol
-    S_ND = np.ma.mean(S_ND,axis=0) # Average over independent ND measurements
+    S_ND = _get_ND_(ds, counts2scale=counts2Jy, y_unit="Jy", freqmask=freqmask, rfifilt=rfifilt, y_lim='pct')
+    S_ND = np.nanmean(S_ND, axis=0) # Average over independent ND measurements -> freq,pol
+    S_ND = mask_where(S_ND, freqs, freqmask, axis=0)
     
     T_ND = S_ND * Tsys_deduced/(SEFD_meas/2.) # Remembering that SEFD _per pol_ is scaled by x2 while neither ND nor Tsys is
     
@@ -624,7 +618,7 @@ def _debug_stats_(vis, channel_freqs, timestamps, bore_indices, nulls_indices, w
             else:
                 viz = viz[select_dumps,:]
         
-        chans = chan_idx(channel_freqs, freqrange)
+        chans = _idx(channel_freqs, freqrange)
         x_axis = channel_freqs[chans]
         xlabel = "f [MHz]"
         
@@ -725,7 +719,7 @@ def combine(x, y, x_common=None, pctmask=100):
     else:
         f = x_common
     
-    # Almost certainly the edge channels are bad, so ommit it on both ends
+    # Almost certainly the edge channels are bad, so omit it on both ends
     B = 2
     y_combi = [np.interp(s*f, s*fp[B:-B], yp[B:-B], left=np.nan, right=np.nan) for s,fp,yp in zip(_s,x,y)]
     
@@ -734,7 +728,7 @@ def combine(x, y, x_common=None, pctmask=100):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", "invalid value encountered in", category=RuntimeWarning)
             mask = [np.r_[np.nan, diff[p,:]] > np.nanpercentile(diff[p,:], pctmask) for p in range(len(y_combi))]
-        y_combi = np.ma.masked_array(y_combi, mask, fill_value=np.nan)
+        y_combi = np.ma.masked_array(y_combi, mask|np.isnan(y_combi), fill_value=np.nan)
         
     return f, y_combi
 
@@ -775,14 +769,14 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
         f, m_h = combine([x[0] for x in results], [x[m_index][:,0] for x in results], pctmask=pctmask) # Mask out some interference
         f, m_v = combine([x[0] for x in results], [x[m_index][:,1] for x in results], f, pctmask=pctmask)
         _h, _v = np.ma.mean(m_h,axis=0), np.ma.mean(m_v,axis=0)
-        _hv = mask_where(np.dstack([_h, _v]).squeeze(),f,freqmask)
+        _hv = mask_where(np.dstack([_h, _v]).squeeze(), f, freqmask)
 
         ### Plot results with error bars to show the range
         _h, _v = _hv[:,0], _hv[:,1]
-        plot_data(f/1e6, _h, label="Measured "+pol[0], xtag="Frequency [MHz]", ytag=tag, header=header,
-                 bars=[np.ma.max(m_h,axis=0)-_h, _h-np.ma.min(m_h,axis=0)], errorevery=128, capthick=3)
-        plot_data(f/1e6, _v, label="Measured "+pol[1], newfig=False, y_lim=y_lim,
-                 bars=[np.ma.max(m_v,axis=0)-_v, _v-np.ma.min(m_v,axis=0)], errorevery=128, capthick=3)
+        bars = {} if (len(m_h) == 1) else dict(bars=[np.ma.max(m_h,axis=0)-_h, _h-np.ma.min(m_h,axis=0)], errorevery=128, capthick=3)
+        plot_data(f/1e6, _h, label="Measured "+pol[0], xtag="Frequency [MHz]", ytag=tag, header=header, **bars)
+        bars = {} if (len(m_v) == 1) else dict(bars=[np.ma.max(m_v,axis=0)-_v, _v-np.ma.min(m_v,axis=0)], errorevery=128, capthick=3)
+        plot_data(f/1e6, _v, label="Measured "+pol[1], newfig=False, y_lim=y_lim, **bars)
 
         if (p_index == m_index):
             p_hv = _hv
@@ -803,16 +797,18 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
     axes = make_figure("Gain [Jy/#]")[1]
     for p,ax in enumerate(axes):
         for n,x in enumerate(results):
-            ax.plot(x[0]/1e6, x[1][:,p], label=labels[n])
-        ax.legend(); ax.set_ylim(_ylim_pct_(x[1][:,p],10,30))
+            y = mask_where(x[1][:,p], x[0], freqmask)
+            ax.plot(x[0]/1e6, y, label=labels[n])
+        ax.legend(); ax.set_ylim(_ylim_pct_(y,10,30))
  
     if plot_ratio: # Gain ratios, relative to the first result (but may fail)
         fig, axes = make_figure("#2Jy Gain ratio")
         try:
             for p,ax in enumerate(axes):
                 for n,x in enumerate(results[1:]):
-                    ax.plot(x[0]/1e6, x[1][:,p]/results[0][1][:,p], label="%s/%s"%(labels[n+1],labels[0]))
-                ax.legend(); ax.set_ylim(_ylim_pct_(x[1][:,p]/results[0][1][:,p],10,30))
+                    y = mask_where(x[1][:,p]/results[0][1][:,p], x[0], freqmask)
+                    ax.plot(x[0]/1e6, y, label="%s/%s"%(labels[n+1],labels[0]))
+                ax.legend(); ax.set_ylim(_ylim_pct_(y,10,30))
         except: # May fail if frequency ranges don't match - then just ignore this step
             plt.close(fig)
     
@@ -851,7 +847,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
 
 def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, swapped_pol=False, strict=False,
             HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
-            fitfreqrange=None, rfifilt=[1,7], freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)],
+            fitfreqrange=None, freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)], rfifilt=[1,7],
             saveroot=None, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
@@ -865,9 +861,9 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param nulls: pairs of indices of nulls to generate results for, zero-based or None and as (prior to, post transit) (default [(0,0)]).
-        @param fitfreqrange: frequency range [Hz] that is sufficiently free from interference to be used to fit spectral baseline, or None for all (default None).
+        @param fitfreqrange: frequency range (start,stop)[Hz] to be used to fit the beam model, or None for all (default None).
+        @param freqmask: list of 2-vectors for frequency bands to mask out for fit and in results (default covers 0-200MHz, MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)).
         @param rfifilt: median filter lengths for final de-noising over the time & frequency axes (default [1,7]).
-        @param freqmask: list of 2-vectors for frequency bands to mask out in results, default covers 0-200MHz, MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)
         @param saveroot: root folder on filesystem to save files to (default None).
         @param debug_nulls: 1 to plot null traces, 2 to plot advanced statistics (default 1).
         @return: same products as get_SEFD_ND() + [offbore_deg]
@@ -883,13 +879,8 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     source = source if source else ds.target.name
     
     # Combine fitfreqrange and freqmask
-    fitchans = chan_idx(ds.channel_freqs, fitfreqrange)
-    if (freqmask is not None):
-        mask = np.full(ds.channel_freqs.shape, True)
-        mask[fitchans] = False
-        for fnot in freqmask:
-            mask[chan_idx(ds.channel_freqs, fnot)] = True
-        fitchans = ~mask
+    fitchans = _idx(ds.channel_freqs, fitfreqrange)
+    fitchans = mask_where(fitchans, ds.channel_freqs, freqmask)
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
@@ -905,8 +896,8 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         # Plot the raw data, integrated over frequency, vs relative time
         F = np.max([0]+plt.get_fignums())
         plt.figure(figsize=(12,6))
-        fitfreqs = ds.channel_freqs[fitchans]
-        plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(fitfreqs)/1e6, np.max(fitfreqs)/1e6))
+        fitMHz = ds.channel_freqs[fitchans]/1e6
+        plt.title("Raw drift scan time series, %g - %g MHz" % (np.min(fitMHz), np.max(fitMHz)))
         plt.plot(np.arange(vis.shape[0]), np.nanmean(vis[:,fitchans,:], axis=1)); plt.grid(True)
         plt.ylabel("Radiometer counts"); plt.xlabel("Sample Time Indices (at %g Sec Dump Rate)" % ds.dump_period)
         pp.report_fig(F+1, orientation="landscape")
@@ -930,7 +921,6 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         par_angle = ds.parangle[_bore_] * np.pi/180
         Sobs_src = lambda f_GHz, yr: S_src(f_GHz, yr, par_angle) * models.G_bore(offbore0, hpbwf0/1e9, np.reshape(f_GHz, (-1,1)))
         
-        freqrange = None # Only omit first and last channels from the results to be returned
         nulls_l = [N[0] for N in nulls if N[0] is not None]
         nulls_r = [N[1] for N in nulls if N[1] is not None]
         null_groups = [null_l[N] for N in nulls_l] + [null_r[N] for N in nulls_r]
@@ -938,7 +928,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         print("\nNow determining measured and predicted SEFD with target in beam nulls:")
         print("    %s before transit & %s after transit" % (null_labels[:len(nulls_l)], null_labels[len(nulls_l):]))
         freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg = \
-                get_SEFD_ND(ds,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,freqrange=freqrange,rfifilt=rfifilt,freqmask=freqmask)
+                get_SEFD_ND(ds,bore,null_groups,N_bore,Sobs_src,hpw_src/_HPBW,profile_src,null_labels=null_labels,rfifilt=rfifilt,freqmask=freqmask)
         F = np.max(plt.get_fignums())
         pp.report_fig([F-1, F], orientation="landscape") # get_SEFD_ND()-> (SEFD, ND flux)
         
@@ -1104,7 +1094,7 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, ca
         @param ds: either a raw drift scan dataset or an npz file name
         @param savetofile: npz filename to save the data to (default None)
         @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 64).
-        @param cleanchans: clean channels to use to auto-detect and mask out "jumps" (default None).
+        @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on (default None).
         @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 0)
         @param cached: True to load from 'savetofile' if it exists (default False)
         @param return_all: True if ds is a raw dataset, to also return fitted (baseline,beam) as extra data (default False)
@@ -1165,6 +1155,8 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
         @return: lambda f: hpw [rad]
     """
     hpw_src = 0 if (hpw_src is None) else hpw_src
+    fitchans = slice(None) if (fitchans is None) else fitchans
+    
     # Basic model and constants
     hpbw = lambda f, p,q: ((p*(_c_/f)**q/D)**2 + hpw_src**2)**.5 # rad
     omega_e = 2*np.pi/(24*60*60.) # rad/sec
@@ -1176,16 +1168,15 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     
     # The data to fit to
     N_freq, N_prod = sigma.shape
-    sigma = np.ma.array(sigma, copy=True)
-    sigma[np.isnan(sigma) | sigma.mask] = np.nanmean(sigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
-    fitchans = fitchans if (fitchans is not None) else slice(None)
+    ssigma = np.ma.array(sigma, copy=True)
+    ssigma[np.isnan(ssigma) | ssigma.mask] = np.nanmean(ssigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
     # Don't fit to data that is too far off the expected smooth curve
-    _s = np.stack([smooth(sigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
-    ff, ssigma, _s = f[fitchans], sigma[fitchans], _s[fitchans]
+    _s = np.stack([smooth(ssigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
+    ff, ssigma, _s = f[fitchans], ssigma[fitchans], _s[fitchans]
     ssigma.mask[np.abs(ssigma-_s)>0.05*_s] = True
     if debug:
         plot_data(ff/1e6, K*ssigma*omega_e*180/np.pi, style='.', label="To fit", newfig=False)
-    print("Fitting HPBW over %.f - %.f MHz assuming D=%.2f m"%(np.min(ff[~ssigma.mask[:,0]])/1e6, np.max(ff[~ssigma.mask[:,0]])/1e6, D))
+    print("Fitting HPBW over %.f - %.f MHz assuming D=%.2f m"%(np.min(ff)/1e6, np.max(ff)/1e6, D))
     
     # lambda^1 model
     _p = sop.fmin_bfgs(lambda p: np.nansum((np.dstack([hpbw(ff,p[0],1)]*N_prod)-K*ssigma*omega_e)**2), [1], disp=False)
