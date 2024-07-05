@@ -537,7 +537,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # From here on we ignore any difference in bore sight direction between the polarisations
     bore = np.nanmean(bore, axis=1)
     # Interpolate 'bore' where it is masked, and convert to time samples relative to current selection i.e. timestamp[0]
-    bore = mat.interp(f[~bore.mask], bore[~bore.mask], "cubic", bounds_error=False, fill_value=np.median(bore))
+    bore = mat.interp(f, f[~bore.mask], bore[~bore.mask], "cubic", bounds_error=False, fill_value=np.median(bore))
     T0 = ds.timestamps[0] - float(ds.start_time)
     bore = np.asarray(np.clip((bore-T0)/ds.dump_period, t[0],t[-1]), int) # [samples]
     
