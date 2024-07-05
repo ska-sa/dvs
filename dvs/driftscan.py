@@ -38,12 +38,11 @@ import pylab as plt
 import numpy as np
 import warnings
 import scipy.optimize as sop
-import scipy.interpolate as interp
 import katpoint
 from . import driftfit, util
 from analysis import katsemodels as models
 from analysis.katsemodels import _kB_, _c_
-from analysis.katsemat import smooth, smooth2d
+from analysis import katsemat as mat
 from analysis.katselib import PDFReport
 
 
@@ -370,8 +369,8 @@ def _get_ND_(ds, counts2scale=None, y_unit="counts", freqmask=None, rfifilt=None
             if (rfifilt is not None):
                 if (rfifilt[0] > min(ON.shape[0], OFF.shape[0])/3.): # Limited to < shape[0]/3
                     rfifilt = (int(min(ON.shape[0], OFF.shape[0])/6.)*2-1, rfifilt[-1])
-                ON = smooth2d(ON, rfifilt, axes=(0,1))
-                OFF = smooth2d(OFF, rfifilt, axes=(0,1))
+                ON = mat.smooth2d(ON, rfifilt, axes=(0,1))
+                OFF = mat.smooth2d(OFF, rfifilt, axes=(0,1))
             ND_delta = np.mean(ON,axis=0) - np.mean(OFF,axis=0) # ON-OFF spectrum for this pol
             if (counts2scale is not None):
                 ND_delta = ND_delta*counts2scale[:,pol]
@@ -411,7 +410,7 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     el_deg = ds.el_deg
 
     if rfifilt is not None:
-        vis = smooth2d(vis, rfifilt, axes=(0,1))
+        vis = mat.smooth2d(vis, rfifilt, axes=(0,1))
     
     counts2Jy, SEFD_meas = [], []
     for null in nulls:
@@ -538,7 +537,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # From here on we ignore any difference in bore sight direction between the polarisations
     bore = np.nanmean(bore, axis=1)
     # Interpolate 'bore' where it is masked, and convert to time samples relative to current selection i.e. timestamp[0]
-    bore = interp.interp1d(f[~bore.mask], bore[~bore.mask], "cubic", axis=0, bounds_error=False, fill_value=np.median(bore))(f)
+    bore = mat.interp(f[~bore.mask], bore[~bore.mask], "cubic", axis=0, bounds_error=False, fill_value=np.median(bore))(f)
     T0 = ds.timestamps[0] - float(ds.start_time)
     bore = np.asarray(np.clip((bore-T0)/ds.dump_period, t[0],t[-1]), int) # [samples]
     
@@ -721,7 +720,7 @@ def combine(x, y, x_common=None, pctmask=100):
     
     # Almost certainly the edge channels are bad, so omit it on both ends
     B = 2
-    y_combi = [np.interp(s*f, s*fp[B:-B], yp[B:-B], left=np.nan, right=np.nan) for s,fp,yp in zip(_s,x,y)]
+    y_combi = [mat.interp(s*f, s*fp[B:-B], yp[B:-B], left=np.nan, right=np.nan) for s,fp,yp in zip(_s,x,y)]
     
     if (pctmask>0 and pctmask<100): # Mask out 2D data which is too far off the expected smooth curve along the second axis.
         diff = np.abs(np.diff(y_combi, axis=1))
@@ -769,7 +768,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
         f, m_h = combine([x[0] for x in results], [x[m_index][:,0] for x in results], pctmask=pctmask) # Mask out some interference
         f, m_v = combine([x[0] for x in results], [x[m_index][:,1] for x in results], f, pctmask=pctmask)
         _h, _v = np.ma.mean(m_h,axis=0), np.ma.mean(m_v,axis=0)
-        _hv = mask_where(np.dstack([_h, _v]).squeeze(), f, freqmask)
+        _hv = mask_where(np.ma.dstack([_h, _v]).squeeze(), f, freqmask)
 
         ### Plot results with error bars to show the range
         _h, _v = _hv[:,0], _hv[:,1]
@@ -1171,7 +1170,7 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     ssigma = np.ma.array(sigma, copy=True)
     ssigma[np.isnan(ssigma) | ssigma.mask] = np.nanmean(ssigma) # Avoid warnings in 'ssigma<_s' below if there are nan's
     # Don't fit to data that is too far off the expected smooth curve
-    _s = np.stack([smooth(ssigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
+    _s = np.stack([mat.smooth(ssigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
     ff, ssigma, _s = f[fitchans], ssigma[fitchans], _s[fitchans]
     ssigma.mask[np.abs(ssigma-_s)>0.05*_s] = True
     if debug:
