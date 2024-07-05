@@ -59,8 +59,8 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     G = lambda ampl,sigma,mu: abs(ampl)*np.exp(-1/2.*(t_axis-mu)**2/sigma**2) # 1/sigma/sqrt(2pi)*... is absorbed in amplitude term
     B = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[oH+sH*t_axis + G(aH,sigmaH,muH),
                                                                oV+sV*t_axis + G(aV,sigmaV,muV)]
-    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.2 + G(1,1*sigmaH,muH), # Weights to emphasize the beam peak over the baseline
-                                                               0.2 + G(1,1*sigmaV,muV)]
+    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.2 + G(1,(sigmaH+sigmaV),(muH+muV)/2), # Weights to emphasize the beam peak over the baseline
+                                                               0.2 + G(1,(sigmaH+sigmaV),(muH+muV)/2)]
     
     N_t, N_f, N_p = np.shape(vis)
     assert (N_p==2), "_fit_bm_() is hard-coded for data shaped like (*,*,2), not %s"%np.shape(vis)
@@ -83,7 +83,7 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
             print("INFO: Fitting channel %d of %d"%(f,N_f))
         v_nb = vis[:,f,:]
         p0 = [0,0, 0,0, 1,1, sigma0,sigma0, mu0,mu0]
-        p, s, _,_, _,_, w = sop.fmin_bfgs(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
+        p, s, _,_, _, w = sop.fmin_powell(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
         ss = np.nansum((B(*p)-v_nb)**2, axis=(0,1))
         
         # Repeat the fit if necessary
@@ -95,7 +95,7 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
             if ((p[-2+bb] < 0) or (p[-2+bb] >= N_t)): # In some pathological cases the lowest residual has mu out of bounds
                 bb = abs(1-bb) # 0->1, 1->0
             p0 = p0[:-4] + [p[bb+len(p0[:-4])+i] for i in [0,0,2,2]] # sigma & mu from the best of the fitted pols
-            p, s, _,_, _,_, w = sop.fmin_bfgs(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
+            p, s, _,_, _, w = sop.fmin_powell(lambda p: np.nansum(W(*p)*(B(*p)-v_nb)**2), p0, full_output=True, disp=False)
             ss = np.nansum((B(*p)-v_nb)**2, axis=(0,1))
             
             if ((w == 1) or (np.min(p[-2:]) < 0 or np.max(p[-2:]) >= N_t)): # Unrecoverable after two attempts
