@@ -59,8 +59,8 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     G = lambda ampl,sigma,mu: abs(ampl)*np.exp(-1/2.*(t_axis-mu)**2/sigma**2) # 1/sigma/sqrt(2pi)*... is absorbed in amplitude term
     B = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[oH+sH*t_axis + G(aH,sigmaH,muH),
                                                                oV+sV*t_axis + G(aV,sigmaV,muV)]
-    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.2 + G(1,(sigmaH+sigmaV),(muH+muV)/2), # Weights to emphasize the beam peak over the baseline
-                                                               0.2 + G(1,(sigmaH+sigmaV),(muH+muV)/2)]
+    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.4 + G(1,(sigmaH+sigmaV),(muH+muV)/2), # Weights to emphasize the beam peak over the baseline
+                                                               0.4 + G(1,(sigmaH+sigmaV),(muH+muV)/2)]
     
     N_t, N_f, N_p = np.shape(vis)
     assert (N_p==2), "_fit_bm_() is hard-coded for data shaped like (*,*,2), not %s"%np.shape(vis)
