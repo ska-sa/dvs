@@ -534,14 +534,14 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     elif callable(HPBW): # Forced as a function
         HPBW = np.vectorize(HPBW)(f)
     
-    # From here on we ignore any difference in bore sight direction between the polarisations
-    bore = np.nanmean(bore, axis=1)
     # Interpolate 'bore' where it is masked, and convert to time samples relative to current selection i.e. timestamp[0]
-    bore = mat.interp(f, f[~bore.mask], bore[~bore.mask], "cubic", bounds_error=False, fill_value=np.median(bore))
+    bore = np.apply_along_axis(lambda b:mat.interp(f, f[~b.mask], b[~b.mask], "cubic", bounds_error=False, fill_value=np.nanmedian(b[~b.mask])), 0, bore)
     T0 = ds.timestamps[0] - float(ds.start_time)
-    bore = np.asarray(np.clip((bore-T0)/ds.dump_period, t[0],t[-1]), int) # [samples]
+    # TODO: mathematical operations are NOT performed on masked values!!! This is different from what I expected, so consider removing all use of masked array!
+    bore = np.asarray((bore.data-T0)/ds.dump_period + 0.5, int) # [samples]
+    bore = np.clip(bore, t[0],t[-1])
     
-    t_bore = int(np.median(bore)) # Representative sample of bore sight transit
+    t_bore = int(np.ma.median(bore)) # Representative sample of bore sight transit
     N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*ds.dump_period) / 16.)+1) # The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
@@ -565,6 +565,8 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
             plot_data(t[flags_ch], angles[flags_ch]/D2R, style='.', label="Null %d @ channel %d"%(n,cleanchan), newfig=False)
     # Use angles from bore sight and Nk relationship to identify nulls
     mn = lambda x: np.nan if len(x)==0 else np.mean(x) # Because np.min fails on empty, np.mean returns empty & issues a warning message
+    # From here on we ignore any difference in bore sight direction between the polarisations
+    bore = np.nanmean(bore.data, axis=1)
     DT = bore - t_bore
     find_null = lambda t,angles,k: np.asarray([mn(t[np.abs(angles-Nk[k]*hpbw)<hpbw/20.])+dt for dt,hpbw in zip(DT,HPBW)]) # Must subset t & angles to avoid this getting both left & right!
     null_l = [find_null(t[t<t_bore],angles[t<t_bore],k) for k in range(len(Nk))] # (k'th null, frequency)
