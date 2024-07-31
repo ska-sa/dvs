@@ -20,8 +20,9 @@ pip install numpy scipy matplotlib
 pip install pysolr paramiko zernike
 
 pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpscripts,katsdpcal}
-# TODO: At present, this package is private - a temporary situation.
 pip install git+ssh://git@github.com/ska-sa/dvsholog
+# TODO: At present, the above package is private - a temporary situation. The workaround is to obtain a "zip" package and do:
+# pip install dvsholog-main.zip
 
 pip install git+https://github.com/telegraphic/PyGSM
 py=`ls ~/venv-py3/lib/`
@@ -31,11 +32,12 @@ wget -O i~/venv-py3/lib/$py/site-packages/pygsm/gsm2016_components.h5 https://ze
 
 ## Set up the DVS workspace
 git clone git@github.com:ska-sa/dvs.git
-# TODO: At present, this required package is private - a temporary situation.
 git clone git@github.com:ska-sa/systems-analysis.git
+# TODO: At present, the above package is private - a temporary situation. The workaround is to obtain a "zip" package and do:
+# unzip systems-analysis-master.zip -d systems-analysis
 ln -s `pwd`/systems-analysis/analysis dvs/libraries/analysis
 
 ipython3 kernel install --name "dvs" --user
 jupyter kernelspec list | grep dvs
 echo ACTION: Insert the following line into the above dvs/kernel.json 
-echo  \"env\": {\"PYTHONPATH\":\"/home/aph/work_dvs/dvs\"},
+echo  \"env\": {\"PYTHONPATH\":\"`pwd`/dvs\"},
