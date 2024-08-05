@@ -1,0 +1,3 @@
+source ~/venv-py3/bin/activate
+cd `dirname $(readlink -f $0)`
+jupyter notebook &
