@@ -16,8 +16,7 @@ pip install ipykernel jupyter notebook
 ipython3 kernel install --name "python3" --user
 
 
-pip install numpy scipy==1.11.4 matplotlib
-# Note: as of 08/2024 the specific version of scipy is necessary for dvsholog
+pip install numpy scipy matplotlib
 pip install pysolr paramiko zernike
 
 pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal}
