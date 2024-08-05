@@ -16,7 +16,8 @@ pip install ipykernel jupyter notebook
 ipython3 kernel install --name "python3" --user
 
 
-pip install numpy scipy matplotlib
+pip install numpy scipy==1.11.4 matplotlib
+# Note: as of 08/2024 the specific version of scipy is necessary for dvsholog
 pip install pysolr paramiko zernike
 
 pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal}
@@ -44,3 +45,7 @@ ipython3 kernel install --name "dvs" --user
 KS=`jupyter kernelspec list | sed -n -E 's/\s*(dvs)\s+(\S+)/\2/p'`/kernel.json
 PK=\"env\":{\"PYTHONPATH\":\"`pwd`/dvs\"}
 sed -i -E ':a; N; $! ba; s@(.*)}@\1,'$PK'\n}@' $KS
+
+
+echo You may start the notebook server by using the following command:
+echo `readlink -f dvs/startjnb` 
