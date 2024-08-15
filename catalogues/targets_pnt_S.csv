@@ -1,7 +1,7 @@
 # Targets suitable for single dish pointing in MeerKAT S-band - TO BE CONFIRMED
 # -> no targets that are separated by less than 60arcmin.
 # Entries collected from gaincal_l_5jy.csv sources_pnt_Ku.csv sources_all.csv point_Sband.csv. Coordinates checked against SIMBAD to 0.2arcsec
-# ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000),   flux polynomial,                                               uncertainty[arcsec] source,             Gal l,  Gal b,~1400MHz flux,redshift,NED Object type     IRAS/X-ray  s-dish comment
+# ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000),   flux polynomial,                                               uncertainty[arcsec] source,    Gal l,  Gal b,~1400MHz flux,redshift,NED Object type     IRAS/X-ray  s-dish comment
 J000613-062338 | PKS 0003-066, radec gaincal, 00:06:13.892894, -06:23:35.335300, (7000 15000 4.4851 -2.5022 0.3761)
 
 J0010-4153 | PKS 0008-421, radec gaincal, 00:10:52.52, -41:53:10.8
