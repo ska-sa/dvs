@@ -11,29 +11,6 @@ D2R = np.pi/180
 R2D = 1/D2R
 
 
-def remove_overlapping(catalogue, eps=0.1, debug=True):
-    """ Creates a new catalogue with duplicates in RA,DEC removed (keeps the first one in the list).
-    
-        @param catalgoue: original katpoint.Catalogue
-        @param eps: radius within which two positions are considered identical [arcsec]
-        @return: katpoint.Catalogue without duplicates """
-    eps = eps/3600*D2R # arcsec -> rad
-    
-    # Don't need an antenna if for "radec" targets, but in case there are other types
-    ant = catalogue.antenna if (catalogue.antenna is not None) else katpoint.Antenna("Z, 0,0,0, 0")
-    
-    newcat = katpoint.Catalogue(antenna=ant)
-    for tgt in catalogue.targets:
-        overlap = [(tgt.separation(t, antenna=ant) < eps) for t in newcat.targets]
-        if (np.count_nonzero(overlap) == 0):
-            newcat.add(tgt)
-        elif debug:
-            keep = np.take(newcat.targets, np.flatnonzero(overlap))[0]
-            print("Removing overlapping target: ", tgt.description)
-            print("  ( keeping ", keep.description, " -- %.1f arcsec off" % (tgt.separation(keep, antenna=ant)/D2R*3600), ")")
-    return newcat
-
-
 class ElevationFormatter(matplotlib.projections.polar.ThetaFormatter):
     """ Generate tick labels on a matplotlib polar plot, with angles increasing to 90deg at the centre.
         This is simply the ThetaFormatter, with angles "inverted". """
@@ -63,6 +40,29 @@ def plot_skycat(catalogue, timestamps, t_observe=120, antenna=None, el_limit_deg
                 el.append(_el)
         ax.plot(np.pi/2.-np.asarray(az), np.pi/2.-np.asarray(el), 'o', markersize=7)
     
+
+def remove_overlapping(catalogue, eps=0.1, debug=True):
+    """ Creates a new catalogue with duplicates in RA,DEC removed (keeps the first one in the list).
+    
+        @param catalgoue: original katpoint.Catalogue
+        @param eps: radius within which two positions are considered identical [arcsec]
+        @return: katpoint.Catalogue without duplicates """
+    eps = eps/3600*D2R # arcsec -> rad
+    
+    # Don't need an antenna if for "radec" targets, but in case there are other types
+    ant = catalogue.antenna if (catalogue.antenna is not None) else katpoint.Antenna("Z, 0,0,0, 0")
+    
+    newcat = katpoint.Catalogue(antenna=ant)
+    for tgt in catalogue.targets:
+        overlap = [(tgt.separation(t, antenna=ant) < eps) for t in newcat.targets]
+        if (np.count_nonzero(overlap) == 0):
+            newcat.add(tgt)
+        elif debug:
+            keep = np.take(newcat.targets, np.flatnonzero(overlap))[0]
+            print("Removing overlapping target: ", tgt.description,
+                  "( keeping ", keep.description, " -- %.1f arcsec off" % (tgt.separation(keep, antenna=ant)/D2R*3600), ")")
+    return newcat
+
 
 def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sunmoon_separation_deg=10):
     """ Removes targets from the supplied catalogue which are within the specified distance from others or either the Sun or Moon.
