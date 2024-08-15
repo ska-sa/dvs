@@ -20,9 +20,10 @@ pip install numpy scipy matplotlib
 pip install pysolr paramiko zernike
 
 pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal}
-pip install git+ssh://git@github.com/ska-sa/dvsholog
-# TODO: At present, the above package is private - a temporary situation. The workaround is to obtain a "zip" package and do:
-# pip install dvsholog-main.zip
+# pip install git+ssh://git@github.com/ska-sa/dvsholog
+# TODO: At present, the above package is private - a temporary situation. The workaround is the following:
+pip install gdown
+gdown 1X1CdggMPIgR5xRoeGd2LajHRixf_mVtM && pip install dvsholog-main.zip && rm dvsholog-main.zip
 
 pip install git+https://github.com/telegraphic/PyGSM
 PY=`ls ~/venv-py3/lib/`
@@ -33,9 +34,9 @@ wget -O ~/venv-py3/lib/$PY/site-packages/pygsm/gsm2016_components.h5 https://zen
 ## Set up the DVS workspace
 git clone https://github.com/ska-sa/dvs.git
 git clone https://github.com/ska-sa/katsdpscripts.git
-git clone git@github.com:ska-sa/systems-analysis.git
-# TODO: At present, the above package is private - a temporary situation. The workaround is to obtain a "zip" package and do:
-# unzip systems-analysis-master.zip -d systems-analysis
+# git clone git@github.com:ska-sa/systems-analysis.git
+# TODO: At present, the above package is private - a temporary situation. The workaround is the following:
+gdown 1Ep3o1mElx2YsJM_B4Hh6j_LKU4mkFYpU && unzip systems-analysis-master.zip -d systems-analysis && rm systems-analysis-master.zip
 ln -f -s `pwd`/systems-analysis/analysis dvs/libraries/analysis
 ln -f -s `pwd`/katsdpscripts dvs/libraries/katsdpscripts
 
