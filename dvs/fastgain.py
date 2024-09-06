@@ -114,7 +114,8 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
 
 def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
            xK=[1.03,1.05,1.1,1.15]):
-    """
+    """ Load the data from a suitable dataset and perform the standard analysis on it.
+        
         @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
         @param channels: channel indices (list or slice) to select (default None)
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
@@ -122,6 +123,7 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
         @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
         @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
         @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
+        @return: (<H>_freq/<H>, <V>_freq/<V>) i.e. the normalised time series total power in H & V.
     """
     filename = h5.name.split()[0].split(" ")[0] # "rdb files are different
     # Select the correct scan. It's always the last 'track'
@@ -153,11 +155,39 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
         p_v = p_v[:2*len(t):2,:] # (p_v[:2*len(t):2,:]+p_v[1:1+2*len(t):2,:])/2.
         p_hv = p_hv[:2*len(t):2,:] # (p_hv[:2*len(t):2,:]+p_hv[1:1+2*len(t):2,:])/2.
     
-    xvalues = h5.freqs/1e6 if vs_freq else h5.channels
+    _pol_lbl_ = lambda pol: "%s pol @ gain %s"%(pol,gains[0]["%s%s"%(ant,pol.lower())])
+    dataset_id = "%s: %s[%s]"%(filename,ant,h5.receivers[ant])
+    _info_ = "with FFT shift %d" % fft_shift
+    savefile = "%s_%s.csv"%(filename[-13:-3],ant)
+    return standard_report(t, h5.freqs, p_h, p_v, p_hv, vs_freq, T_interval, sigma_spec, cycle_50pct, xK,
+                           dataset_id, _pol_lbl_, _info_, savefile, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
+
+analyze = analyse # Alias
+
+
+def standard_report(t, freqs, p_h, p_v, p_hv, vs_freq, T_interval, sigma_spec, cycle_50pct, xK=[1.03,1.05,1.1,1.15],
+                    dataset_id, _pol_lbl_=lambda pol:pol, _info_="", savefile=None, **kwargs):
+    """ Perform standard stability analysis on a set of data.
+        
+        @param t, freqs, p_h, p_v, p_hv: the data to analyse (all dimensions must match!)
+        @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
+        @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
+        @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
+        @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
+        @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
+        @param kwargs: may specify `channels` if not to use default numbering, and also t_spike_start & t_spike_end
+                to generate flags for spikes in time series.
+        @return: (<H>_freq/<H>, <V>_freq/<V>) i.e. the normalised time series total power in H & V.
+    """
+    channels = kwargs.get("channels", np.arange(len(freqs)))
+    xvalues = freqs/1e6 if vs_freq else channels
     xunit = "MHz" if vs_freq else "channel #"
+    dt = t[1] - t[0]
+    df = abs(freqs[1] - freqs[0])
+    
+    _suptitle_ = "%s %s"%(dataset_id,_info_)
     
     # Waterfall plots for debugging
-    _suptitle_ = "%s: %s[%s] with FFT shift %d"%(filename,ant,h5.receivers[ant],fft_shift)
     figure(figsize=(16,8)); suptitle(_suptitle_)
     subplot(2,1,1); imshow(p_h/np.median(p_h,axis=0), vmin=0.99,vmax=1.01,cmap='jet', aspect='auto',extent=[xvalues[0],xvalues[-1],t[-1],t[0]], origin='upper')
     ylabel(r"$dP_H/<P_H>$\ntime [sec]"); colorbar()
@@ -165,17 +195,16 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     ylabel(r"$dP_V/<P_V>$\ntime [sec]"); xlabel("frequency [%s]"%xunit); colorbar()
 
     # Plots to identify RFI-free bits of spectrum
-    _pol_lbl_ = lambda pol: "%s pol @ gain %s"%(pol,gains[0]["%s%s"%(ant,pol.lower())])
-    _suptitle_ = "%s: %s[%s] with FFT shift %d\n%s %s; BWch,tau~(%.3fHz, %.3fsec)"%(filename,ant,h5.receivers[ant],fft_shift, _pol_lbl_("H"),_pol_lbl_("V"),h5.channel_width,dt)
-    figure(figsize=(16,8)); suptitle(_suptitle_)
+    figure(figsize=(16,8))
+    suptitle("%s\n%s %s; BWch,tau~(%.3fHz, %.3fsec)"%(_suptitle_, _pol_lbl_("H"),_pol_lbl_("V"), df,dt))
 
     subplot(2,1,1) # H & V sigma/mu spectra
     plot(xvalues, np.std(p_h,axis=0)/np.mean(p_h,axis=0))
     plot(xvalues, np.std(p_v,axis=0)/np.mean(p_v,axis=0))
-    K = 1/np.sqrt(h5.channel_width*dt) # Expected radiometer scatter
+    K = 1/np.sqrt(df*dt) # Expected radiometer scatter
     if cycle_50pct: # TODO: Work in progress - why is this necessary for cycle_50pct?
         K *= 40 # Perhaps requant gains wrong?
-    plot(xvalues,K+0*h5.channels,'k,'); ylim(K/2.,2.6*np.max(xK)*K)
+    plot(xvalues,K+0*freqs,'k,'); ylim(K/2.,2.6*np.max(xK)*K)
     ylabel(r"$\sigma/\mu$ []"); title("Complete spectrum")
 
     subplot(2,1,2) # HV power
@@ -186,7 +215,7 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
 
     # Identify pristine chunks of spectrum e.g. from the above
     M = max(int(10/dt),32) # Need something like 20/dt MHz to beat system noise?
-    ch_chunks = [range(100+M*n,100+M*(n+1)) for n in range(1,(len(h5.channels)-200)//M)] # Omit 100 channels at both edges
+    ch_chunks = [range(100+M*n,100+M*(n+1)) for n in range(1,(len(freqs)-200)//M)] # Omit 100 channels at both edges
 
     snr_h = [np.mean(np.std(p_h[:,C],axis=0)/np.mean(p_h[:,C],axis=0)) for C in ch_chunks]
     snr_v = [np.mean(np.std(p_v[:,C],axis=0)/np.mean(p_v[:,C],axis=0)) for C in ch_chunks]
@@ -222,35 +251,35 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     for ch in ch_chunks:
         plot(xvalues[ch], np.std(p_h[:,ch],axis=0)/np.mean(p_h[:,ch],axis=0))
         plot(xvalues[ch], np.std(p_v[:,ch],axis=0)/np.mean(p_v[:,ch],axis=0))
-    plot(xvalues,K+0*h5.channels,'k,'); ylim(K/2.,3*K)
+    plot(xvalues,K+0*freqs,'k,'); ylim(K/2.,3*K)
     ylabel(r"$\sigma/\mu$ []"); legend([_pol_lbl_("H"),_pol_lbl_("V")]); title("Pristine spectrum")
 
     subplot(2,1,2) # HV power
     for ch in ch_chunks:
         plot(xvalues[ch], 10*np.log10(np.mean(p_hv[:,ch],axis=0)))
-    plot(xvalues,K+0*h5.channels,'k,');
+    plot(xvalues,K+0*freqs,'k,');
     ylabel(r"HV [dB]")
 
     xlabel("Frequency [%s]"%xunit); 
 
-    _suptitle_ = "%s: %s[%s] with FFT shift %d\n BWch,tau~(%.1fHz, %.3fsec)"%(filename,ant,h5.receivers[ant],fft_shift, h5.channel_width,dt)
+    _suptitle2_ = "%s\n BWch,tau~(%.1fHz, %.3fsec)"%(_suptitle_, df,dt)
     # Added figure to visually compare stability in selected channels against major RFI culprits
     _ch_chunks = [("clean",ch_chunks[-1]) # reference clean channel
-                 ] + [(k,c) for (k,c) in [("GSM<40MHz>",h5.channels[np.abs(h5.freqs-940e6)<=20e6]), # GSM
-                                          ("GSM<10MHz>",h5.channels[np.abs(h5.freqs-935e6)<=5e6]),  # GSM
-                                          ("GSM<10MHz>",h5.channels[np.abs(h5.freqs-955e6)<=5e6]),  # GSM
-                                          ("SSR-air",h5.channels[np.abs(h5.freqs-1090e6)<=2*2e6])]  # SSR-airTx; 2* opens this up to 1086MHz i.e. alias in UHF-band
+                 ] + [(k,c) for (k,c) in [("GSM<40MHz>",channels[np.abs(freqs-940e6)<=20e6]), # GSM
+                                          ("GSM<10MHz>",channels[np.abs(freqs-935e6)<=5e6]),  # GSM
+                                          ("GSM<10MHz>",channels[np.abs(freqs-955e6)<=5e6]),  # GSM
+                                          ("SSR-air",channels[np.abs(freqs-1090e6)<=2*2e6])]  # SSR-airTx; 2* opens this up to 1086MHz i.e. alias in UHF-band
                                           if (len(c)>0)]
-    axes = subplots(len(_ch_chunks),1,figsize=(16,2+2*len(_ch_chunks)))[1]; suptitle("Compare to known RFI\n%s: %s"%(filename, ant))
+    axes = subplots(len(_ch_chunks),1,figsize=(16,2+2*len(_ch_chunks)))[1]; suptitle("Compare to known RFI\n%s"%dataset_id)
     axes = np.atleast_1d(axes)
     for i,(key,ch) in enumerate(_ch_chunks):
         axes[i].plot(t, np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]), label="H")
         axes[i].plot(t, np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]), label="V", alpha=0.7)
-        axes[i].set_ylabel(r"%s $\delta P/P$"%key); axes[i].legend(); axes[i].set_title("~%.f MHz"%(h5.freqs[ch].mean()/1e6))
+        axes[i].set_ylabel(r"%s $\delta P/P$"%key); axes[i].legend(); axes[i].set_title("~%.f MHz"%(freqs[ch].mean()/1e6))
     axes[-1].set_xlabel("time [sec]")
 
     # Time series H & V
-    figure(figsize=(16,8)); suptitle(_suptitle_)
+    figure(figsize=(16,8)); suptitle(_suptitle2_)
     subplot(2,1,1)
     for ch in ch_chunks:
         plot(t, np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]))
@@ -274,7 +303,7 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     # Debug in case time-domain spikes are noticed
     if t_A is not None and t_B is not None:
         # Time domain
-        figure(figsize=(16,8)); suptitle(_suptitle_)
+        figure(figsize=(16,8)); suptitle(_suptitle2_)
         for ch in ch_chunks:
             plot(t[t_A], (np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]))[t_A])
             plot(t[t_A], (np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]))[t_A])
@@ -283,7 +312,7 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
         xlabel("time [sec]"); ylabel(r"$\delta P/P$ []")
 
         # Spectral domain
-        figure(figsize=(16,8)); suptitle(_suptitle_)
+        figure(figsize=(16,8)); suptitle(_suptitle2_)
         plot(xvalues, 10*np.log10(np.mean(p_h[t_B,:].squeeze(),axis=0) / np.mean(p_h[t_A,:].squeeze(),axis=0)))
         plot(xvalues, 10*np.log10(np.mean(p_v[t_B,:].squeeze(),axis=0) / np.mean(p_v[t_A,:].squeeze(),axis=0)))
         ylim(-0.1,0.1)
@@ -303,7 +332,7 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
             p_v = p_v[t_Z:,:]
 
     # PSD of individual channel chunks, **normalized to fractional variation per channel**
-    figure(figsize=(12,8)); suptitle(_suptitle_)
+    figure(figsize=(12,8)); suptitle(_suptitle2_)
     subplot(2,1,1)
     for ch in ch_chunks:
         psd(np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch])-1, Fs=1/dt, NFFT=len(t))
@@ -312,21 +341,21 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
         psd(np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch])-1, Fs=1/dt, NFFT=len(t))
 
     # All good channels combined, un-normalized
-    figure(figsize=(12,6)); suptitle(_suptitle_)
+    figure(figsize=(12,6)); suptitle(_suptitle2_)
     P_h=np.take(p_h,ch_chunks,axis=1).reshape(len(t),np.prod(ch_chunks.shape))
     psd(np.mean(P_h,axis=1)-np.mean(P_h), Fs=1/dt, NFFT=len(t))
     P_v=np.take(p_v,ch_chunks,axis=1).reshape(len(t),np.prod(ch_chunks.shape))
     psd(np.mean(P_v,axis=1)-np.mean(P_v), Fs=1/dt, NFFT=len(t));       
+    BW = P_h.shape[1] * df
     
-    # Save combined time series data
-    BW = P_h.shape[1] * abs(h5.freqs[1]-h5.freqs[0])
-    np.savetxt("%s_%s.csv"%(filename[-13:-3],ant), [np.mean(P_h,axis=1), np.mean(P_v,axis=1)], delimiter=",",
-               header="Autocorrelation stability from %s: %s with BW=%gMHz, dT=%gsec. Format: H, V [linear P_sys]"%(filename,ant,BW/1e6,dt))
+    if savefile: # Save combined time series data
+        np.savetxt(savefile, [np.mean(P_h,axis=1), np.mean(P_v,axis=1)], delimiter=",",
+                   header="Autocorrelation stability from %s with BW=%gMHz, dT=%gsec. Format: H, V [linear P_sys]"%(dataset_id,BW/1e6,dt))
 
     sfact = 2**-.5 if cycle_50pct else 1. # Scale factor for RMS & std, in case the samples are differences
     
     # RMS measurements in each identified good channel chunk individually
-    axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle_)
+    axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle2_)
     for i,(pol,p_t) in enumerate([("H",p_h), ("V",p_v)]):
         for ch in ch_chunks:
             p_tch = np.mean(p_t[:,ch],axis=1)/np.mean(p_t[:,ch])
@@ -339,9 +368,9 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     axes[-1].set_xlabel("time [sec]");
 
     # Measurements combined over all identified good channel chunks
-    _suptitle_ = "%s: %s[%s] with FFT shift %d\n BWch,tau~(%.3fMHz, %.3fsec)"%(filename,ant,h5.receivers[ant],fft_shift, BW/1e6,dt)
+    _suptitle3_ = "%s\n BWch,tau~(%.3fMHz, %.3fsec)"%(_suptitle_, BW/1e6,dt)
     ret = []
-    axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle_)
+    axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle3_)
     for i,(pol,p_t) in enumerate([("H",P_h), ("V",P_v)]):
         p_t = np.mean(p_t,axis=1)/np.mean(p_t)
         ret.append(p_t)
@@ -355,11 +384,9 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     
     af = plot_allanvar(ret[0], dt=dt, sfact=sfact, label="H-pol");
     plot_allanvar(ret[1], dt=dt, sfact=sfact, label="V-pol", grid=True, figs=af)
-    suptitle(_suptitle_)
+    suptitle(_suptitle3_)
     
     return ret
-
-analyze = analyse # Alias
 
 
 def get_fft_shift_and_gains(h5, channel=123, verbose=False):
