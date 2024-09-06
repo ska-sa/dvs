@@ -159,30 +159,31 @@ def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T
     dataset_id = "%s: %s[%s]"%(filename,ant,h5.receivers[ant])
     _info_ = "with FFT shift %d" % fft_shift
     savefile = "%s_%s.csv"%(filename[-13:-3],ant)
-    return standard_report(t, h5.freqs, p_h, p_v, p_hv, vs_freq, T_interval, sigma_spec, cycle_50pct, xK,
-                           dataset_id, _pol_lbl_, _info_, savefile, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
+    return standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, xK,
+                           dataset_id, _pol_lbl_, _info_, savefile, vs_freq, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
 
 analyze = analyse # Alias
 
 
-def standard_report(t, freqs, p_h, p_v, p_hv, vs_freq, T_interval, sigma_spec, cycle_50pct, xK=[1.03,1.05,1.1,1.15],
-                    dataset_id, _pol_lbl_=lambda pol:pol, _info_="", savefile=None, **kwargs):
-    """ Perform standard stability analysis on a set of data.
+def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct=False, xK=[1.03,1.05,1.1,1.15],
+                    dataset_id="", _pol_lbl_=lambda pol:pol, _info_="", savefile=None, vs_freq=False, **kwargs):
+    """ Perform standard stability analysis on a set of regularly sampled data.
         
-        @param t, freqs, p_h, p_v, p_hv: the data to analyse (all dimensions must match!)
-        @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
+        @param dt: the detector averaging time [sec].
+        @param freqs, p_h, p_v, p_hv: the data to analyse, with p_ arranged as (time, freq).
         @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
         @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
         @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
         @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
+        @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
         @param kwargs: may specify `channels` if not to use default numbering, and also t_spike_start & t_spike_end
                 to generate flags for spikes in time series.
         @return: (<H>_freq/<H>, <V>_freq/<V>) i.e. the normalised time series total power in H & V.
     """
+    t = np.arange(p_h.shape[0]) * dt # NB: the analysis is strictly only valid for regularly sampled data!
     channels = kwargs.get("channels", np.arange(len(freqs)))
     xvalues = freqs/1e6 if vs_freq else channels
     xunit = "MHz" if vs_freq else "channel #"
-    dt = t[1] - t[0]
     df = abs(freqs[1] - freqs[0])
     
     _suptitle_ = "%s %s"%(dataset_id,_info_)
