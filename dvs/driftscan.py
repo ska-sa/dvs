@@ -1022,12 +1022,16 @@ def load_results(fids, product="SEFD", root="", also_el=False):
         @param product: "SEFD"|"S_ND"|"counts2Jy" (default "SEFD")
         @return: (freq_Hz, H_data, V_data) and el_deg if also_el.
     """
-    f_,d_H,d_V = [],[],[]
+    f_,d_H,d_V,el = [],[],[],[]
     for i in fids:
         f,x_h,x_v = np.loadtxt("%s/%s-%s.csv"%(root,i,product), delimiter=",", unpack=True)
         d_H.append(x_h)
         d_V.append(x_v)
         f_.append(f)
+        with open("%s/%s-%s.csv"%(root,i,product)) as file:
+            header = file.readline()
+        i = header.find("degEl")
+        el.append(float(header[header.rfind(" ", 0,i):i]))
     # Re-grid all results onto a common range
     f, d_H = combine(f_, d_H)
     f, d_V = combine(f_, d_V)
@@ -1036,11 +1040,7 @@ def load_results(fids, product="SEFD", root="", also_el=False):
     if not also_el:
         return f, d_H, d_V
     else: # Parse elevation from first line of header
-        with open("%s/%s-%s.csv"%(root,i,product)) as file:
-            header = file.readline()
-        i = header.find("degEl")
-        el_deg = float(header[header.rfind(" ", 0,i):i])
-        return f, d_H, d_V, el_deg
+        return f, d_H, d_V, el
 
 
 def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=False):
