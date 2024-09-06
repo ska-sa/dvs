@@ -18,12 +18,20 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, verbo
         Use like 'ds = open_dataset(URL, ...)'
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
+                  If this is an integer (or string representation of an integer) it is converted using `cbid2url`.
         @param ref_ant: the name of reference antenna, used to partition data set into scans (essential if you
                   are interpreting the data for SKA-type Dishes, because their activities have a time offset from MeerKAT).
         @param hackedL: True if the dataset was generated with the hacked L-band digitiser i.e. sampled in 1st Nyquist zone.
         @param ant_rx_override: {ant:rx_serial} to override (default None)
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
+    # Convert dataset from an integer to a URL, if necessary
+    try:
+        if (int(str(dataset)) > 0): # Raises an exception if not an integer
+            dataset = cbid2url(dataset)
+    except ValueError:
+        pass
+    
     # Take care of activity boundary time mismatches
     try:
         _time_offset = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
