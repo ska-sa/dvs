@@ -1016,11 +1016,11 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
         np.savetxt(fnroot+fn+".csv", data, delimiter=",",
                    header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
 
-def load_results(fids, product="SEFD", root=""):
+def load_results(fids, product="SEFD", root="", also_el=False):
     """ Loads the results stored when analyse() completes. Re-grids all data onto a common frequency grid.
         @param fids: list of file ID's (e.g. "{epoch seconds}_sdp_l0-s0000")
         @param product: "SEFD"|"S_ND"|"counts2Jy" (default "SEFD")
-        @return: freq_Hz, H_data, V_data
+        @return: (freq_Hz, H_data, V_data) and el_deg if also_el.
     """
     f_,d_H,d_V = [],[],[]
     for i in fids:
@@ -1033,7 +1033,14 @@ def load_results(fids, product="SEFD", root=""):
     f, d_V = combine(f_, d_V)
     d_H = np.transpose(d_H)
     d_V = np.transpose(d_V)
-    return f, d_H, d_V
+    if not also_el:
+        return f, d_H, d_V
+    else: # Parse elevation from first line of header
+        with open("%s/%s-%s.csv"%(root,i,product)) as file:
+            header = file.readline()
+        i = header.find("degEl")
+        el_deg = float(header[header.rfind(" ", 0,i):i])
+        return f, d_H, d_V, el_deg
 
 
 def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=False):
