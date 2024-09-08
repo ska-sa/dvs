@@ -171,8 +171,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         
         @param dt: the detector averaging time [sec].
         @param freqs, p_h, p_v, p_hv: the data to analyse, with p_ arranged as (time, freq).
-        @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
-        @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
+        @param T_interval: interval for sliding window to evaluate over, in seconds
+        @param sigma_spec: the reference limit in percent to indicate on the final figures
         @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
         @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
