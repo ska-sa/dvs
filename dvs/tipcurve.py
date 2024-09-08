@@ -2,14 +2,13 @@
 """
     Formalization of earlier http://kat-imager.kat.ac.za:8888/notebooks/SysEng/Tipping%20curve%20for%20SKA%20prototype%20report-UHF%20Shroud%20tests.ipynb
     Typical use 1:
-        python analyze_tipping.py /data/132598363.h5 m008 900,1200,1700
+        python tipcurve.py /data/132598363.h5 m008 900,1200,1700
         
     Typical use 2:
-        import tipcurve as tip
         import util
         ds = util.open_dataset("/data/132598363.h5", "m008")
-        ru = tip.process(ds, "m008", 900,1700, freq_mask='', PLANE="antenna",spec_sky=True)
-        tip.report("m008", h5.name.split()[0].split(" ")[0], *ru, select_freq=[900,1200,1700])
+        ru = tipcurve.process(ds, "m008", 900,1700, freq_mask='', PLANE="antenna",spec_sky=True)
+        tipcurve.report("m008", ds.name.split()[0].split(" ")[0], *ru, select_freq=[900,1200,1700], plot_limits=True)
         
     @author aph@sarao.ac.za
 """
@@ -35,7 +34,8 @@ from analysis import katsemodels as models
 # Noise Diode Models that are not yet "deployed in the telescope"
 nd_models_folder = modelsroot + '/noise-diode-models'
 
-Tcmb = 2.725 # [K]
+Tcmb = models.Tcmb # [K]
+T0degC = models.T0degC # [K]
 
 
 class Sky_temp:
@@ -184,7 +184,7 @@ class System_Temp:
         self.surface_temperature = surface_temperature
         self.freq = d.freqs[freq_index]  #MHz Centre frequency of observation APH changed [0] to [freq_index] on 03/2017
         ### APH begin 032017 added the default opacity & T_atm calculation here.
-        T_atm = 1.12 * (273.15 + surface_temperature) - 50.0 # APH 02/2017 changed comment: Ippolito 1989 eq 6.8-6, quoting Wulfsberg 1964
+        T_atm = 1.12 * (T0degC + surface_temperature) - 50.0 # APH 02/2017 changed comment: Ippolito 1989 eq 6.8-6, quoting Wulfsberg 1964
         tau = models.calc_atmospheric_opacity(surface_temperature,air_relative_humidity,self.pressure,self.height/1000.,self.freq/1000.)
         self.opacity = tau/np.sin(np.radians(self.elevation))
         # APH 03/2017 added the following two corrections, but only significant above 10 GHz and below 10deg elevation, so leave out.
@@ -243,6 +243,7 @@ def load_cal(filename_or_file, baseline, nd_models=None, freq_channel=None,chann
     """
     print('Loading noise diode models')
     
+    # TODO: check that scape applies the katdal flags? 
     try:
         d = scape.DataSet(filename_or_file, baseline=baseline, nd_models=nd_models,band=band_input)
     except IOError:
@@ -415,7 +416,7 @@ def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=No
         @param sky_radius: radius to truncate the all sky integral for T_sky model [multiple of HPBW] (default 30)
         @param freq_mask: full name of file with RFI mask for this band """
     global nd_models_folder
-    h5.select(reset="TFB")
+    h5.select(reset="TB", flags="data_lost,ingest_rfi")
     h5.select(scans='track')
     ant = ant if isinstance(ant, str) else ant.name
     h5.select(ants=ant)
@@ -501,7 +502,7 @@ def Tsysmodel(T_SysTemps,freq_list,elevation,ra,dec,surface_temperature,air_rela
         Tmodel[:,i,1] = (atm_atten*T_SysTemp.T_sky + eta_mb[1]*T_SysTemp.T_atm) + Tspill_V
         
         if full: # Add elevation-independent contributions, except for Antenna Ohmic + electronics after LNA.
-            dTdT = 1 if (Trxref is None) else (273.15+surface_temperature)/Trxref
+            dTdT = 1 if (Trxref is None) else (T0degC+surface_temperature)/Trxref
             Tmodel[:,i,0] += Tcmb + receiver.rec["HH"](T_SysTemp.freq)*dTdT 
             Tmodel[:,i,1] += Tcmb + receiver.rec["VV"](T_SysTemp.freq)*dTdT
         
@@ -750,7 +751,7 @@ def process_cached(cache, h5, ant, f_min, f_max, apscale=1.,PLANE="antenna"):
     nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant = process_b(*intermediate_results, apscale=apscale,PLANE=PLANE)
     return nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant
 
-def report(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, select_freq=None, select_el=[15,45,90], cartesian=True, plot_limits=True):
+def report(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, select_freq=None, select_el=[15,45,90], cartesian=True, plot_limits=False):
     pp = report_a(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE)
     report_b(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, pp, cartesian)
     report_c(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE, pp, select_freq, plot_limits=plot_limits)
@@ -772,14 +773,15 @@ if __name__ == "__main__":
     opts, args = parser.parse_args()
     
     filename = args[0]
+    ds = util.open_dataset(filename, hackedL=opts.hackL)
+    if opts.hackedL: # Minimize unused horizontal space in figures
+        ds.select(freqrange=(330e6,856.5e6))
     if (opts.ant=="all"):
-        ants = [a.name for a in util.open_dataset(filename).ants]
+        ants = [a.name for a in ds.ants]
     else:
         ants = opts.ants.split(',')
     select_freq = map(float, opts.select_freq.split(","))
     for ant in ants:
-        ds = util.open_dataset(filename, ant, hackedL=opts.hackL)
-        if opts.hackedL:
-            ds.select(freqrange=(330e6,856.5e6))
+        ds.select(ants=ant)
         ru = process(filename, ant, min(select_freq), max(select_freq), freq_mask=opts.freq_mask, PLANE="antenna",spec_sky=True)
-        report(ant, ds.name.split()[0].split(" ")[0], *ru, select_freq=select_freq)
+        report(ant, ds.name.split()[0].split(" ")[0], *ru, select_freq=select_freq, plot_limits=True)
