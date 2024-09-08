@@ -59,8 +59,8 @@ def remove_overlapping(catalogue, eps=0.1, debug=True):
             newcat.add(tgt)
         elif debug:
             keep = np.take(newcat.targets, np.flatnonzero(overlap))[0]
-            print("Removing overlapping target: ", tgt.description,
-                  "( keeping ", keep.description, " -- %.1f arcsec off" % (tgt.separation(keep, antenna=ant)/D2R*3600), ")")
+            print(tgt.description, "( duplicate of ", keep.description,
+                  " -- %.1f arcsec off" % (tgt.separation(keep, antenna=ant)/D2R*3600), ")")
     return newcat
 
 
@@ -315,4 +315,3 @@ if __name__ == "__main__":
         plt.plot(N_rnd, np.mean(R, axis=1), '.', N_rnd, np.max(R, axis=1), '^')
         plt.xlabel("N_rnd")
         plt.show()
-        
