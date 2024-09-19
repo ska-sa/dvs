@@ -165,11 +165,11 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
     
     baseline_pt = _baseline_endpt_(ant, baseline_pt) if (baseline_pt is not None) else None
     
-    print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{freq/1e9:.0f}GHz]")
+    print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{freq/1e9:.0f}GHz] | Flux [Jy@{freq/1e9:.0f}GHz]")
     print("-"*80)
     for target in targets:
         _name = target.name
-        # _flux = target.flux_density(freq/1e6) # Not reliably specified in the catalogue files, so omitted
+        _flux = target.flux_density(freq/1e6) if (target.flux_model is not None) else np.nan
         try:
             _rise, _set = observer.previous_rising(target.body), observer.next_setting(target.body)
             if show_LST:
@@ -181,7 +181,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
             delay_rate = target.geometric_delay(baseline_pt, timestamps, ant)[1]
             imax = np.argmax(np.abs(delay_rate))
             _phrate = delay_rate[imax] * (360*freq) # deg/sec
-        print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:.1f}")
+        print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:.1f} | {_flux:.1f}")
 
     targets = targets[0] if (len(targets) == 1) else targets
     return targets
