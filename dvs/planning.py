@@ -123,7 +123,11 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(catant))
         if (target != "*"):
             matches = target.split("|")
-            targets = [cat[t] for t in matches]
+            targets = [cat[t] for t in matches if (cat[t] is not None)]
+            missing = [t for t in matches if (cat[t] is None)]
+            if (len(missing) > 0):
+                print(f"WARNING: {catfn} does not contain entries for the following targets!")
+                print(", ".join(missing))
         else:
             targets = cat.targets
     else:
