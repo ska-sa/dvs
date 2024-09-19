@@ -181,7 +181,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
             delay_rate = target.geometric_delay(baseline_pt, timestamps, ant)[1]
             imax = np.argmax(np.abs(delay_rate))
             _phrate = delay_rate[imax] * (360*freq) # deg/sec
-        print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:.1f} | {_flux:.1f}")
+        print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:>23.1f} | {_flux:.1f}")
 
     targets = targets[0] if (len(targets) == 1) else targets
     return targets
