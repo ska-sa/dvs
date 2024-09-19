@@ -41,6 +41,8 @@ J1229+0203 | 3C 273 | PKS 1226+02,                           radec, 12:29:06.70,
 
 J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,  +12:23:28.0,  (1408.0 10550.0 4.484 -0.603 -0.0280),                          mas        VLBI 2.3/8.4 GHz,   283.78,  74.49,    220,  v=1307,  Sy; LINER; FRI; cD     I; X       ok   < ~1'; core dominated            
 
+J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
+
 # Extreme asymmetry < 2GHz
 #J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
 
