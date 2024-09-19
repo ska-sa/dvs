@@ -1,20 +1,13 @@
-# https://docs.google.com/document/d/1KuUgt05_h7IhXeArFLno2KMq7XKO943JaA1TpT7gHpA
+# https://www.narrabri.atnf.csiro.au/calibrators/calibrator_database_search.html?rarange=0,24&decrange=0,-90&fluxlimit=5&band=16cm
 # Targets suitable for single dish pointing in MeerKAT UHF & L-band. Coordinates checked against SIMBAD to 0.2arcsec
 # ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000),   flux polynomial,                                               uncertainty[arcsec] source,    Gal l,  Gal b,~1400MHz flx,redshift,NED Object type     IRAS/X-ray  s-dish comment
-J0025-2602 | PKS 0023-26 | OB-238,                           radec, 00:25:49.16,  -26:02:12.6,  (1410.0 8400.0 -1.69419422297 2.10689777152 -0.40432185373),    mas        VLBI 2.3/8.4 GHz,    42.27, -84.17,      9,  z=0.32,  Sy                                ok   CSS src
-
 J005911-721027,                                              radec,  0:59:11.26, -72:10:27.1,,CRATES
 
 J0137+3309 | 3C 48,                                          radec, 01:37:41.30,  +33:09:35.1,  (1408.0 23780.0 2.465 -0.004 -0.1251),                          mas        VLBI 2.3/8.4 GHz,   133.96, -28.72,     16,  z=0.37,  Sy 1.5                 I; X       ok   <10"; core dominated with faint ext'd em
 
-# Too low Dynamic Range for MeerKAT UHF/L 
-#J0252-7104 | PKS 0252-712,                                   radec gaincal, 02:52:46.155968, -71:04:35.2741510
-
 J0319+4130 | *Per A | Perseus A | NGC 1275 | 3C 84,          radec, 03:19:48.16,  +41:30:42.1,  (400.0 2000.0 1.398),                                           mas        VLBI 2.3/8.4 GHz,   150.58, -13.26,     13,  v=5264,  LIRG; Sy 1.5; FRI; cD  I; X       ok?  strong core & jet inside 10' radio halo; BLLAC;                  
 
 J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79, -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,                 240.16, -56.69,   148,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes
-
-J0408-6545 | PKS 0408-65,                                    radec, 04:08:20.38,  -65:45:09.1,  (1410.0 8400.0 -3.70830186533 3.80739194577 -0.720249171902),   mas        VLBI 2.3/8.4 GHz,   278.64, -40.88,     15,  z=0.96,  BLLAC?                            ok   compact; GPS source
 
 J0437+2940 | 3C 123,                                         radec, 04:37:04.38,  +29:40:13.8,  (1408.0 23780.0 2.525 0.246 -0.1638),                           mas        VLBI 2.3/8.4 GHz,   170.58, -11.66,     47,  z=0.22,  LERG; FRII             X          ok   <1'
 
@@ -24,39 +17,31 @@ J0522-3627 | PKS 0521-36 | ESO 362-G021,                     radec, 05:22:57.99,
 
 J0534+2200 | Tau A | Taurus A | 3C 144 | Crab | PKS 0531+21, radec, 05:34:31.97,  +22:00:52.1,  (1400.0 10000.0 3.915 -0.299),                                  0.5x0.5    opt/psr,            184.56,  -5.78,    930,        ,  SNR; Psr               I; X; Gam  no   ~5' @ 160MHz; single comp      
 
-# TODO: Fit with two gaussians < 2 GHz
-#J0538-6904 | J053844-690542 | MC 74,                         radec, 05:38:44.26,  -69:05:42.4,  (200.0 12000.0 -3.94 3.799 -0.6469),                           50x50       PKS,                279.44, -31.67,     34,        ,  HII                               no   prob ext'd; in 30 Dor                   
+PKS 0637-752,                                                radec, 06:35:46.51, -75:16:16.81
 
-J0813-4813 | *3C 196,                                         radec, 08:13:36.03,  +48:13:02.6,  (26.0 22000.0 4.73 -1.09 0 0 -3.59 -1),                         0.2x0.13   opt/rad,            171.17,  33.24,     14,  z=0.87,  Sy1.8; DLAS; FRII                 ok   <10arcsec; double src                                
+PKS 0723-008,                                                radec, 07:25:50.64, -00:54:56.54
+
+0813+483 | *3C 196,                                          radec, 08:13:36.03,  +48:13:02.6,  (26.0 22000.0 4.73 -1.09 0 0 -3.59 -1),                         0.2x0.13   opt/rad,            171.17,  33.24,     14,  z=0.87,  Sy1.8; DLAS; FRII                 ok   <10arcsec; double src                                
 
 J0918-1205 | Hyd A | Hydra A | 3C 218 | PKS 0915-11,         radec, 09:18:05.65,  -12:05:44.0,  (1408.0 10550.0 4.729 -1.025 0.0130),                          10x10       phot,               242.93,  25.09,     43,  z=0.05,  S0; Sy 3; LINER; FRI   X          ok?  tot ext ~7'; main comp ~1.5'; tailed radio src
-
-# Too low Dynamic Range for MeerKAT UHF/L 
-#J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,  +07:25:20.6,  (1408.0 4750.0 6.757 -2.801 0.2969),                            0.5x0.5    SDSS,               228.58,  42.29,      7,  z=0.09,  Sy 1.5; BLRG                      ok?  ~4'; FRII
-
-# Too low Dynamic Range for MeerKAT UHF/L 
-#J1008+0730 | PKS 1005+077 | 3C237,                           radec gaincal, 10:08:00.0160, 07:30:16.552
 
 J1229+0203 | 3C 273 | PKS 1226+02,                           radec, 12:29:06.70,  +02:03:08.6,  (1410.0 8400.0 10.0465955419 -4.90623613415 0.709890678937),    mas        VLBI 2.3/8.4 GHz,   289.95,  64.36,     45,  z=0.16,  Sy 1.0; ULIRG; blazar  I; X; Gam  ok   compact core and jet of ~25"; circ pol
 
 J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,  +12:23:28.0,  (1408.0 10550.0 4.484 -0.603 -0.0280),                          mas        VLBI 2.3/8.4 GHz,   283.78,  74.49,    220,  v=1307,  Sy; LINER; FRI; cD     I; X       ok   < ~1'; core dominated            
 
-J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
-
-# Extreme asymmetry < 2GHz
-#J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
-
-# Blobby < 2GHz
-#J1331+3030 | 3C 286,                                         radec, 13:31:08.29,  +30:30:33.0,  (1408.0 43200.0 0.956 0.584 -0.1644),                           mas        VLBI 2.3/8.4 GHz,    56.52,  80.67,     15,  z=0.85,  DLAS; Sy 1.5; core-do  X          ok   <~5"; primary flux calib (no variab)
+J1256-0547 | 3C 279,                                         radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
 
 J1424-4913 | PKS 1421-490,                                    radec, 14:24:32.24, -49:13:49.7,   (145. 99000. 6.0550 -4.1963 1.1975 -0.1218),                                          LQAC,     318.2,  10.87,      7,  z=0.66,
+
+1613-586,                                                     radec, 16:17:17.89, -58:48:07.86
 
 J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,  +04:59:34.9,  (1408.0 10550.0 3.852 -0.361 -0.1053),                          1.25x1.25  2Mass,               23.05,  28.95,     48,  z=0.15,  i.a. E/S0 pair; NLRG   X          no   ~5'; FRI/FRII                    
 
 J1720-0058 | 3C 353 | PKS 1717-00,                           radec, 17:20:28.15,  -00:58:46.8,  (1408.0 10550.0 3.148 -0.157 -0.0911),                          1.25x1.25  2Mass,               21.20,  19.65,     56,  v=9120,  S0; NLRG                          no   ~5'; FRII
 
-# Blobby < 2 GHz
-#J193244-453640 | ATPMN J193244.8-453637,                     radec,19: 32: 44.89,-45: 36: 37.4,,CRATES
+PKS 1730-13,                                                 radec, 17:33:02.71, -13:04:49.55
+
+1921-293 | *CRATES J1924-2914,                               radec, 19:24:51.06, -29:14:30.12
 
 J1959+4044 | Cyg A | Cygnus A | 3C 405,                      radec, 19:59:28.36,  +40:44:02.1,  (20.0 2000.0 4.695 0.085 -0.178),                               mas        VLBI,                76.19,   5.76,   1590,  z=0.06,  Sy 2                   I; X       ok   ~3'; double radio src; cD; FRII  
 
@@ -64,5 +49,6 @@ J2107-2526 | PKS 2104-25 | NGC 7018,                         radec, 21:07:25.70,
 
 J2157-6941 | PKS 2153-69 | ESO 075-G041,                     radec, 21:57:05.98,  -69:41:23.7,  (200.0 12000.0 2.923 -0.1222 -0.1043),                          mas        VLBI 2.3/8.4 GHz,   321.32, -40.65,     30,  v=8476,  S0; Sy 1/2?            I; X       ok   ~4' incl faint comp; FRII        
 
-J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes  
+PKS 2223-05 | 3C 446,                                        radec, 22:25:47.26, -04:57:01.39
 
+J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes  
