@@ -1,6 +1,8 @@
 # https://www.narrabri.atnf.csiro.au/calibrators/calibrator_database_search.html?rarange=0,24&decrange=0,-90&fluxlimit=5&band=16cm
 # Targets suitable for single dish pointing in MeerKAT UHF & L-band. Coordinates checked against SIMBAD to 0.2arcsec
 # ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000),   flux polynomial,                                               uncertainty[arcsec] source,    Gal l,  Gal b,~1400MHz flx,redshift,NED Object type     IRAS/X-ray  s-dish comment
+J0025-2602 | PKS 0023-26 | OB-238,                           radec, 00:25:49.16,  -26:02:12.6,  (1410.0 8400.0 -1.69419422297 2.10689777152 -0.40432185373),    mas        VLBI 2.3/8.4 GHz,    42.27, -84.17,      9,  z=0.32,  Sy                                ok   CSS src
+
 J005911-721027,                                              radec,  0:59:11.26, -72:10:27.1,,CRATES
 
 J0137+3309 | 3C 48,                                          radec, 01:37:41.30,  +33:09:35.1,  (1408.0 23780.0 2.465 -0.004 -0.1251),                          mas        VLBI 2.3/8.4 GHz,   133.96, -28.72,     16,  z=0.37,  Sy 1.5                 I; X       ok   <10"; core dominated with faint ext'd em
