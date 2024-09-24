@@ -145,10 +145,11 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
 
 
 def nominal_pos(ant_id, verbose=False):
-    """ Calculates the E,N,U offsets of an antenna, relative to the MeerKAT array reference coordinate.
+    """ Calculates the (Lat,Lon,HAE) of the point of intersection of the axes,
+        and (E,N,U) offsets of the antenna relative to the MeerKAT array reference coordinate.
         
         @param ant_id: text identifier of the antenna - either "m0xx" or "SKA0xx" to identify the antenna.
-        @return: (lat, lon, hae), (delta_East, delta_North, delta_Up, NIAO) [m] """
+        @return: (Lat, Lon, HAE) [deg,deg,m], (delta_East, delta_North, delta_Up, NIAO) [m] """
     assert (ant_id.startswith("m0") or ant_id.startswith("SKA")), "'ant_id' doesn't match the pattern for either MeerKAT or SKA-MID dishes!"
     catroot = os.path.realpath(__file__ + "/../../catalogues/arrays")
     
@@ -168,11 +169,11 @@ def nominal_pos(ant_id, verbose=False):
             llh = np.loadtxt(catroot+"/ska1-mid.txt", comments="#", delimiter=",")[ant_no-1]
             PH = 9.82 # 316-000000-022 rev 2, Fig 10
         NIAO = 1.6
-    
+    # NB: the current catalogues are based on SKA-TEL-INSA-0000537 rev 11 where HAE already includes PH! 
     lon, lat, hae = llh # This is the ordering in the catalogue files
-    hae -= 8 # TODO: TBC: current catalogues are based on SKA-TEL-INSA-0000537 rev 11 which has hae increased by this amount. 
+    
     E, N, U = katpoint.ecef_to_enu( lat0*D2R,lon0*D2R,h0,
-                                    *katpoint.lla_to_ecef(lat*D2R,lon*D2R,hae+PH) )
+                                    *katpoint.lla_to_ecef(lat*D2R,lon*D2R,hae) )
     
     if verbose:
         print(ant_id)
