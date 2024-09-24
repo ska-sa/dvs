@@ -1,5 +1,5 @@
 # lon,lat,HAE from SKA-TEL-INSA-0000537 rev 11 (only M000 - M063; lon, lat agree with M0000-0000 rev 1 & MeerKAT64v36.wgs84.64x4.xlsx, HAE ~40m higher than 234-STR-101 rev A)
-# NB: as noted in SKA-TEL-INSA-0000537 & confirmed with authors, HAE = height of concrete above WGS84 ellipsoid + height of the pedestal (top of concrete to the center of the elevation axis)
+# NB: as noted in SKA-TEL-INSA-0000537 & confirmed with authors, HAE = height of concrete above WGS84 ellipsoid + 8mTBC height of the pedestal (top of concrete to the center of the elevation axis)
 21.443803, -30.712925, 1096.0
 21.443901, -30.712605, 1095.2
 21.443554, -30.713078, 1095.1

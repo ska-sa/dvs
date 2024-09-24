@@ -170,6 +170,7 @@ def nominal_pos(ant_id, verbose=False):
         NIAO = 1.6
     
     lon, lat, hae = llh # This is the ordering in the catalogue files
+    hae -= 8 # TODO: TBC: current catalogues are based on SKA-TEL-INSA-0000537 rev 11 which has hae increased by this amount. 
     E, N, U = katpoint.ecef_to_enu( lat0*D2R,lon0*D2R,h0,
                                     *katpoint.lla_to_ecef(lat*D2R,lon*D2R,hae+PH) )
     
