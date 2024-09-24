@@ -2,6 +2,7 @@
     
     @author aph@sarao.ac.za
 """
+import os
 import numpy as np
 import pylab as plt
 import matplotlib
@@ -143,26 +144,41 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
     return done, T
 
 
-def nominal_pos(ska_pad):
+def nominal_pos(ant_id, verbose=False):
     """ Calculates the E,N,U offsets of an antenna, relative to the MeerKAT array reference coordinate.
         
-        @param ska_pad: pad number to identify the antenna as SKA* [integer]
-        @return: (delta_East, delta_North, delta_Up) [m] """
-    lat0, lon0, h0 = -30.7110555, 21.4438888, 1086.6 # As of 2021 the formal "centre" of MeerKAT [https://github.com/ska-sa/katconfig/blob/karoo/static/arrays/karoo.array_mkat.conf]
-    if (ska_pad == 0): # SKA-MPI is not in the catalogue
-        name = "SKA-MPI"
-        llh = (-30.717956, 21.413028, 1093)
-        ph = 10.11 # 316-000000-022 rev 1
-    else:
-        name = "SKA%03d" % ska_pad
-        llh = np.loadtxt(__file__+"/../../catalogues/arrays/ska1-mid.txt", comments="#", delimiter=",")[ska_pad-1]
-        ph = 9.82 # 316-000000-022 rev 2, Fig 10
+        @param ant_id: text identifier of the antenna - either "m0xx" or "SKA0xx" to identify the antenna.
+        @return: (lat, lon, hae), (delta_East, delta_North, delta_Up, NIAO) [m] """
+    assert (ant_id.startswith("m0") or ant_id.startswith("SKA")), "'ant_id' doesn't match the pattern for either MeerKAT or SKA-MID dishes!"
+    catroot = os.path.realpath(__file__ + "/../../catalogues/arrays")
     
-    lat, lon, hae = llh
-    hae += ph
+    lat0, lon0, h0 = -30.7110555, 21.4438888, 1086.6 # As of 2021 the formal "centre" of MeerKAT [https://github.com/ska-sa/katconfig/blob/karoo/static/arrays/karoo.array_mkat.conf]
+    
+    if ant_id.startswith("m0"):
+        ant_no = int(ant_id[1:])
+        llh = np.loadtxt(catroot+"/meerkat.txt", comments="#", delimiter=",")[ant_no]
+        PH = (8.250-0.330) # General Layout, Drawing, MD-1012033-22000-00-0 rev B
+        NIAO = 1
+    elif ant_id.startswith("SKA"):
+        ant_no = int(ant_id[3:])
+        if (ant_no == 0): # SKA-MPI is special
+            llh = (21.413028, -30.717956, 1093) # It's not in the catalogue file
+            PH = 10.11 # 316-000000-022 rev 1
+        else:
+            llh = np.loadtxt(catroot+"/ska1-mid.txt", comments="#", delimiter=",")[ant_no-1]
+            PH = 9.82 # 316-000000-022 rev 2, Fig 10
+        NIAO = 1.6
+    
+    lon, lat, hae = llh # This is the ordering in the catalogue files
     E, N, U = katpoint.ecef_to_enu( lat0*D2R,lon0*D2R,h0,
-                                    *katpoint.lla_to_ecef(lat*D2R,lon*D2R,hae) )
-    print(name, "llh = (%.6f, %.6f, %.1f)" % (lat, lon, hae), "ENU = (%.1f %.1f %.1f)" % (E, N, U), "; all including pedestal height!")
+                                    *katpoint.lla_to_ecef(lat*D2R,lon*D2R,hae+PH) )
+    
+    if verbose:
+        print(ant_id)
+        print("nominal_position = %.6f, %.6f, %.1f" % (lat, lon, hae))
+        print("delay-model: %.1f %.1f %.1f 0 0 %.1f" % (E, N, U, NIAO))
+    
+    return (lat, lon, hae), (E, N, U, NIAO)
 
 
 def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enabled_params=[1,3,4,5,6,7,8,11], Tstart=None,
@@ -281,12 +297,12 @@ def sim_pointingfit(catfn, el_floor_deg=20, duration_min=120, meas_min=5, enable
 
 
 if __name__ == "__main__":
-    catroot = __file__ + "/../../catalogues/"
+    catroot = os.path.realpath(__file__ + "/../../catalogues")
     
     if True: # Check spacing of pointing targets
-        remove_overlapping(katpoint.Catalogue(open(catroot+"targets_pnt_L.csv")), eps=2*60*60, debug=True)
-        remove_overlapping(katpoint.Catalogue(open(catroot+"targets_pnt_S.csv")), eps=60*60, debug=True)
-        remove_overlapping(katpoint.Catalogue(open(catroot+"targets_pnt_Ku.csv")), eps=30*60, debug=True)
+        remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_L.csv")), eps=2*60*60, debug=True)
+        remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_S.csv")), eps=60*60, debug=True)
+        remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_Ku.csv")), eps=30*60, debug=True)
     
     elif True: # Planning a pointing measurement session
         catfiles = ["targets_pnt_S.csv"]
@@ -304,7 +320,7 @@ if __name__ == "__main__":
         plt.show()
 
     elif True: # Print coordinates of an antenna
-        nominal_pos(ska_pad=0)
+        nominal_pos("SKA000", verbose=True)
     
     elif True:
         sim_pointingfit(catroot+"targets_pnt_L.csv", Tstart=1718604536, verbose=2)
