@@ -1,4 +1,5 @@
 # lon,lat,HAE from SKA-TEL-INSA-0000537 rev 11 (only SKA001 - SKA133)
+# NB: as noted in SKA-TEL-INSA-0000537 & confirmed with authors, HAE = height of concrete above WGS84 ellipsoid + height of the pedestal (top of concrete to the center of the elevation axis)
 21.449412, -30.713290, 1098.1
 21.443214, -30.711544, 1094.4
 21.442342, -30.710966, 1093.5
