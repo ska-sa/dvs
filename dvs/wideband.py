@@ -146,7 +146,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     axs[0].set_ylabel(dataset.header["ylabel"]); axs[0].legend()
     axs[1].set_ylabel("TND/Tsys [frac]"); axs[1].legend()
     axs[1].hlines(nd_lim, np.min(dataset.freq), np.max(dataset.freq), 'r')
-    axs[1].set_ylim(nd_lim[0]/2,nd_lim[-1]*2)
+    axs[1].set_ylim(nd_lim[0]/3,nd_lim[-1]*3)
     axs[1].set_xlabel(dataset.header["xlabel"])
     freq_subset = dataset.freq[subset_mask]
     freq_subset = (np.min(freq_subset), np.max(freq_subset))
@@ -166,7 +166,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     
     # Statistics only over subset of frequency!
     axs = [fig.add_subplot(gs[-1, i]) for i in range(2)]
-    bins = np.linspace(nd_lim[0]/2,nd_lim[-1]*2,30)
+    bins = np.linspace(nd_lim[0]/3,nd_lim[-1]*3,30)
     for ax,off,on,pol in zip(axs,dataset.off,dataset.on,dataset.pols):
         ax.hist((dB2lin(on)/dB2lin(off))[subset_mask] - 1, bins=bins, density=True, cumulative=True)
         ax.set_xlabel(f"{pol} TND/Tsys [frac]")
