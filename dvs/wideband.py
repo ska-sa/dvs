@@ -130,7 +130,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
     """
     freq_band, nd_lims, band_mask = band_defs(band_ID)
-    nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-3*nlim, np.mean(nd_lims)+3*nlim)
+    nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
     dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
