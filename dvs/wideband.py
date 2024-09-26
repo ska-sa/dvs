@@ -123,7 +123,7 @@ def band_defs(band_ID):
     return band_freq, nd_lim, (mask_f,mask_a)
 
 
-def process_wbg_set(dataset, band_ID, flim=None):
+def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     """ Process a set of H & V pol measurements with ND OFF and ON.
         Generates a standard figure to summarise the results.
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
@@ -133,7 +133,7 @@ def process_wbg_set(dataset, band_ID, flim=None):
     dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
-    fig = plt.figure()
+    fig = plt.figure(figsize=figsize)
     gs = plt.GridSpec(3, 2, figure=fig)
     
     axs = [fig.add_subplot(gs[i, :]) for i in range(gs.nrows-1)]
@@ -146,6 +146,7 @@ def process_wbg_set(dataset, band_ID, flim=None):
     axs[0].set_ylabel(dataset.header["ylabel"]); axs[0].legend()
     axs[1].set_ylabel("TND/Tsys [frac]"); axs[1].legend()
     axs[1].hlines(nd_lim, np.min(dataset.freq), np.max(dataset.freq), 'r')
+    axs[1].set_ylim(nd_lim[0]/2,nd_lim[-1]*2)
     axs[1].set_xlabel(dataset.header["xlabel"])
     freq_subset = dataset.freq[subset_mask]
     freq_subset = (np.min(freq_subset), np.max(freq_subset))
