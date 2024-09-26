@@ -129,7 +129,8 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
     """
-    freq_band, nd_lim, band_mask = band_defs(band_ID)
+    freq_band, nd_lims, band_mask = band_defs(band_ID)
+    nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-3*nlim, np.mean(nd_lims)+3*nlim)
     dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
@@ -145,8 +146,8 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     axs[0].plot(band_mask[0], band_mask[1], 'k-')
     axs[0].set_ylabel(dataset.header["ylabel"]); axs[0].legend()
     axs[1].set_ylabel("TND/Tsys [frac]"); axs[1].legend()
-    axs[1].hlines(nd_lim, np.min(dataset.freq), np.max(dataset.freq), 'r')
-    axs[1].set_ylim(nd_lim[0]/3,nd_lim[-1]*3)
+    axs[1].hlines(nd_lims, np.min(dataset.freq), np.max(dataset.freq), 'r')
+    axs[1].set_ylim(*nlim)
     axs[1].set_xlabel(dataset.header["xlabel"])
     freq_subset = dataset.freq[subset_mask]
     freq_subset = (np.min(freq_subset), np.max(freq_subset))
@@ -166,11 +167,11 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     
     # Statistics only over subset of frequency!
     axs = [fig.add_subplot(gs[-1, i]) for i in range(2)]
-    bins = np.linspace(nd_lim[0]/3,nd_lim[-1]*3,30)
+    bins = np.linspace(*nlim,30)
     for ax,off,on,pol in zip(axs,dataset.off,dataset.on,dataset.pols):
         ax.hist((dB2lin(on)/dB2lin(off))[subset_mask] - 1, bins=bins, density=True, cumulative=True)
         ax.set_xlabel(f"{pol} TND/Tsys [frac]")
         ax.grid(True)
-        ax.fill_between([bins[0],nd_lim[0]], [0.05,0.05], [1,1], color='r', alpha=0.3)
-        ax.fill_between([nd_lim[-1],bins[-1]], [0,0], [0.95,0.95], color='r', alpha=0.3)
+        ax.fill_between([bins[0],nd_lims[0]], [0.05,0.05], [1,1], color='r', alpha=0.3)
+        ax.fill_between([nd_lims[-1],bins[-1]], [0,0], [0.95,0.95], color='r', alpha=0.3)
     
