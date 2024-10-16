@@ -1,6 +1,7 @@
 '''
     Analyse "RF Tracking Stability" measured by using circular_pointing.py
-
+    CAUTION: consider this still work in progress!
+    
     @author: aph@sarao.ac.za
 '''
 import numpy as np
@@ -178,7 +179,14 @@ def analyse_circ_scans(fn, ants, chans, debug=True, **kwargs): # TODO: eventuall
 
 
 def katdal_open(sys, fn, *args, **kwargs):
-    """ Use katdal_open("m", ...) instead of katdal.open(...)
+    """ Work around misalignment of scna boundaries and data, due to inconsistent implementation of Receptor/DishProxy COMMAND_TIME_OFFSET.
+        1. All datasets have s0000 activities misaligned from data by 10sec but m028 by 1.2sec. The following fixes that for s0000. 
+        ``katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = 10 ``
+        2. In most cases pointing coordinates are misaligned from visibilities by ~0.1sec (LMC sample & hold @ 0.2sec), the following improves that
+        ``katdal.open(timingoffset=0.1)``
+
+        Use katdal_open("m", ...) instead of katdal.open(...)
+        
         @param sys: "m*" or "s*", only the first character is considered.
         @param kwargs: e.g. 'X' to force the time_offset
         @return: katdal.Dataset """
