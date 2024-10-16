@@ -27,9 +27,8 @@ def plane_to_sphere_holography(targetaz,targetel,ll,mm):
     scanel=np.arcsin(np.clip((np.sqrt(1.0-ll**2-mm**2)*np.sin(targetel)+np.sqrt(np.cos(targetel)**2-ll**2)*mm)/(1.0-ll**2),-1.0,1.0))
     return scanaz,scanel
 
-def generatepattern(totextent=10,tottime=1800,tracktime=5,sampletime=1,scanspeed=0.15,slewspeed=-1,kind='circle'):
+def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewspeed=-1,kind='circle'):
     """ Generates the basic scan pattern in target coordinates.
-        Note: to track for tracktime after this many scans, track for tracktime include scan in front and end of pattern regardless
         
         All quantities in seconds except:
         @param kind: only 'circle' supported
@@ -51,11 +50,10 @@ def generatepattern(totextent=10,tottime=1800,tracktime=5,sampletime=1,scanspeed
         compositex=[]
         compositey=[]
         compositeslew=[]
-        add_track = lambda arm: np.r_[np.zeros(int(tracktime/sampletime)),arm] if (tracktime>0) else arm
         for orbit in range(norbits):
-            compositex.append(add_track(armx))
-            compositey.append(add_track(army))
-            compositeslew.append(add_track(np.zeros(len(army))))
+            compositex.append(armx)
+            compositey.append(army)
+            compositeslew.append(np.zeros(len(army)))
 
     return compositex,compositey,compositeslew #these coordinates are such that the upper part of pattern is sampled first; reverse order to sample bottom part first
 
@@ -143,15 +141,13 @@ if __name__=="__main__":
     parser.add_option('--num-cycles', type='int', default=-1,
                       help='Number of beam measurement cycles to complete (default=%default) use -1 for indefinite')
     parser.add_option('--cycle-duration', type='float', default=1800,
-                      help='Time to spend measuring beam pattern per cycle, in seconds (default=%default)')
+                      help='Time to spend on the pattern per cycle, in seconds (default=%default)')
     parser.add_option('-l', '--scan-extent', type='float', default=10,
-                      help='Diameter of beam pattern to measure, in degrees (default=%default)')
+                      help='Diameter of pattern to measure, in degrees (default=%default)')
     parser.add_option('--kind', type='string', default='circle',
-                      help='Kind could be "circle" (default=%default)')
-    parser.add_option('--tracktime', type='float', default=10,
-                      help='Extra time in seconds for scanning antennas to track when passing over target (default=%default)')
+                      help='Select the kind of pattern: may only be "circle" (default=%default)')
     parser.add_option('--cycle-tracktime', type='float', default=30,
-                      help='Extra time in seconds for scanning antennas to track when passing over target (default=%default)')
+                      help='time in seconds to track a new target before starting the pattern (default=%default)')
     parser.add_option('--sampletime', type='float', default=0.25,
                       help='time in seconds to spend on each sample point generated (default=%default)')
     parser.add_option('--scanspeed', type='float', default=0.1,
@@ -168,7 +164,7 @@ if __name__=="__main__":
     # Parse the command line
     opts, args = parser.parse_args()
 
-    compositex,compositey,compositeslew=generatepattern(totextent=opts.scan_extent,tottime=opts.cycle_duration,tracktime=opts.tracktime,sampletime=opts.sampletime,scanspeed=opts.scanspeed,slewspeed=opts.slewspeed,kind=opts.kind)
+    compositex,compositey,compositeslew=generatepattern(totextent=opts.scan_extent,tottime=opts.cycle_duration,sampletime=opts.sampletime,scanspeed=opts.scanspeed,slewspeed=opts.slewspeed,kind=opts.kind)
     if testmode:
         plt.figure()
         x=[]
@@ -319,7 +315,7 @@ if __name__=="__main__":
                         user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
                     session.set_target(target)
                     user_logger.info("Performing azimuth unwrap")#ensures wrap of session.track is same as being used in load_scan
-                    targetazel=gen_track([time.time()+opts.tracktime],target)[0][1:]
+                    targetazel=gen_track([time.time()],target)[0][1:]
                     azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
                     session.track(azeltarget, duration=0, announce=False)#azel target
 
