@@ -297,7 +297,7 @@ if __name__=="__main__":
                     targetinfotext=[]
                     for testtarget in targets:
                         suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=90.,
-                                                                                                opts.cycle_tracktime,opts.sampletime,opts.high_elevation_slowdown_factor)
+                                                                                                cycle_tracktime=opts.cycle_tracktime,sampletime=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor)
                         targetinfotext.append('%s (elev %.1f%s)'%(testtarget.name,meanelev,'' if suitable else ', unsuitable'))
                         if suitable:
                             target=testtarget
