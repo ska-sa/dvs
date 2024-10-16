@@ -27,8 +27,7 @@ def plane_to_sphere_holography(targetaz,targetel,ll,mm):
     scanel=np.arcsin(np.clip((np.sqrt(1.0-ll**2-mm**2)*np.sin(targetel)+np.sqrt(np.cos(targetel)**2-ll**2)*mm)/(1.0-ll**2),-1.0,1.0))
     return scanaz,scanel
 
-
-def generatepattern(totextent=10,tottime=1800,tracktime=5,slowtime=6,sampletime=1,scanspeed=0.15,slewspeed=-1,trackinterval=1,kind='circle'):
+def generatepattern(totextent=10,tottime=1800,tracktime=5,sampletime=1,scanspeed=0.15,slewspeed=-1,kind='circle'):
     """ Generates the basic scan pattern in target coordinates.
         Note: to track for tracktime after this many scans, track for tracktime include scan in front and end of pattern regardless
         
@@ -37,7 +36,6 @@ def generatepattern(totextent=10,tottime=1800,tracktime=5,slowtime=6,sampletime=
         @param totextent: degrees
         @param scanspeed,slewspeed: degrees/second
         @param sampletime: seconds per sample
-        @param trackinterval: number of scans
         @return: (x,y,slew)
     """
     if slewspeed<0.:#then factor of scanspeed
@@ -152,12 +150,8 @@ if __name__=="__main__":
                       help='Kind could be "circle" (default=%default)')
     parser.add_option('--tracktime', type='float', default=10,
                       help='Extra time in seconds for scanning antennas to track when passing over target (default=%default)')
-    parser.add_option('--trackinterval', type='int', default=1,
-                      help='track target for tracktime every this many scans (default=%default)')
     parser.add_option('--cycle-tracktime', type='float', default=30,
                       help='Extra time in seconds for scanning antennas to track when passing over target (default=%default)')
-    parser.add_option('--slowtime', type='float', default=6,
-                      help='Time in seconds to slow down at start and end of each segment / arm (default=%default)')
     parser.add_option('--sampletime', type='float', default=0.25,
                       help='time in seconds to spend on each sample point generated (default=%default)')
     parser.add_option('--scanspeed', type='float', default=0.1,
@@ -174,7 +168,7 @@ if __name__=="__main__":
     # Parse the command line
     opts, args = parser.parse_args()
 
-    compositex,compositey,compositeslew=generatepattern(totextent=opts.scan_extent,tottime=opts.cycle_duration,tracktime=opts.tracktime,slowtime=opts.slowtime,sampletime=opts.sampletime,scanspeed=opts.scanspeed,slewspeed=opts.slewspeed,trackinterval=opts.trackinterval,kind=opts.kind)
+    compositex,compositey,compositeslew=generatepattern(totextent=opts.scan_extent,tottime=opts.cycle_duration,tracktime=opts.tracktime,sampletime=opts.sampletime,scanspeed=opts.scanspeed,slewspeed=opts.slewspeed,kind=opts.kind)
     if testmode:
         plt.figure()
         x=[]
