@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 """ Modified from holography_scan.py to specifically implement continuous scan patterns for determining pointing offsets while tracking.
         circle: scans along a fixed radial offset from the target.
-    
-    Potential future changes:
-        "circle" data suffers from ambiguity: need to constrain either HPBW or peak amplitude.
-        One way around this is to also scan across bore sight - something like a cardioid pattern?
-    
+        cardioid: makes a "loopy heart"-shaped scan centred on the target.
+        
     @author: aph@sarao.ac.za
 """
 import time
@@ -31,21 +28,32 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     """ Generates the basic scan pattern in target coordinates.
         
         All quantities in seconds except:
-        @param kind: only 'circle' supported
+        @param kind: only 'circle'|'cardioid' supported
         @param totextent: degrees
         @param scanspeed,slewspeed: degrees/second
         @param sampletime: seconds per sample
         @return: (x,y,slew)
     """
+    if (kind=='_circle_') or (kind == 'circle'): # Scan along a constant radial offset from target centre
+        a, b = 0, 1
+    elif (kind=='cardioid'): # "Loopy hearth-shaped" scan around the target centre
+        a, b = 0.2, 1
+    else:
+        raise ValueError("Patterns of kind %s not supported!" % kind)
+    
     if slewspeed<0.:#then factor of scanspeed
         slewspeed*=-scanspeed
     radextent=totextent/2.
-    if (kind=='_circle_') or (kind == 'circle'):# Scan along a constant radial offset from target centre
-        orbittime=2*np.pi*radextent/scanspeed
-        norbits=int(tottime/orbittime + 0.5)
-        dt=np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
-        armx=radextent*np.cos(2.0*np.pi*dt)
-        army=radextent*np.sin(2.0*np.pi*dt)
+    
+    if (kind in ['cardioid', 'circle', '_circle_']): # These are all generically the same pattern
+        a *= radextent; b *= radextent
+        orbittime = 2*np.pi*radextent/scanspeed
+        norbits = int(tottime/orbittime + 0.5)
+        dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
+        th = 2.0*np.pi*dt
+        radius = a + b*np.cos(th)
+        armx = radius*np.cos(th) - (a+b)/2
+        army = radius*np.sin(th)
 
         compositex=[]
         compositey=[]
@@ -54,7 +62,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
             compositex.append(armx)
             compositey.append(army)
             compositeslew.append(np.zeros(len(army)))
-
+    
     return compositex,compositey,compositeslew #these coordinates are such that the upper part of pattern is sampled first; reverse order to sample bottom part first
 
 
