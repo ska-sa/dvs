@@ -35,9 +35,9 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         @return: (x,y,slew)
     """
     if (kind=='_circle_') or (kind == 'circle'): # Scan along a constant radial offset from target centre
-        a, b = 0, 1
+        a, b = 0, 1 # Sum to 1
     elif (kind=='cardioid'): # "Loopy hearth-shaped" scan around the target centre
-        a, b = 0.2, 1
+        a, b = 0.2, 0.8 # Sum to 1
     else:
         raise ValueError("Patterns of kind %s not supported!" % kind)
     
