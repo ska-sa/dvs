@@ -35,15 +35,15 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         @return: (x,y,slew)
     """
     if (kind=='_circle_') or (kind == 'circle'): # Scan along a constant radial offset from target centre
-        a, b = 0, 1 # Sum to 1
+        a, b = 1, 0 # Constant radius
     elif (kind=='cardioid'): # "Loopy hearth-shaped" scan around the target centre
-        a, b = 0.2, 0.8 # Sum to 1
+        a, b = 0.4, 1.5 # Large inner loop; effective radius ~ a+b/2
     else:
         raise ValueError("Patterns of kind %s not supported!" % kind)
     
     if slewspeed<0.:#then factor of scanspeed
-        slewspeed*=-scanspeed
-    radextent=totextent/2.
+        slewspeed *= -scanspeed
+    radextent = totextent/2.
     
     if (kind in ['cardioid', 'circle', '_circle_']): # These are all generically the same pattern
         a *= radextent; b *= radextent
@@ -52,12 +52,13 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
         th = 2.0*np.pi*dt
         radius = a + b*np.cos(th)
-        armx = radius*np.cos(th) - (a+b)/2
+        c = b if (b < a) else (b+a**2/4/b+a) # The cardioid is offset in the x direction
+        armx = radius*np.cos(th) - c/2
         army = radius*np.sin(th)
 
-        compositex=[]
-        compositey=[]
-        compositeslew=[]
+        compositex = []
+        compositey = []
+        compositeslew = []
         for orbit in range(norbits):
             compositex.append(armx)
             compositey.append(army)
