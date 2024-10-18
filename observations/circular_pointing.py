@@ -28,16 +28,18 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     """ Generates the basic scan pattern in target coordinates.
         
         All quantities in seconds except:
-        @param kind: only 'circle'|'cardioid' supported
+        @param kind: only 'circle'|'cardioid'|'epicycles' supported
         @param totextent: degrees
         @param scanspeed,slewspeed: degrees/second
         @param sampletime: seconds per sample
         @return: (x,y,slew)
     """
-    if (kind=='_circle_') or (kind == 'circle'): # Scan along a constant radial offset from target centre
+    if (kind == '_circle_') or (kind == 'circle'): # Scan along a constant radial offset from target centre
         a, b = 1, 0 # Constant radius
-    elif (kind=='cardioid'): # "Loopy hearth-shaped" scan around the target centre
+    elif (kind == 'cardioid'): # "Loopy hearth-shaped" scan around the target centre
         a, b = 0.4, 1.5 # Large inner loop; effective radius ~ a+b/2
+    elif (kind == 'epicycles'):
+        pass
     else:
         raise ValueError("Patterns of kind %s not supported!" % kind)
     
@@ -45,24 +47,30 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         slewspeed *= -scanspeed
     radextent = totextent/2.
     
+    orbittime = 2*np.pi*radextent/scanspeed
+    norbits = int(tottime/orbittime + 0.5)
+    dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
+    th = 2.0*np.pi*dt
     if (kind in ['cardioid', 'circle', '_circle_']): # These are all generically the same pattern
         a *= radextent; b *= radextent
-        orbittime = 2*np.pi*radextent/scanspeed
-        norbits = int(tottime/orbittime + 0.5)
-        dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
-        th = 2.0*np.pi*dt
         radius = a + b*np.cos(th)
         c = b if (b < a) else (b+a**2/4/b+a) # The cardioid is offset in the x direction
         armx = radius*np.cos(th) - c/2
         army = radius*np.sin(th)
 
-        compositex = []
-        compositey = []
-        compositeslew = []
-        for orbit in range(norbits):
-            compositex.append(armx)
-            compositey.append(army)
-            compositeslew.append(np.zeros(len(army)))
+    elif (kind == "epicycles"):
+        r2 = radextent/2 # Sets the ratio of the circles to go between scanrad and center
+        n = 4 # 2 looks like a cardioid, 3 is too "sparse"
+        armx = r2*np.cos(th) + r2*np.cos(th*n)
+        army = r2*np.sin(th) + r2*np.sin(th*n)
+    
+    compositex = []
+    compositey = []
+    compositeslew = []
+    for orbit in range(norbits):
+        compositex.append(armx)
+        compositey.append(army)
+        compositeslew.append(np.zeros(len(army)))
     
     return compositex,compositey,compositeslew #these coordinates are such that the upper part of pattern is sampled first; reverse order to sample bottom part first
 
@@ -154,7 +162,7 @@ if __name__=="__main__":
     parser.add_option('-l', '--scan-extent', type='float', default=10,
                       help='Diameter of pattern to measure, in degrees (default=%default)')
     parser.add_option('--kind', type='string', default='circle',
-                      help='Select the kind of pattern: may only be "circle" (default=%default)')
+                      help='Select the kind of pattern: may only be "circle"|"cardioid"|"epicycles" (default=%default)')
     parser.add_option('--cycle-tracktime', type='float', default=30,
                       help='time in seconds to track a new target before starting the pattern (default=%default)')
     parser.add_option('--sampletime', type='float', default=0.25,
