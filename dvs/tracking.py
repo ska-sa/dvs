@@ -1,6 +1,5 @@
 '''
     Analyse "RF Tracking Stability" measured by using circular_pointing.py
-    CAUTION: consider this still work in progress!
     
     @author: aph@sarao.ac.za
 '''
@@ -9,65 +8,105 @@ import scipy.optimize as sop
 import pylab as plt
 import katpoint
 import katdal
+import typing
 
 
-def fit_gaussianoffset(x, y, height, powerbeam=True, check_convergence=True, debug=None):
-    """ @param x, y: position coordinates around the circular scan trajectory
-        @param heigh: heigh above the baseline, measured along the trajectory
+def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, debug=None):
+    """ Fit a Gaussian to the magnitude measured along a trajectory (x,y).
+        NB: Circular scan provides very little information to fit all of the Gaussian's free variables reliably, so use constrain_ampl.
+        
+        @param x, y: position coordinates around the circular scan trajectory
+        @param height: height above the baseline, measured along the trajectory
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
-        @return: xoffset, yoffset, valid """
-    # BRITTLENESS WARNING
-    # Circular scan provides very little information to fit all of the Gaussian's free variables reliably,
-    # seems vital to start with very good guesses, and constrain the fit!
-    
-    # Circular scan is nominally around the half-power point.
-    fwhm = 2*np.median(x**2 + y**2)**.5 # Full width spanning half max, i.e. model(@fwhm/2)~0.5
-    xoffset, yoffset = 0, 0 # Don't use mean(x,y) because x & y may be partial orbits
-    if not powerbeam: # Scan referenced to a tracking antenna scans the voltage beam, but likely also along HP contour
+        @param constrain_ampl: > 0 to constrain the fitted peak to within 10% of this
+        @return: (xoffset, yoffset, valid) - positions on tangent plane centred on target in same units as `x` & `y` """
+    if not powerbeam: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
         height = np.abs(height)**2
-    height /= np.std(height)
-    # Auto & cross correlations are different: auto can have weak signal riding on large system noise, so need to model offset
-    ampl = np.median(height) # Close for "cross-corr" scans, but "high" for typical "total power" targets. Results not very sensitive to this.
-    h0 = max([0, np.median(height)-6]) # 0 for "cross-corr", and for "total power" targets are typically weak so 6 sigma if the amplitude "in the noise"
-
-    model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: abs(h0) + ampl*np.exp(-4*np.log(2) * ((x-xoffset)**2/wx**2+(y-yoffset)**2/wy**2))
+    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
     
-    p0 = [2*ampl,xoffset,yoffset,0.5*fwhm,0.5*fwhm] + ([h0] if powerbeam else []) # Starting narrower seems best
-    # Fits easily converge to local minima if ampl AND wx,wy are free variables
-    if True: # This constrained fit is quite robust, also if bounds change a bit
-        if powerbeam:
-            bounds = [(0,np.inf)] +( [(-fwhm/2,fwhm/2)]*2 ) + ( [(0.2*fwhm,1.5*fwhm)]*2 ) + [(0,np.min(height))]
-        else:
-            bounds = [(2*ampl,np.inf)] +( [(-fwhm/2,fwhm/2)]*2 ) + ( [(0.2*fwhm,0.7*fwhm)]*2 )
-        p = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
-        if p.success and check_convergence: # Check for sensitivity of offsets wrt. bounds
-            if powerbeam:
-                bounds = [(0,np.inf)] +( [(-fwhm/2,fwhm/2)]*2 ) + ( [(0.1*fwhm,2*fwhm)]*2 ) + [(0,np.min(height))]
-            else:
-                bounds = [(2*ampl,np.inf)] +( [(-fwhm/2,fwhm/2)]*2 ) + ( [(0.1*fwhm,1*fwhm)]*2 )
-            p_ = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
-            converged = p_.success and np.all(np.abs(1-p.x[1:3]/p_.x[1:3]) < 0.05) # Within 5%
-            p.success = converged
-    else: # TODO: unconstrained fit is VERY BRITTLE, results very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
+    # Starting estimates
+    # These measurements (power & voltage) are typically done by scanning around half _power_ contour
+    scanext = 2*np.median(x**2 + y**2)**.5 
+    ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
+    p0 = [ampl0,0,0,scanext,scanext, np.min(height)]
+    
+    model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))
+    
+    # Fit model to data
+    if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
         p = sop.minimize(lambda p: np.nansum((height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
-    p, valid = p.x, p.success
-    ampl, xoffset, yoffset, fwhmx, fwhmy = p[:5]
-    h0 = p[5] if powerbeam else 0
-    model_height = model(*p)
-    snr = (np.median(height) - h0) / np.std((height - model_height)[1:-1])
+    else: # Constrained fits should be robust, and not very sensitive to bounds
+        bounds = [(h_sigma,np.inf)] + ( [(-1*scanext,1*scanext)]*2 ) + ( [(0.5*scanext,2*scanext)]*2 ) + [(0,np.min(height))]
+        if (constrain_ampl): # Explicit constraint for e.g. circular scan
+            bounds[0] = (0.9*constrain_ampl, 1.1*constrain_ampl)
+        p = sop.least_squares(lambda p: (height-model(*p))**2, p0, bounds=np.transpose(bounds), verbose=0)
+    # It seems that the fit fails to converge if we fit for h0 too!??
+    ampl, xoffset, yoffset, fwhmx, fwhmy, h0 = p.x
+    model_height = model(*p.x)
     
-    # 'success' status isn't quite relevant - multiple minima?
-    # The following criteria are somewhat arbitrary but empirically OK over many datasets:
-    valid = valid and (snr > 4) # Less than 4 sigma is often visually a poor fit
-    valid = valid and (np.std(height - model_height) < 0.6) # Some pathological cases where h0 isn't fitted well for SNR to be accurate
-#     valid = valid and np.all(np.array([fwhmx,fwhmy])/fwhm < 1.3) # Throw out fits that get stuck at upper bound
-#     valid = valid and np.all(np.abs(1 - np.array([fwhmx,fwhmy])/fwhm) < 0.3) # Throw out fits that get stuck at bounds
+    # 'p.success' status isn't quite reliable (e.g. multiple minima)
+    # Also check deduced signal-to-noise, and residuals must be "in the noise"
+    resid = np.std(height - model_height)
+    valid = p.success and (ampl/h_sigma > 6) and (resid < 2*h_sigma)
     
-    if debug is not None:
-        debug.plot(height, '.', alpha=0.5)
-        debug.plot(model_height, '-', label="%.1f exp(Q(%.2f, %.2f)) + %.1f"%(ampl, fwhmx/fwhm, fwhmy/fwhm, h0))
+    if debug is not None: # 'debug' is expected to be a plot axis
+        if not powerbeam:
+            model_height = model_height**.5
+        debug.plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
         debug.legend()
     return xoffset, yoffset, valid
+
+
+def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
+    """ @param kind: "circle"|"cartioid"|"epicycles"
+        @param ampl, SEFD: powers per polarisation channel [Jy]
+        @param Nsamples_per_dump: BW*tau
+        @param scanrad: radius for the scan pattern, either "hpbw" or a number in same units as `hpbw`.
+        @return: (timestamps, target_x, target_y, magnitudes) """
+    scanrad = hpbw if (scanrad == 'hpbw') else scanrad
+    
+    timestamps = np.arange(133) # Should just be > 20?
+    th = np.linspace(0, 2*np.pi, len(timestamps)) # One full cycle (should exclude the last one which overlaps)
+    
+    if (kind in ["circle","cardioid"]): # "circle" is a trivial case of "cardioid"
+        a, b = (1, 0) if (kind == "circle") else (0.4, 1.5)
+        a, b = a*scanrad, b*scanrad
+        c = b if (b < a) else (b+a**2/4/b+a) # The cardioid is offset in the x direction
+        radius = a + b*np.cos(th)
+        target_x = radius*np.cos(th) - c/2
+        target_y = radius*np.sin(th)
+    elif (kind == "epicycles"):
+        r2 = scanrad/2 # Sets the ratio of the circles to go between scanrad and center
+        n = 4 # 2 looks like a cardioid, 3 is too "sparse"
+        target_x = r2*np.cos(th) + r2*np.cos(th*n)
+        target_y = r2*np.sin(th) + r2*np.sin(th*n)
+    actual_x = target_x + ox
+    actual_y = target_y + oy
+    
+    if powerbeam: # TOTAL power integrated over frequency
+        hv = ampl*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2) + SEFD*(1 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x)))
+    else: # Cross-corr voltage amplitude integrated over frequency
+        hv = (ampl*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2))**.5 + SEFD*(0 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x)))
+    
+    return (timestamps, target_x, target_y, hv)
+
+
+def _test_fit_gaussianoffset_():
+    np.random.seed(1)
+    
+    hpbw = 0.18 # 11arcmin in degrees
+    ampl = 10/2 # Jy per pol
+    SEFD = 400/2 # Jy per pol
+    Nsamples_per_dump = 1e6*1 # 1MHz * 1sec
+    for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]: # Different pointing offsets 
+        for powerbeam in [True,False]: # Power & voltage beams
+            timestamps,target_x,target_y,m = _generate_test_data_("epicycles", powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
+                                                                  Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
+            axs = plt.subplots(1, 2)[1]
+            axs[0].plot(timestamps, target_x, '.', timestamps, target_y)
+            axs[1].plot(m, '.')
+            xoff, yoff, valid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, constrain_ampl=None, debug=axs[1])
+            print(powerbeam, "x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid)
 
 
 def flag_circscancycle(target_x, target_y, discard='1sigma', debug=False):
@@ -102,16 +141,20 @@ def flag_circscancycle(target_x, target_y, discard='1sigma', debug=False):
     return mask
 
 
-def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, discard=1, check_convergence=True, verbose=True, debug=False):
+def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, discard=1, verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with circular_pointing.py
         @param ds: the dataset (selection is reset!)
         @param ant: the identifier of the scanning antenna in the dataset
-        @param chanmapping: like `lambda target_name,fGHz: channel_indices`
+        @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param strict: True to set invalid fits to nan (default True)
         @param discard: strategy for identifying outliers, either '1sigma' or a percentile (both wrt. deviations from fitted orbit)
         @return: [(timestamp [sec], target ID, dAz, dEl [deg]), ...(for each cycle)]
     """
+    if (not callable(chanmapping)) and (chanmapping is not None):
+        _chans_ = chanmapping
+        chanmapping = lambda *a: _chans_
+    
     R2D = 180/np.pi
     offsets = [] # (timestamp, target, dAz, dEl)
     
@@ -128,18 +171,19 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
     for scan in ds.scans():
         # Fit offsets to circular scan total power
         target = ds.catalogue.targets[ds.target_indices[0]]
-        ds.select(channels=chanmapping(target.name, fGHz))
+        if chanmapping:
+            ds.select(channels=chanmapping(target.name, fGHz))
         mask = flag_circscancycle(ds.target_x[...,ant_ix], ds.target_y[...,ant_ix], discard=discard)
-        h = np.mean(np.abs(ds.vis[:]),axis=(1,2)) # TOTAL power integrated over frequency
+        hv = np.abs(ds.vis[:])
+        height = np.mean(hv/np.mean(hv,axis=0), axis=(1,2)) # Normalise for gains then make TOTAL power integrated over frequency
         t_ref = np.mean(ds.timestamps[mask])
         rAz, rEl = target.azel(t_ref, antenna=ant)
         if debug: # Prepare figure for debugging
             axs = plt.subplots(1,3, figsize=(14,3))[1]
             axs[0].plot(ds.channels, np.mean(np.abs(ds.vis[:]), axis=(0,2)), '.')
-            axs[1].plot(ds.timestamps[mask], ds.target_x[mask,...], '.', ds.timestamps[mask], ds.target_y[mask,...]) # Also plots track antenna if present - diagnostic
-#             axs[2].plot(ds.timestamps[mask], h[mask], '.') # Instead of debug below
-        xoff, yoff, valid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], h[mask],
-                                               powerbeam=(track_ant is None), check_convergence=check_convergence, debug=axs[-1] if debug else None) # Positions on tangent plane centred on target [degrees]
+            axs[1].plot(ds.timestamps[mask], ds.target_x[mask,...], '.', ds.timestamps[mask], ds.target_y[mask,...]) # Also plots track antenna if present
+        xoff, yoff, valid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
+                                               powerbeam=(track_ant is None), debug=axs[2] if debug else None)
         try:
             aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=ant, coord_system='azel') # [rad]
         except: # Sometimes if fit is way out it may appear to be in the other hemisphere - OutOfRangeError!
@@ -159,21 +203,89 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
     return offsets
 
 
-def analyse_circ_scans(fn, ants, chans, debug=True, **kwargs): # TODO: eventually generate "APSS-like" csv file
+def _test_reduce_circular_pointing_():
+    np.random.seed(1)
+    
+    class TestDataset(object):
+        def __init__(self, f_c, ant_names, targets_scanned, n_cycles, Dant=15):
+            """ @param f_c: center frequency, in Hz
+                @param ant_names: just the names - they will get random coordinates in the Karoo.
+                @param targets_scanned: list of target names, one entry for each "scan", in order.
+                @param n_cycles: the number of cycles at each "scan"
+                @param Dant: diameter of the individual dish [meter]
+            """
+            self.spectral_windows = [typing.NamedTuple('SpectralWindow', centre_freq=float)(f_c)]
+            self.channels = np.arange(16) # Not important, this keeps it easy 
+            self.ants = [katpoint.Antenna(a, -np.pi/3+0.1*np.random.rand(), np.pi/3.3+0.1*np.random.rand(), 1050) for a in ant_names] # Roughly in the Karoo
+            self.catalogue = katpoint.Catalogue(antenna=self.ants[0], add_specials=True)
+            for t in set(targets_scanned):
+                if (t not in self.catalogue):
+                    self.catalogue.add("%s, radec, %.3f, %.3f" % (t, 24*np.random.rand(), -90*np.random.rand()))
+            self.__targets_scanned__ = targets_scanned
+            self.__n_cycles__ = n_cycles
+            self.__hpbw__ = 1.22*(3e9/f_c)/Dant * 180/np.pi # [deg]
+            self.__set_testopts__() # Defaults
+
+        def select(self, *a, **k): # For test purposes we may ignore the "select()" in reduce_circular_pointing()
+            pass
+        
+        def __set_testopts__(self, kind="cardioid", scanrad='hpbw', ampl=1, SEFD=300, BW=1e6, ox=0,oy=0):
+            """ @param kind: "circle"|"cardioid"|"epicycles"
+                @param scanrad: 'hpbw' or radius to scan at, in [degrees]
+                @param ampl, SEFD: Jy per pol
+                @param ox, oy: "error" offsets in degrees
+            """
+            self.__testopts__ = [kind, scanrad, ampl, SEFD, BW, ox, oy]
+                    
+        def scans(self):
+            """ Generate the test data for a single cycle at a time (yields) """
+            for i,tgt in enumerate(self.__targets_scanned__):
+                self.compscan_indices = [i]
+                self.target_indices = [k for k,t in enumerate(self.catalogue.targets) if (tgt in t.name)]
+                for s in range(self.__n_cycles__):
+                    kind, scanrad, ampl, SEFD, BW, ox,oy = self.__testopts__
+                    scanrad = self.__hpbw__ if (scanrad == 'hpbw') else scanrad 
+                    t, x, y, m = _generate_test_data_(kind, powerbeam=len(self.ants)==1, ampl=ampl/2,SEFD=SEFD/2, Nsamples_per_dump=BW*1,
+                                                      hpbw=self.__hpbw__, scanrad=scanrad, ox=ox, oy=oy)
+                    m = np.transpose(np.stack([m]*len(self.channels),axis=0)) # time,freq
+                    self.target_x, self.target_y, self.vis = np.stack([x],axis=1), np.stack([y],axis=1), np.stack([m/2,m/2],axis=2)
+                    self.timestamps = t + (t[-1]-t[0])*(i*self.__n_cycles__ + s)
+                    yield
+
+    # Somewhat representative of DVS Ku-band
+    ds = TestDataset(13.5e9, ["s0000"], ["Jupiter"], n_cycles=3)
+    for ox,oy in [(0,0),(120/3600,0),(0,20/3600)]:
+        ds.__set_testopts__(kind="cardioid", scanrad='hpbw', ampl=10/2, SEFD=700/2, BW=10e6, ox=ox,oy=oy)
+        reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, discard=1, verbose=True, debug=False)
+    # Somewhat representative of DVS Ku-band
+    ds = TestDataset(11.5e9, ["s0000"], ["GEOS"], n_cycles=5)
+    for ox,oy in [(0,0),(120/3600,0),(0,20/3600)]:
+        ds.__set_testopts__(kind="cardioid", scanrad='hpbw', ampl=500/2, SEFD=700/2, BW=.3e6, ox=ox,oy=oy)
+        reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, discard=1, verbose=True, debug=False)
+
+
+def analyse_circ_scans(fn, ants, chanmapping, debug=True, verbose=False, **kwargs): # TODO: eventually generate "APSS-like" csv file
+    """ Generates pointing offsets for a dataset created with circular_pointing.py
+        @param fn: the URL for the dataset
+        @param ants: the identifiers of the scanning antennas in the dataset
+        @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
+        @param kwargs: extra arguments for reduce_circular_pointing()
+        @return: [results_ant0, ... (for each ant in ants)] with 'results_ant' a list of (timestamp, target, dAz, dEl) for all cycles
+    """
     results = []
     for ant in ants:
         ds = katdal_open(ant, fn)
-        offsets = reduce_circular_pointing(ds, ant, chans, debug=debug, **kwargs)
+        offsets = reduce_circular_pointing(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
         results.append(offsets)
         
-    # Plot the offsets
-    symbols = ['.', '+', '^']
-    axs = plt.subplots(2,1, figsize=(14,5))[1]
-    for ant,offsets,fmt in zip(ants,results,symbols):
-        oss = np.array([[m[0],m[2],m[3]] for m in offsets])
-        axs[0].plot(oss[:,0], (oss[:,1]-np.nanmedian(oss[:,1]))*3600, fmt, label=ant)
-        axs[1].plot(oss[:,0], (oss[:,2]-np.nanmedian(oss[:,2]))*3600, fmt, label=ant)
-    axs[0].legend(); axs[0].set_ylabel("dAz"); axs[1].set_ylabel("dEl");
+    if verbose: # Plot the offsets
+        symbols = ['.', '+', '^']
+        axs = plt.subplots(2,1, figsize=(14,5))[1]
+        for ant,offsets,fmt in zip(ants,results,symbols):
+            oss = np.array([[m[0],m[2],m[3]] for m in offsets])
+            axs[0].plot(oss[:,0], (oss[:,1]-np.nanmedian(oss[:,1]))*3600, fmt, label=ant)
+            axs[1].plot(oss[:,0], (oss[:,2]-np.nanmedian(oss[:,2]))*3600, fmt, label=ant)
+        axs[0].legend(); axs[0].set_ylabel("dAz"); axs[1].set_ylabel("dEl");
     
     return results
 
@@ -255,3 +367,9 @@ def make_apss_record(ds, offsets, sigma):
              f'{temperature}.2f, {pressure}.2f, {humidity}.2f, {wind_speed}.2f, ' \
              f'{wind_direction}.2f , {sun_az}.7f, {sun_el}.7f, {timestamp}i'
     return fields
+
+
+if __name__ == "__main__":
+    _test_fit_gaussianoffset_()
+    _test_reduce_circular_pointing_()
+    plt.show()
