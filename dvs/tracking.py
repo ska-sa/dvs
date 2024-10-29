@@ -9,6 +9,7 @@ import pylab as plt
 import katpoint
 import katdal
 import typing
+from analysis.katsepnt import save_apss_data
 
 
 _c_ = 299792458
@@ -23,7 +24,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param height: height above the baseline, measured along the trajectory
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
-        @return: (xoffset, yoffset, valid) - positions on tangent plane centred on target in same units as `x` & `y` """
+        @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
     
     # Starting estimates
@@ -36,13 +37,13 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     if powerbeam:
         model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))**2
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
-        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))
+        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl**.5*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
         p = sop.minimize(lambda p: np.nansum((height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     else: # Constrained fits should be robust, and not very sensitive to bounds
-        bounds = [(h_sigma,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(0,np.min(height))]
+        bounds = [(h_sigma/2,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.9*ampl0, 1.1*ampl0)
         if (constrain_width):
@@ -60,7 +61,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     if debug is not None: # 'debug' is expected to be a plot axis
         debug.plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
         debug.legend()
-    return xoffset, yoffset, valid
+    return (xoffset, yoffset, valid, fwhmx, fwhmy, ampl, resid)
 
 
 def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
@@ -90,29 +91,48 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
     actual_y = target_y + oy
     
     if powerbeam: # TOTAL power integrated over frequency
-        hv = ampl*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2)**2 + SEFD*(1 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x)))
+        hv = ampl*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2)**2 + SEFD*(1 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x))**2)
     else: # Cross-corr voltage amplitude integrated over frequency
-        hv = ampl**.5*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2) + SEFD*(0 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x)))
+        hv = ampl**.5*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2) + (SEFD*(0 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x))**2))**.5
     
     return (timestamps, target_x, target_y, hv)
 
 
-def _test_fit_gaussianoffset_():
-    np.random.seed(1)
-    
-    hpbw = 0.18 # 11arcmin in degrees
+def _test_fit_gaussianoffset_(cycles=100):
+    """ Demonstrate the fits for single dish & interferometric measurements, with different scan patterns. """ 
+    # Typical values for SKA-MID Band 5b?
+    hpbw = 11 # 11arcmin (pointing residuals in same units)
     ampl = 10/2 # Jy per pol
     SEFD = 400/2 # Jy per pol
     Nsamples_per_dump = 1e6*1 # 1MHz * 1sec
-    for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]: # Different pointing offsets 
-        for powerbeam in [True,False]: # Power & voltage beams
-            timestamps,target_x,target_y,m = _generate_test_data_("epicycles", powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
-                                                                  Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
-            axs = plt.subplots(1, 2)[1]
-            axs[0].plot(timestamps, target_x, '.', timestamps, target_y)
-            axs[1].plot(m, '.')
-            xoff, yoff, valid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=axs[1])
-            print(powerbeam, "x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid)
+    
+    for powerbeam in [True, False]: # Power & voltage beams
+        fig, axs = plt.subplots(1,3)
+        fig.suptitle(" SD" if powerbeam else " INTF")
+        for kind in ['circle','cardioid','epicycles']:
+            # Same pointing offsets for each 'kind'
+            np.random.seed(1)
+            offsets = hpbw * np.c_[np.random.rand(cycles) - 0.5, np.random.rand(cycles) - 0.5]
+            fits = []
+            for ox,oy in offsets:
+                timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
+                                                                      Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
+                # dbg = plt.subplots(1, 2)[1]
+                # dbg[0].plot(timestamps, target_x, '.', timestamps, target_y)
+                # dbg[1].plot(m, '.')
+                debug = None # dbg[-1]
+                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=debug)
+                # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
+                fits.append([ox-xoff, oy-yoff, hpwx/hpbw, hpwy/hpbw, a0/ampl])
+            fits = np.asarray(fits)
+            axs[0].hist(fits[:,0], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" X")
+            axs[0].hist(fits[:,1], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" Y")
+            axs[1].hist(fits[:,2], bins=20, range=(0,2), alpha=0.5, label=kind+" X")
+            axs[1].hist(fits[:,3], bins=20, range=(0,2), alpha=0.5, label=kind+" Y")
+            axs[2].hist(fits[:,4], bins=20, range=(0,2), alpha=0.5, label=kind)
+        for ax,unit in zip(axs,["$\Delta$pointing", "fit_hpw/hpbw", "fit_ampl/ampl"]):
+            ax.legend(); ax.set_xlabel(unit)
+            
 
 
 def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, verbose=True, debug=False, kind=None):
@@ -122,13 +142,15 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
         @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param strict: True to set invalid fits to nan (default True)
-        @return: [(timestamp [sec], target ID, dAz, dEl [deg]), ...(for each cycle)]
+        @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)]
+                   [(temperature, pressure, humidity, wind_speed, wind_dir), ...(for each cycle)] )
     """
     if (not callable(chanmapping)) and (chanmapping is not None):
         _chans_ = chanmapping
         chanmapping = lambda *a: _chans_
     
-    offsets = [] # (timestamp, target, dAz, dEl)
+    fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
+    enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir)
     
     ds.select(scans="track", compscans="~slew")
     if (track_ant):
@@ -160,8 +182,8 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/ant.diameter * R2D
             if (track_ant):
                 constr["constrain_width"] *= 2
-        xoff, yoff, valid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
-                                               powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
+        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
+                                                                        powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
         try:
             aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=ant, coord_system='azel') # [rad]
         except: # Sometimes if fit is way out it may appear to be in the other hemisphere - OutOfRangeError!
@@ -174,11 +196,21 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
         
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
-        offsets.append((t_ref, target.name, dAz, dEl))
+        fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid))
         
+        # Do a 2-D vector average of wind speed + direction
+        raw_wind_speed = ds.wind_speed
+        raw_wind_direction = ds.wind_direction/R2D
+        mean_north_wind = np.mean(raw_wind_speed * np.cos(raw_wind_direction))
+        mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
+        wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
+        wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
+        enviro.append((np.mean(ds.temperature), np.mean(ds.pressure), np.mean(ds.humidity), wind_speed, wind_direction))
+    
     if debug or verbose:
-        print("Std [arcsec]", np.nanstd([o[2] for o in offsets])*3600, np.nanstd([o[3] for o in offsets])*3600)
-    return offsets
+        print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
+    
+    return (fitted, enviro)
 
 
 def _test_reduce_circular_pointing_():
@@ -229,6 +261,11 @@ def _test_reduce_circular_pointing_():
                     m = np.transpose(np.stack([m]*len(self.channels),axis=0)) # time,freq
                     self.target_x, self.target_y, self.vis = np.stack([x],axis=1), np.stack([y],axis=1), np.stack([m/2,m/2],axis=2)
                     self.timestamps = t + (t[-1]-t[0])*(i*self.__n_cycles__ + s)
+                    self.temperature = 15 + np.random.rand(len(self.timestamps))
+                    self.pressure = 900 + 5*np.random.rand(len(self.timestamps))
+                    self.humidity = 20 + 10*np.random.rand(len(self.timestamps))
+                    self.wind_speed = 1 + np.random.rand(len(self.timestamps))
+                    self.wind_direction = 123 + 10*np.random.rand(len(self.timestamps))
                     yield
 
     # Somewhat representative of DVS Ku-band
@@ -243,27 +280,30 @@ def _test_reduce_circular_pointing_():
         reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
 
 
-def analyse_circ_scans(fn, ants, chanmapping, debug=False, verbose=True, **kwargs): # TODO: eventually generate "APSS-like" csv file
+def analyse_circ_scans(fn, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
     """ Generates pointing offsets for a dataset created with circular_pointing.py
         @param fn: the URL for the dataset
         @param ants: the identifiers of the scanning antennas in the dataset
         @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
+        @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
         @param kwargs: extra arguments for reduce_circular_pointing()
-        @return: [results_ant0, ... (for each ant in ants)] with 'results_ant' a list of (timestamp, target, dAz, dEl) for all cycles
+        @return: { antID:[(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)] }
     """
-    results = []
+    results = {}
     for ant in ants:
         ds = katdal_open(ant, fn)
-        offsets = reduce_circular_pointing(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
-        results.append(offsets)
+        fitted, enviro = reduce_circular_pointing(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
+        results[ant] = fitted
+        if (output_filepattern):
+            save_apss_file(output_filepattern%ant, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
         
     if verbose: # Plot the offsets
-        symbols = ['.', '+', '^']
+        symbols = ['.', '+', '^', 'D', 'S', 'O', 'v', '*']
         axs = plt.subplots(2,1, figsize=(14,5))[1]
-        for ant,offsets,fmt in zip(ants,results,symbols):
-            oss = np.array([[m[0],m[2],m[3]] for m in offsets])
-            axs[0].plot(oss[:,0], (oss[:,1]-np.nanmedian(oss[:,1]))*3600, fmt, label=ant)
-            axs[1].plot(oss[:,0], (oss[:,2]-np.nanmedian(oss[:,2]))*3600, fmt, label=ant)
+        for (ant,fitted),fmt in zip(results.items(),symbols):
+            tAE = np.array([[m[0],m[4],m[5]] for m in fitted])
+            axs[0].plot(tAE[:,0], (tAE[:,1]-np.nanmedian(tAE[:,1]))*3600, fmt, label=ant)
+            axs[1].plot(tAE[:,0], (tAE[:,2]-np.nanmedian(tAE[:,2]))*3600, fmt, label=ant)
         axs[0].legend(); axs[0].set_ylabel("dAz"); axs[1].set_ylabel("dEl");
     
     return results
@@ -299,53 +339,52 @@ def katdal_open(sys, fn, *args, **kwargs):
         katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = curr_val
 
 
-def make_apss_record(ds, offsets, sigma):
-    """ Compiles a record like what's generated by analyse_point_source_scans.py
+def save_apss_file(output_filename, ds, ant, fitted, enviro):
+    """ Creates a CSV file like what's generated by analyse_point_source_scans.py
         @param ds: the dataset with selection applied
-        @parma offsets: total power centroid offsets [dxEl, dEl] in deg.
-        @parma sigma: width of total power pattern [xEl, El] in deg.
-        @return: [dataset, target, timestamp_string, az, el, delta_az, delta_az_std, delta_el, delta_el_std, ..., timestamp_sec]
+        @param ant: the katpoint.Antenna (with pointing model in use at the time)
+        @param fitted, enviro: as returned by `reduce_circular_pointing()`
     """
-    timestamp = np.mean(ds.timestamps)
-    dataset, target, timestamp_ut = ds.name.split(" ")[-1], np.take(ds.catalogue.targets, ds.target_indices)[0].name, str(katpoint.Timestamp(timestamp))
-    azimuth, elevation = np.mean(ds.az), np.mean(ds.el) # deg
-    delta_azimuth, delta_elevation = offsets[0]/np.cos(elevation*R2D), offsets[1] # deg 
-    delta_azimuth_std, delta_elevation_std = 0, 0
-    beam_width_HH, beam_width_VV = sigma[0]/np.cos(elevation*R2D), sigma[1] # deg 
-    beam_width_I, beam_width_I_std = (beam_width_HH+beam_width_VV)/2., 0
+    fields = ['target', 'timestamp', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
+              'beam_height_I','beam_height_I_std','beam_width_I','beam_width_HH','beam_width_VV']
+    record = {k:[] for k in fields}
+    for rec in fitted: # (timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]
+        record['timestamp'].append(rec[0])
+        record['target'].append(rec[1])
+        record['azimuth'].append(rec[2])
+        record['elevation'].append(rec[3])
+        record['delta_azimuth'].append(rec[4])
+        record['delta_elevation'].append(rec[5])
+        record['beam_width_I'].append((rec[6]*rec[7])**.5)
+        record['beam_width_HH'].append(rec[6])
+        record['beam_width_VV'].append(rec[7])
+        record['beam_height_I'].append(rec[8])
+        record['beam_height_I_std'].append(rec[9]) # Not quite the same, but relevant
+    record['dataset'] = [ds.name.split(" ")[-1]]*len(fitted)
+    record['frequency'] = [np.mean(ds.freqs)]*len(fitted)
+    record['timestamp_ut'] = [str(katpoint.Timestamp(_)) for _ in record['timestamp']]
+    record['data_unit'] = ['counts']*len(fitted)
+    for k in ['baseline_height_I','baseline_height_I_std','baseline_height_HH','baseline_height_VV','refined_I','refined_HH','refined_VV','flux']:
+        record[k] = [0]*len(fitted)
+    record['beam_height_HH'] = record['beam_height_I']
+    record['beam_height_VV'] = record['beam_height_I']
+    for k in ['delta_azimuth_std','delta_elevation_std','beam_width_I_std',]:
+        record[k] = [0]*len(fitted)
     
-    data_unit, beam_height_I, beam_height_I_std = "counts", 1, 0
-    baseline_height_I, baseline_height_I_std, refined_I = 0, 0, 1
-    beam_height_HH, baseline_height_HH, refined_HH = 1, 0, 1
-    beam_height_VV, baseline_height_VV, refined_VV = 1, 0, 1
-    frequency, flux = np.mean(ds.freqs), 0
-    
-    temperature = np.mean(ds.temperature)
-    pressure = np.mean(ds.pressure)
-    humidity = np.mean(ds.humidity)
-    # Do a 2-D vector average of wind speed + direction
-    raw_wind_speed = ds.wind_speed
-    raw_wind_direction = ds.wind_direction
-    mean_north_wind = np.mean(raw_wind_speed * np.cos(np.radians(raw_wind_direction)))
-    mean_east_wind = np.mean(raw_wind_speed * np.sin(np.radians(raw_wind_direction)))
-    wind_speed = np.sqrt(mean_north_wind ** 2 + mean_east_wind ** 2)
-    wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
-    # Sun angle relative to the antenna
+    # Sun angle relative to the antenna (not critical which antenna)
     sun = katpoint.Target('Sun, special')
-    sun_az, sun_el = katpoint.rad2deg(np.array(sun.azel(timestamp, antenna=ds.ants[0])))
+    sun_az, sun_el = katpoint.rad2deg(np.array(sun.azel(record['timestamp'], antenna=ds.ants[0])))
+    record['sun_az'] = sun_az
+    record['sun_el'] = sun_el
     
-    fields = f'{dataset:s}, {target:s}, {timestamp_ut:s}, {azimuth:.7f}, {elevation:.7f}, ' \
-             f'{delta_azimuth}.7f, {delta_azimuth_std}.7f, ' \
-             f'{delta_elevation}.7f, {delta_elevation_std}.7f, ' \
-             f'{data_unit}s, {beam_height_I}.7f, {beam_height_I_std}.7f, ' \
-             f'{beam_width_I}.7f, {beam_width_I_std}.7f, ' \
-             f'{baseline_height_I}.7f, {baseline_height_I_std}.7f, {refined_I}.7f, ' \
-             f'{beam_height_HH}.7f, {beam_width_HH}.7f, {baseline_height_HH}.7f, {refined_HH}.7f, ' \
-             f'{beam_height_VV}.7f, {beam_width_VV}.7f, {baseline_height_VV}.7f, {refined_VV}.7f, ' \
-             f'{frequency}.7f, {flux}.4f, ' \
-             f'{temperature}.2f, {pressure}.2f, {humidity}.2f, {wind_speed}.2f, ' \
-             f'{wind_direction}.2f , {sun_az}.7f, {sun_el}.7f, {timestamp}i'
-    return fields
+    enviro = np.asarray(enviro)
+    record['temperature'] = enviro[:,0]
+    record['pressure'] = enviro[:,1]
+    record['humidity'] = enviro[:,2]
+    record['wind_speed'] = enviro[:,3]
+    record['wind_direction'] = enviro[:,4]
+    
+    save_apss_data(output_filename, record, ant)
 
 
 if __name__ == "__main__":
