@@ -7,7 +7,6 @@ import numpy as np
 import scipy.optimize as sop
 import pylab as plt
 import katpoint
-import katdal
 import typing
 from analysis.katsepnt import save_apss_data
 
@@ -214,6 +213,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
 
 
 def _test_reduce_circular_pointing_():
+    """ Demonstrate a simulated "single dish" dataset similar to what's expected with DVS Ku-band """
     np.random.seed(1)
     
     class TestDataset(object):
@@ -280,9 +280,10 @@ def _test_reduce_circular_pointing_():
         reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
 
 
-def analyse_circ_scans(fn, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
+def analyse_circ_scans(ds, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
     """ Generates pointing offsets for a dataset created with circular_pointing.py
-        @param fn: the URL for the dataset
+    
+        @param ds: the katdal dataset
         @param ants: the identifiers of the scanning antennas in the dataset
         @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
         @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
@@ -291,7 +292,6 @@ def analyse_circ_scans(fn, ants, chanmapping, output_filepattern=None, debug=Fal
     """
     results = {}
     for ant in ants:
-        ds = katdal_open(ant, fn)
         fitted, enviro = reduce_circular_pointing(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
         results[ant] = fitted
         if (output_filepattern):
@@ -307,36 +307,6 @@ def analyse_circ_scans(fn, ants, chanmapping, output_filepattern=None, debug=Fal
         axs[0].legend(); axs[0].set_ylabel("dAz"); axs[1].set_ylabel("dEl");
     
     return results
-
-
-def katdal_open(sys, fn, *args, **kwargs):
-    """ Work around misalignment of scna boundaries and data, due to inconsistent implementation of Receptor/DishProxy COMMAND_TIME_OFFSET.
-        1. All datasets have s0000 activities misaligned from data by 10sec but m028 by 1.2sec. The following fixes that for s0000. 
-        ``katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = 10 ``
-        2. In most cases pointing coordinates are misaligned from visibilities by ~0.1sec (LMC sample & hold @ 0.2sec), the following improves that
-        ``katdal.open(timingoffset=0.1)``
-
-        Use katdal_open("m", ...) instead of katdal.open(...)
-        
-        @param sys: "m*" or "s*", only the first character is considered.
-        @param kwargs: e.g. 'X' to force the time_offset
-        @return: katdal.Dataset """
-    curr_val = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
-    try:
-        if sys.startswith("m"):
-            X = kwargs.get("X", 1.2)
-            katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = X # Some datasets (where plan_targets() takes too long) require anything [0.1,0.7]
-            timingoffset = kwargs.pop("timingoffset", 0)
-        elif sys.startswith("s"):
-            X = kwargs.get("X", 10)
-            katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = X
-            timingoffset = kwargs.pop("timingoffset", 0.1)
-        else:
-            katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = 0
-            timingoffset = kwargs.pop("timingoffset", 0)
-        return katdal.open(fn, *args, timingoffset=timingoffset, **kwargs)
-    finally: # Safe to restore after katdal.open() completed
-        katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = curr_val
 
 
 def save_apss_file(output_filename, ds, ant, fitted, enviro):
