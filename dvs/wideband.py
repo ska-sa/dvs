@@ -9,6 +9,7 @@
 """
 import pylab as plt
 import numpy as np
+import os
 
 
 dB2lin = lambda dB: 10**(dB/10)
@@ -96,6 +97,39 @@ class WBGDataset(object):
         dataset.on_max = [pol0_on[:,1], pol1_on[:,1]]
         dataset.off_max = [pol0_off[:,1], pol1_off[:,1]]
         return dataset
+
+
+def load_wbg_dig(root_folder, f_sample, NYQ=2):
+    """ Load a digitiser spectrometer dataset as if it's a WBGDataset.
+    
+        @return wideband.WBGDataset """
+    def load_digspectra(filenames, f_sample, NYQ=2):
+        """ Load DIGITISER spectrometer data from a local file.
+            
+            @param filenames: one or more filenames contianing the digitiser spectrum data
+            @param f_sample: digitiser sample rate [Hz]
+            @param NYQ: Nyquist zone sampled by the digitiser (default 1).
+            @return: (freqs, spectrum0, ...) in [Hz] and [complex power, dBm] """
+        freqs = None
+        spectra = []
+        for fn in np.atleast_1d(filenames):
+            spec = np.loadtxt(fn, delimiter=",")
+            spectra.append(spec)
+            if (freqs is None):
+                freqs = np.linspace(NYQ-1, NYQ, len(spec))*f_sample/2
+                # TODO: interpret NYQ
+        return [freqs] + spectra
+    
+    # The files in the folder are assumed to be sorted in this sequence: (H_off,H_on, V_off,V_on)
+    files = sorted(os.listdir(root_folder))
+    files = [root_folder+"/"+f for f in files if ("DIFF" not in f)] # Remove the "HV" cross correlation files
+    freq, h_off = load_digspectra(files[0], f_sample, NYQ)
+    freq, h_on = load_digspectra(files[1], f_sample, NYQ)
+    freq, v_off = load_digspectra(files[2], f_sample,NYQ)
+    freq, v_on = load_digspectra(files[3], f_sample, NYQ)
+    dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV",
+                         header={"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"})
+    return dataset
 
 
 def band_defs(band_ID):
