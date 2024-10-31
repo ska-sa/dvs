@@ -47,7 +47,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
             bounds[0] = (0.9*ampl0, 1.1*ampl0)
         if (constrain_width):
             bounds[3] = bounds[4] = (0.9*width0,1.1*width0)
-        p = sop.least_squares(lambda p: (height-model(*p))**2, p0, bounds=np.transpose(bounds), verbose=0)
+        p = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
     # It seems that the fit fails to converge if we fit for h0 too!??
     ampl, xoffset, yoffset, fwhmx, fwhmy, h0 = p.x
     model_height = model(*p.x)
@@ -55,7 +55,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
     resid = np.std(height - model_height)
-    valid = p.success and (ampl/h_sigma > 6) and (resid < 2*h_sigma)
+    valid = p.success and (ampl/h_sigma > 6) and (resid < h_sigma)
     
     if debug is not None: # 'debug' is expected to be a plot axis
         debug.plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
@@ -180,7 +180,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
             ds.select(channels=chanmapping(target.name, fGHz))
         mask = slice(None) # TODO: mask any extra data, e.g. too high acceleration, or data lost?
         hv = np.abs(ds.vis[mask])
-        # hv /= np.median(hv,axis=0) # Normalise for H-V gains & bandpass
+        hv /= np.median(hv,axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
         t_ref = np.mean(ds.timestamps[mask])
         rAz, rEl = target.azel(t_ref, antenna=ant)
@@ -192,8 +192,6 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/ant.diameter * R2D
-            if (track_ant):
-                constr["constrain_width"] *= 2
         xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
                                                                         powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
         try:
