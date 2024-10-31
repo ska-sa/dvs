@@ -97,40 +97,53 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
     return (timestamps, target_x, target_y, hv)
 
 
-def _test_fit_gaussianoffset_(cycles=100):
-    """ Demonstrate the fits for single dish & interferometric measurements, with different scan patterns. """ 
-    # Typical values for SKA-MID Band 5b?
-    hpbw = 11 # 11arcmin (pointing residuals in same units)
-    ampl = 10/2 # Jy per pol
-    SEFD = 400/2 # Jy per pol
+def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
+    """ Demonstrate the fits for single dish & interferometric measurements, with different scan patterns.
+    
+        @param hpbw: half power beam width to use for simulated pattern [angle units e.g. arcmin] - pointing residuals will be in the same units (default 11)
+        @param ampl: Jansky per pol for simulated target [power e.g. Jansky] (default 1)
+        @param SEFD: Jansky per pol for simulated measurement noise (same power units as `ampl`) (default 200)
+        @param cycles: number of measurements to simulate; if 1 then will only plot the raw measurement and fit (default 1).
+    """ 
+    # Default values are meant to be typical values for SKA-MID Band 5b?
     Nsamples_per_dump = 1e6*1 # 1MHz * 1sec
     
-    for powerbeam in [True, False]: # Power & voltage beams
-        fig, axs = plt.subplots(1,3)
-        fig.suptitle(" SD" if powerbeam else " INTF")
-        for kind in ['circle','cardioid','epicycles']:
-            # Same pointing offsets for each 'kind'
-            np.random.seed(1)
-            offsets = hpbw * np.c_[np.random.rand(cycles) - 0.5, np.random.rand(cycles) - 0.5]
-            fits = []
-            for ox,oy in offsets:
+    if (cycles == 1): # Debug plots for a specific offset, all different kinds
+        ox,oy = (hpbw/6, 0)
+        for powerbeam in [True, False]: # Power & voltage beams
+            axs = plt.subplots(3, 3)[1]
+            for i,kind in enumerate(['circle','cardioid','epicycles']):
                 timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
                                                                       Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
-                # dbg = plt.subplots(1, 2)[1]
-                # dbg[0].plot(timestamps, target_x, '.', timestamps, target_y)
-                # dbg[1].plot(m, '.')
-                debug = None # dbg[-1]
-                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=debug)
+                axs[0][i].set_title(kind)
+                axs[0][i].plot(target_x, target_y, '.')
+                axs[1][i].plot(timestamps, target_x, '.', timestamps, target_y)
+                axs[2][i].plot(m, '.')
+                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=axs[-1][i])
                 # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
-                fits.append([ox-xoff, oy-yoff, hpwx/hpbw, hpwy/hpbw, a0/ampl])
-            fits = np.asarray(fits)
-            axs[0].hist(fits[:,0], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" X")
-            axs[0].hist(fits[:,1], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" Y")
-            axs[1].hist(fits[:,2], bins=20, range=(0,2), alpha=0.5, label=kind+" X")
-            axs[1].hist(fits[:,3], bins=20, range=(0,2), alpha=0.5, label=kind+" Y")
-            axs[2].hist(fits[:,4], bins=20, range=(0,2), alpha=0.5, label=kind)
-        for ax,unit in zip(axs,["$\Delta$pointing", "fit_hpw/hpbw", "fit_ampl/ampl"]):
-            ax.legend(); ax.set_xlabel(unit)
+    
+    else: # Statistical
+        axes = plt.subplots(2,3)[1]
+        for powerbeam,axs in zip([True, False], axes): # Power & voltage beams
+            axs[0].set_ylabel(" SD" if powerbeam else " INTF")
+            for kind in ['circle','cardioid','epicycles']:
+                # Same pointing offsets for each 'kind'
+                np.random.seed(1)
+                offsets = hpbw * np.c_[np.random.rand(cycles) - 0.5, np.random.rand(cycles) - 0.5]
+                fits = []
+                for ox,oy in offsets:
+                    timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
+                                                                          Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
+                    xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=None)
+                    fits.append([ox-xoff, oy-yoff, hpwx/hpbw, hpwy/hpbw, a0/ampl])
+                fits = np.asarray(fits)
+                axs[0].hist(fits[:,0], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" X")
+                axs[0].hist(fits[:,1], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" Y")
+                axs[1].hist(fits[:,2], bins=20, range=(0,2), alpha=0.5, label=kind+" X")
+                axs[1].hist(fits[:,3], bins=20, range=(0,2), alpha=0.5, label=kind+" Y")
+                axs[2].hist(fits[:,4], bins=20, range=(0,2), alpha=0.5, label=kind)
+            for ax,unit in zip(axs,["$\Delta$pointing", "fit_hpw/hpbw", "fit_ampl/ampl"]):
+                ax.legend(); ax.set_xlabel(unit)
             
 
 
@@ -212,7 +225,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
     return (fitted, enviro)
 
 
-def _test_reduce_circular_pointing_():
+def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", cycles=7):
     """ Demonstrate a simulated "single dish" dataset similar to what's expected with DVS Ku-band """
     np.random.seed(1)
     
@@ -268,15 +281,11 @@ def _test_reduce_circular_pointing_():
                     self.wind_direction = 123 + 10*np.random.rand(len(self.timestamps))
                     yield
 
-    # Somewhat representative of DVS Ku-band
-    ds = TestDataset(13.5e9, ["s0000"], ["Jupiter"], n_cycles=3)
-    for ox,oy in [(0,0),(120/3600,0),(0,20/3600)]:
-        ds.__set_testopts__(kind="cardioid", scanrad='hpbw', ampl=10/2, SEFD=700/2, BW=10e6, ox=ox,oy=oy)
-        reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
-    # Somewhat representative of DVS Ku-band
-    ds = TestDataset(11.5e9, ["s0000"], ["GEOS"], n_cycles=5)
-    for ox,oy in [(0,0),(120/3600,0),(0,20/3600)]:
-        ds.__set_testopts__(kind="cardioid", scanrad='hpbw', ampl=500/2, SEFD=700/2, BW=.3e6, ox=ox,oy=oy)
+    ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
+    hpbw = ds.__hpbw__ # deg
+    for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
+        print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
+        ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
         reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
 
 
@@ -358,6 +367,7 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
 
 
 if __name__ == "__main__":
-    _test_fit_gaussianoffset_()
-    _test_reduce_circular_pointing_()
+    _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
+    _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
+    _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
     plt.show()
