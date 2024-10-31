@@ -180,8 +180,8 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
             ds.select(channels=chanmapping(target.name, fGHz))
         mask = slice(None) # TODO: mask any extra data, e.g. too high acceleration, or data lost?
         hv = np.abs(ds.vis[mask])
-        hv /= np.median(hv,axis=0) # Normalise for H-V gains & bandpass
-        height = np.mean(hv, axis=(1,2)) # TOTAL power integrated over frequency
+        # hv /= np.median(hv,axis=0) # Normalise for H-V gains & bandpass
+        height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
         t_ref = np.mean(ds.timestamps[mask])
         rAz, rEl = target.azel(t_ref, antenna=ant)
         if debug: # Prepare figure for debugging
