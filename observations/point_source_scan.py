@@ -59,6 +59,8 @@ parser.add_option('-e', '--scan-in-elevation', action="store_true", default=Fals
                   help="Scan in elevation rather than in azimuth (default=%default)")
 parser.add_option('-m', '--min-time', type="float", default=-1.0,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
+parser.add_option('--min-separation', type="float", default=1.0,
+                  help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
 # Set default value for any option (both standard and experiment-specific options)
 parser.add_option('-z', '--skip-catalogue',
                   help="Name of file containing catalogue of targets to skip (updated with observed targets). "
@@ -217,7 +219,7 @@ with verify_and_connect(opts) as kat:
                          (len(pointing_sources),))
 
     # Remove sources that crowd too closely
-    pointing_sources = filter_separation(pointing_sources, time.time(), kat.sources.antenna, separation_deg=1, sunmoon_separation_deg=10)
+    pointing_sources = filter_separation(pointing_sources, time.time(), kat.sources.antenna, separation_deg=opts.min_separation, sunmoon_separation_deg=10)
 
     # Remove sources in skip catalogue file, if provided
     if opts.skip_catalogue is not None and os.path.exists(opts.skip_catalogue):
