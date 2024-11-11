@@ -135,6 +135,8 @@ parser.add_option('--el-range', type='float',
                   help='Elevation range (signed number) over which to turn, from starting position (default=%default)')
 parser.add_option('--reverse', action='store_true', default=False,
                   help='Do the rate movement in both directions')
+parser.add_option('--repeats', type='int', default=1,
+                  help='Number of times to repeat a complete sequence, (default=%default)')
 parser.add_option('--no-corrections', action='store_true',
                   help='Disable static and tilt corrections during the controlled movement, restore afterwards.')
 
@@ -173,16 +175,17 @@ with verify_and_connect(opts) as kat:
             else:
                 kat.ants.req.dsm_DisablePointingCorrections()
 
-        rate_slew(kat.ants, opts.start_az, opts.start_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
-
-        if opts.reverse:
-            user_logger.info("1/2 of the sequence completed successfully!")
+        for n in range(opts.repeats):
+            rate_slew(kat.ants, opts.start_az, opts.start_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
+    
+            if opts.reverse or (opts.repeats > 1):
+                user_logger.info("1/2 sequence completed successfully!")
+                user_logger.info("Scanning in reverse direction...")
+                rate_slew(kat.ants, (opts.start_az+np.sign(opts.azim_speed)*opts.az_range)%360, (opts.start_el+opts.el_range), -opts.azim_speed, opts.az_range, -opts.el_range,
+                          dry_run=kat.dry_run)
+    
+            user_logger.info("Sequence completed successfully!")
             
-            user_logger.info("Reverse slew selected...")
-            rate_slew(kat.ants, (opts.start_az+np.sign(opts.azim_speed)*opts.az_range)%360, (opts.start_el+opts.el_range), -opts.azim_speed, opts.az_range, -opts.el_range,
-                      dry_run=kat.dry_run)
-
-        user_logger.info("Entire sequence completed successfully!")
     finally:
         if not kat.dry_run:
             if opts.no_corrections:
