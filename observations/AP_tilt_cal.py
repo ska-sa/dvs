@@ -2,115 +2,85 @@
 # While recording only sensor data: Turns antenna at a constant rate in azimuth & elevation over a specified range
 
 import time
-import katpoint
 import numpy as np
 
 from katcorelib import (standard_script_options,
                         verify_and_connect,
                         user_logger)
 
-class ApDriveFailure(Exception):
-    """AP failed to move due to drive failure."""
-
 
 class ParametersExceedTravelRange(Exception):
-    """Indexer is stuck in an undefined position."""
+    pass
 
+def wrap(angle, period):
+    """ @return: angle in the interval -period/2 ... period/2 """
+    return (angle + 0.5*period) % period - 0.5*period
 
 MKAT = True # This code currently only works with homogenous subarrays - either MeerKAT Receptors or SKA1-MID Dishes!
 
-def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, dry_run=False):
-    """ Turn ants from starting azim,elev at the specified speeds for a duration to cover specified azim_range. """
 
-    # Determine expected duration from requested test speed.
-    T_duration = abs(azim_range/azim_speed)
-    elev_speed = elev_range/T_duration
+def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, dry_run=False):
+    """ Turn ants from center azim,elev at the specified speeds for a duration to cover specified azim_range & elev_range. """
+    
+    azim = wrap(azim, 360)
+    target = "Scan, azel, %f,%f, d_az %f..%f, d_el %f..%f"%(azim,elev, -azim_range/2,azim_range/2, -elev_range/2,elev_range/2)
+    start_azim = azim - np.sign(azim_speed)*azim_range/2
+    start_elev = elev - elev_range/2
+    end_azim = azim + np.sign(azim_speed)*azim_range/2
+    end_elev = elev + elev_range/2
+    if not ((15 < start_elev < 90) and (15 < end_elev < 90)):
+        raise ParametersExceedTravelRange("Cannot perform %g degree elev scan centered on %g."%(elev_range,elev))
+    if not ((-185 < start_azim < 275) and (-185 < end_azim < 275)):
+        raise ParametersExceedTravelRange("Cannot perform %g degree azim scan centered on %g."%(azim_range,azim))
+    
     # Slew timeout in case some of the antennas need to unwrap, at max azim speed of 2 deg/sec
     T_timeout = (270+360)/2.0 + 100
-    # Only testing azim_range, not full travel range (460 degrees)
-    expected_azim = azim + np.sign(azim_speed)*azim_range
-    expected_elev = elev + elev_range
     
-    if not ((15 < elev < 90) and (15 < expected_elev < 90)):
-        raise ParametersExceedTravelRange("Cannot perform %g degree elev slew "
-                                          "within the AP elev travel range "
-                                          "from the given start position %g."%(elev_range,elev))
-    if (-185 < azim < 275) and (-185 < expected_azim < 275):
-        user_logger.info("Antennas will perform a rate slew to azimuth %s",
-                         expected_azim)
-    else:
-        raise ParametersExceedTravelRange("Cannot perform %g degree azim slew "
-                                          "within the AP azim travel range "
-                                          "from the given start position %g."%(azim_range,azim))
-
-    # Set this target for the receptor target sensor
-    target = katpoint.Target('Name, azel, %s, %s' % (azim, elev))
-
+    # Determine expected duration from requested test speed.
+    T_duration = abs(azim_range/azim_speed)
+    
     if not dry_run:
         ants.req.mode('STOP')
-        if MKAT: # Use slew to bypass pointing model
-            time.sleep(2)
-            ants.req.ap_slew(azim, elev)
-            # Since we are not using the proxy request we will have to explicitly
-            # wait for the servo brakes to open and on-target sensor to update.
-            time.sleep(2)
-        else: # For SDQM don't have equivalent of ap_rate(), so must use the scan() mechanism. TODO: Pointing model corrections to be omitted.
-            ants.req.target_azel(azim+azim_range/2., elev+elev_range/2.) # SDQM
-            ants.req.scan(-azim_range/2., -elev_range/2., azim_range/2., elev_range/2., T_duration, 'plate-carree') # SDQM
-            ants.req.mode('POINT') # Go to start of scan
-        time.sleep(2)
-
-    user_logger.info("Starting target description: '%s' ", target.description)
-
+        ants.req.target_azel(azim, elev)
+        ants.req.scan(-azim_range/2, -elev_range/2, azim_range/2, elev_range/2, T_duration, 'plate-carree')
+        ants.req.mode('POINT') # Go to start of scan
+    user_logger.info("Going to starting position for: '%s' ", target)
+    
     if not dry_run:
-        try:
-            if MKAT:
-                ants.wait('ap.on-target', True, timeout=T_timeout)
-            else:
-                ants.wait('lock', True, timeout=T_timeout) # SDQM Need this state before SCAN allowed (not dsm.targetLock since that is True during the scan phase).
-        except Exception as e:
-            user_logger.error("Timed out while waiting for AP to reach starting position. %s"%e)
-            raise
-
-    user_logger.info("AP has reached start position.")
-
+        time.sleep(5) # Avoid triggering before the antennas have started moving
+        ants.wait('lock', True, timeout=T_timeout) # Need to achieve this state before allowed to trigger SCAN
+    
+    user_logger.info("Performing scan to azimuth %s at %s deg/sec.", end_azim, azim_speed)
     if not dry_run:
-        if MKAT:
-            ants.req.mode('STOP')
-            time.sleep(2)
-            ants.req.ap_rate(azim_speed, elev_speed)
-        else: # For SDQM we use the scan() mechanism rather than ap_rate()
-            ants.req.mode('SCAN') # Start the configured scan
-        user_logger.info("Performing rate slew to azimuth %s at %s deg/sec.",
-                         expected_azim, azim_speed)
-        time.sleep(2)
-        
+        ants.req.mode('SCAN') # Start the configured scan
+    
+    if not dry_run:
+        time.sleep(2) # Avoid triggering before the antennas have started moving
+        # Note: ants.wait('ap.on-target', True, timeout) & 'dsm.targetLock' are True during the SCAN, so must use following:
+        sensor_name = "ap.actual-azim" if MKAT else "dsm.azPosition"
+        ants.set_sampling_strategy(sensor_name, "period 0.5")
+        threshold = 1 # To catch it at 0.5 second polling period at full speed (2 deg/sec).
+        wait_on_target = lambda t_az,t_el,timeout: ants.wait(sensor_name, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
         try: # Wait until we are at the expected end point
-            # Ideally want to use ants.wait('ap.on-target', True, timeout) but that doesn't work for SDQM scan() approach???
-            sensor_name = "ap.actual-azim" if MKAT else "dsm.azPosition"
-            ants.set_sampling_strategy(sensor_name, "period 0.5")
-            # Position threshold 2 degrees to catch it at 0.5 second polling
-            # period at full speed (2 deg/sec).
-            # NOTE (LW) : Increased this threshold in case the stop point is
-            #             being missed and causing a timeout.
-            threshold = 4
-            wait_on_target = lambda t_az,t_el,timeout: ants.wait(sensor_name, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
-        
             try: # Wait for the shortest possible time required
-                wait_on_target(expected_azim, expected_elev, timeout=T_duration+100)
+                wait_on_target(end_azim, end_elev, timeout=T_duration+100)
+                user_logger.info("Reached the end position.")
             except Exception as e:
-                user_logger.info("Taking longer than expected to reach the end point. Allowing more time.")
-                wait_on_target(expected_azim, expected_elev, timeout=T_timeout)
-            if not MKAT:
-                ants.wait('lock', True, timeout=300) # SDQM Need this to wait for scan to complete gracefully
-            user_logger.info("AP has reached end position.")
-        except Exception as e: # E.g. wind stow is recoverable, so just log and continue
-            user_logger.info("Timed out while waiting for AP to reach end point. %s"%e)
+                user_logger.info("Taking longer than expected to reach the end point. Allowing unwrap time.")
+                wait_on_target(end_azim, end_elev, timeout=T_timeout)
+            ants.wait('lock', True, timeout=100) # Allow scan to complete gracefully
+        except Exception as e: # Some conditions like wind stow are recoverable, so just log and try to continue
+            user_logger.info("Timed out while waiting to reach end point. %s"%e)
+        
         ants.req.mode('STOP')
-
-    else: # Simulate the run time
-        #time.sleep(T_duration) # Dry run may "hang" when it encounters long sleep()
-        user_logger.info("AP has reached end position.")
+    else:
+        user_logger.info("Reached the end position.")
+    
+    if not dry_run:
+        if not MKAT: # HACK to get around issue 12/11/2024 18h00 SAST?
+            import tango
+            dsh = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/elt/master')
+            dsh.TrackStop()
 
 
 # Set up standard script options
@@ -165,6 +135,8 @@ with verify_and_connect(opts) as kat:
         if not kat.dry_run:
             user_logger.error("Unable to set antennas to mode 'STOP'!")
 
+    mean_az = opts.start_az + opts.az_range/2
+    mean_el = opts.start_el + opts.el_range/2
     try:
         if opts.no_corrections and not kat.dry_run:
             if MKAT:
@@ -176,13 +148,12 @@ with verify_and_connect(opts) as kat:
                 kat.ants.req.dsm_DisablePointingCorrections()
 
         for n in range(opts.repeats):
-            rate_slew(kat.ants, opts.start_az, opts.start_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
-    
+            rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
+
             if opts.reverse or (opts.repeats > 1):
                 user_logger.info("1/2 sequence completed successfully!")
                 user_logger.info("Scanning in reverse direction...")
-                rate_slew(kat.ants, (opts.start_az+np.sign(opts.azim_speed)*opts.az_range)%360, (opts.start_el+opts.el_range), -opts.azim_speed, opts.az_range, -opts.el_range,
-                          dry_run=kat.dry_run)
+                rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, -opts.az_range, -opts.el_range, dry_run=kat.dry_run)
     
             user_logger.info("Sequence completed successfully!")
             
