@@ -76,11 +76,6 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     else:
         user_logger.info("Reached the end position.")
     
-    if not dry_run:
-        if not MKAT: # HACK to get around issue 12/11/2024 18h00 SAST?
-            import tango
-            dsh = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/elt/master')
-            dsh.TrackStop()
 
 
 # Set up standard script options
@@ -145,7 +140,7 @@ with verify_and_connect(opts) as kat:
                 kat.ants.req.ap_enable_point_error_systematic(False)
                 kat.ants.req.ap_enable_point_error_tiltmeter(False)
             else:
-                kat.ants.req.dsm_DisablePointingCorrections()
+                kat.ants.req.dsm_DisablePointingCorrections() # TODO: doesn't seem to work like this, but does work via Jive
 
         for n in range(opts.repeats):
             rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
