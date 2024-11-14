@@ -1,17 +1,12 @@
-from katcorelib import user_logger
+""" Temporary hacks and "hack frameworks", for use in the OBS environment.
+    @author: aph@sarao.ac.za
+"""
+try:
+    from katcorelib import user_logger
+except:
+    print("INFO: not running in the OBS framework, some hacks may break!")
 import katpoint, time, numpy
 
-
-def apply_temp_hacks():
-    global session
-    try:
-        if not session.dry_run:
-            import tango
-            dsm = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/lmc/ds_manager')
-            dsm.tiltPointCorrEnabled = False
-    except Exception as e:
-        user_logger.warn("Failed to disable Tilt Corrections on Dish#119", e)
-    
 
 class start_session(object):
     """ Hacked "no capture session" to ignore cbf & sdp """
@@ -101,3 +96,18 @@ class start_session(object):
             return self.ants.req.load_scan(csv)
         else:
             return True                    
+
+
+# Apply mandatory hacks - if in a configured OBS framework
+try:
+    if not kat.dry_run:
+        # HACK 1: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
+        try:
+            import tango
+            dsm = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/lmc/ds_manager')
+            dsm.tiltPointCorrEnabled = False
+        except Exception as e:
+            user_logger.warn("Failed to disable Tilt Corrections on Dish#119", e)
+
+except Exception as e: # Not in a configured OBS framework
+    pass
