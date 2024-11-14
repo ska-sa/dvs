@@ -106,5 +106,6 @@ def apply(kat):
             import tango
             dsm = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/lmc/ds_manager')
             dsm.tiltPointCorrEnabled = False
+            user_logger.warn("APPLIED HACK: Dish#119 Tilt Corrections Disabled")
         except Exception as e:
-            user_logger.warn("Failed to disable Tilt Corrections on Dish#119", e)
+            user_logger.warning("Failed to disable Tilt Corrections on Dish#119: %s" % e)
