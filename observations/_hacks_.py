@@ -98,8 +98,8 @@ class start_session(object):
             return True                    
 
 
-# Apply mandatory hacks - if in a configured OBS framework
-try:
+def apply(kat):
+    """ Apply mandatory hacks - if in a configured OBS framework """
     if not kat.dry_run:
         # HACK 1: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
         try:
@@ -108,6 +108,3 @@ try:
             dsm.tiltPointCorrEnabled = False
         except Exception as e:
             user_logger.warn("Failed to disable Tilt Corrections on Dish#119", e)
-
-except Exception as e: # Not in a configured OBS framework
-    pass
