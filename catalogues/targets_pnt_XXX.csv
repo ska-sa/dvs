@@ -1,0 +1,17 @@
+# Targets suitable for ZEROTH ORDER single dish pointing in MeerKAT RTS UHF - Ku-band (strong but not accurate)
+# ID       |  Name(s),                                        tag,   RA(J2000),     dec(J2000),   flux polynomial,                                               uncertainty[arcsec] source,     Gal l,  Gal b,~1400MHz flx,redshift,NED Object type     IRAS/X-ray  s-dish comment
+J0534+2200 | Tau A | Taurus A | 3C 144 | Crab | PKS 0531+21, radec, 05:34:31.94,  +22:00:52.2,  (1400.0 10000.0 3.915 -0.299),                                  0.5x0.5    opt/psr,            184.56,  -5.78,    930,        ,  SNR; Psr               I; X; Gam  no   ~5' @ 160MHz; single comp           
+
+J0535-0523 | Ori A | Orion A | M42 | 3C 145 | PKS 0532-05,   radec, 05:35:17.30,  -05:23:28.0,  (1000.0 10000.0 -0.429874080747 1.64134149914 -0.219515164089), 7.5x7.5    Molonglo 408MHz,    209.01, -19.38,    410,        ,  HII; Cl                X          no   < ~60'?                       
+
+J0833-4543 | *Vela X | CTB 26,                               radec, 08:33:30, -45:47:0,    (400.0 2000.0 2.377),                                         180x180      Simbad/radio,       263.81,  -3.37,     ?? Jy,        ,  Gal Rad src: SNR?      Gam        no                                            
+
+J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,  +12:23:28.0,  (1408.0 10550.0 4.484 -0.603 -0.0280),                          mas        VLBI 2.3/8.4 GHz,   283.78,  74.49,    220,  v=1307,  Sy; LINER; FRI; cD     I; X       ok   < ~1'; core dominated                   
+
+J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
+
+J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,  +04:59:34.9,  (1408.0 10550.0 3.852 -0.361 -0.1053),                          1.25x1.25  2Mass,               23.05,  28.95,     48,  z=0.15,  i.a. E/S0 pair; NLRG   X          no   ~5'; FRI/FRII                     
+
+J1745-2900 | Sgr A | Sagittarius A | CTB 42,                 radec, 17:46:06, -28:51:0,  (1000.0 10000.0 4.32 -0.55),                                    mas        VLA high-fr,        359.94,  -0.04,     ?? Jy,        ,  MBH                    X; Gam     no                 
+
+J1959+4044 | Cyg A | Cygnus A | 3C 405,                      radec, 19:59:28.36,  +40:44:02.1,  (20.0 2000.0 4.695 0.085 -0.178),                               mas        VLBI,                76.19,   5.76,   1590,  z=0.06,  Sy 2                   I; X       ok   ~3'; double radio src; cD; FRII                 
