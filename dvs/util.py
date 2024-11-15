@@ -4,6 +4,7 @@
     @author: aph@sarao.ac.za
 """
 import katdal
+import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
