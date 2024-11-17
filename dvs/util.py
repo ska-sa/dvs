@@ -10,14 +10,14 @@ import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
 
 
-def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, verbose=False, **kwargs):
+def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache='persist', cache_root=None, **kwargs):
     """ Use this to open a dataset recorded with DVS, instead of katdal.open(), for the following reasons:
         1) easily accommodate the "hacked L-band digitiser"
         2) override the antennas' "receiver" serial numbers, which are some times set incorrectly with DVS "slip-ups"
         3) work-around for the CAM activity time_offset issue that affects SKA-type Dishes
         4) supports local caching of the dataset. 
         
-        Use either this "function call" form, or the accompanying "context manager". The context manager automatically
+        Use this either in "function call" form, or as a "context manager". The context manager automatically
         deletes the local cache, if that is used.
         
         Use as "function call"
@@ -28,7 +28,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         
         Use as "context manager"
         
-            with  open_dataset_cached(cbid, ...) as ds:
+            with  open_dataset(cbid, ..., cache='context') as ds:
                 ...
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
@@ -37,12 +37,14 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                   are interpreting the data for SKA-type Dishes, because their activities have a time offset from MeerKAT).
         @param hackedL: True if the dataset was generated with the hacked L-band digitiser i.e. sampled in 1st Nyquist zone.
         @param ant_rx_override: {ant:rx_serial} to override (default None)
+        @param cache: only relevant if 'cache_root' is given, then must be one of 'persist'|'context'; - in the latter case a
+                      context manager is returned to automate clean up of the cache.
         @param cache_root: folder to download the dataset to until the dataset is garbage collected (default None).
                            Note: will be ignored if 'dataset' is a URL. 
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
     __del_cache__ = lambda: None # Default function, overridden below
-    if cache_root: # Try to download
+    if (cache_root): # Try to download
         try:
             cbid = int(str(dataset))
             cache_fn = f"{cache_root}/{cbid}/{cbid}_sdp_l0.full.rdb"
@@ -92,23 +94,20 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         for ant in dataset.ants:
             dataset.receivers[ant.name] = ant_rx_override.get(ant.name, dataset.receivers[ant.name])
     
-    if verbose:
-        print(dataset)
-        print(dataset.receivers)
-    
 
-    # Add a hook to clean-up in case it's been cached locally
+    # An explicit function to clean-up in case it's been cached locally
     dataset.del_cache = __del_cache__
+    
+    # If requested, create a context manager to automate the cache clean up
+    if (cache_root) and (cache == 'context'):
+        class ctx_wrapper(object):
+            def __init__(self, dataset):
+                self.dataset = dataset
+            def __enter__(self):
+                return self.dataset
+            def __exit__(self, except_type, except_val, except_tb):
+                self.dataset.del_cache()
+        dataset = ctx_wrapper(dataset)
+    
     return dataset
 
-
-class open_dataset_cached(object):
-    """ The context manager version of `open_dataset` """
-    def __init__(self, *a, **k):
-        k['cache_root'] = k.get('cache_root', "./l1_data")
-        self.dataset = open_dataset(*a, **k)
-    def __enter__(self):
-        return self.dataset
-    def __exit__(self, except_type, except_val, except_tb):
-        self.dataset.del_cache()
-open_dataset_cached.__init__.__doc__ = open_dataset.__doc__
