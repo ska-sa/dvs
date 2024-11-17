@@ -14,9 +14,22 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     """ Use this to open a dataset recorded with DVS, instead of katdal.open(), for the following reasons:
         1) easily accommodate the "hacked L-band digitiser"
         2) override the antennas' "receiver" serial numbers, which are some times set incorrectly with DVS "slip-ups"
-        3) work-around for the CAM activity time_offset issue that affects SKA-type Dishes.
+        3) work-around for the CAM activity time_offset issue that affects SKA-type Dishes
+        4) supports local caching of the dataset. 
         
-        Use like 'ds = open_dataset(URL, ...)'
+        Use either this "function call" form, or the accompanying "context manager". The context manager automatically
+        deletes the local cache, if that is used.
+        
+        Use as "function call"
+        
+            ds = open_dataset(cbid, ..., cache_root="./l1_data")
+            ...
+            ds.del_cache() # Clean up explicitly, in case you used 'cache_root'
+        
+        Use as "context manager"
+        
+            with  open_dataset_cached(cbid, ...) as ds:
+                ...
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
                   If this is an integer (or string representation of an integer) it is converted using `cbid2url`.
@@ -28,6 +41,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                            Note: will be ignored if 'dataset' is a URL. 
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
+    __del_cache__ = lambda: None # Default function, overridden below
     if cache_root: # Try to download
         try:
             cbid = int(str(dataset))
@@ -36,19 +50,13 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                 err = os.system(f"python {os.path.dirname(__file__)}/../bin/mvf_copy.py {cbid2url(cbid)} {cache_root}")
                 assert (err == 0), "mvf_copy.py failed with error code %s"%err
             dataset = cache_fn
+            # A function to remove the cached files
+            __del_cache__ = lambda: [shutil.rmtree(f"{cache_root}/{cbid}", ignore_errors=True),
+                                     shutil.rmtree(f"{cache_root}/{cbid}-sdp-l0", ignore_errors=True)]
         except ValueError: # Not a "CaptureBlockId", so don't cache
             pass
         except Exception as e:
             print("WARNING: unable to cache the dataset locally: ", e)
-    # A function to remove the cached files
-    def __uncache__(ds, *args):
-        if cache_root:
-            shutil.rmtree(f"{cache_root}/{cbid}", ignore_errors=True)
-            shutil.rmtree(f"{cache_root}/{cbid}-sdp-l0", ignore_errors=True)
-        try:
-            super(type(ds)).__del__(*args)
-        except AttributeError: # no __del__?
-            pass
     
     # Convert dataset from an integer to a URL, if necessary
     try:
@@ -72,9 +80,6 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
             #     katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = 1.2 # https://github.com/ska-sa/katproxy/blob/master/katproxy/proxy/base_receptor_model.py#L46
         
         dataset = katdal.open(dataset, **kwargs) if isinstance(dataset,str) else dataset
-        # Add a hook to clean-up in case it's been cached locally
-        dataset.__del__ = lambda *a,**k: __uncache__(dataset, *a, **k)
-        # Note: in case of an exception in katdal.open the clean-up will be skipped - this is appropriate in most cases
     finally: # It is "baked in" when katdal.open() completes
         katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = _time_offset
     
@@ -91,5 +96,19 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         print(dataset)
         print(dataset.receivers)
     
+
+    # Add a hook to clean-up in case it's been cached locally
+    dataset.del_cache = __del_cache__
     return dataset
 
+
+class open_dataset_cached(object):
+    """ The context manager version of `open_dataset` """
+    def __init__(self, *a, **k):
+        k['cache_root'] = k.get('cache_root', "./l1_data")
+        self.dataset = open_dataset(*a, **k)
+    def __enter__(self):
+        return self.dataset
+    def __exit__(self, except_type, except_val, except_tb):
+        self.dataset.del_cache()
+open_dataset_cached.__init__.__doc__ = open_dataset.__doc__
