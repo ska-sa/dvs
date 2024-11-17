@@ -3,14 +3,14 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, shutil
+import katdal, os, shutil, tempfile
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
 
 
-def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache='persist', cache_root=None, **kwargs):
+def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, **kwargs):
     """ Use this to open a dataset recorded with DVS, instead of katdal.open(), for the following reasons:
         1) easily accommodate the "hacked L-band digitiser"
         2) override the antennas' "receiver" serial numbers, which are some times set incorrectly with DVS "slip-ups"
@@ -28,7 +28,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         
         Use as "context manager"
         
-            with  open_dataset(cbid, ..., cache='context') as ds:
+            with  open_dataset(cbid, ..., cache_root='CONTEXT') as ds:
                 ...
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
@@ -37,12 +37,14 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                   are interpreting the data for SKA-type Dishes, because their activities have a time offset from MeerKAT).
         @param hackedL: True if the dataset was generated with the hacked L-band digitiser i.e. sampled in 1st Nyquist zone.
         @param ant_rx_override: {ant:rx_serial} to override (default None)
-        @param cache: only relevant if 'cache_root' is given, then must be one of 'persist'|'context'; - in the latter case a
-                      context manager is returned to automate clean up of the cache.
-        @param cache_root: folder to download the dataset to until the dataset is garbage collected (default None).
+        @param cache_root: None, or 'CONTEXT', or the folder to download the dataset to, until the cache is deleted (default None).
+                           If 'CONTEXT' then a context manager is returned to automate clean up of the cache.
                            Note: will be ignored if 'dataset' is a URL. 
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
+    _ctx_ = (cache_root == 'CONTEXT')
+    cache_root = tempfile.gettempdir() if _ctx_ else cache_root
+    
     __del_cache__ = lambda: None # Default function, overridden below
     if (cache_root): # Try to download
         try:
@@ -99,7 +101,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     dataset.del_cache = __del_cache__
     
     # If requested, create a context manager to automate the cache clean up
-    if (cache_root) and (cache == 'context'):
+    if _ctx_:
         class ctx_wrapper(object):
             def __init__(self, dataset):
                 self.dataset = dataset
@@ -110,4 +112,28 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         dataset = ctx_wrapper(dataset)
     
     return dataset
+
+
+def add_datalog_entry(dataset, ant, wipe_all=False, comment=None, **column_entries):
+    """ Update the log messages against a dataset as used for a specific antenna.
+        
+        @param dataset: katdal dataset or CaptureBlockId
+        @param ant: the ID of the antenna that the log message is relevant for.
+        @param wipe_all: True to remove all existing log messages for this dataset & antenna (default False).
+        @param comment: the text to register in the log (only optional if wipe_all=True).
+        @param column_entries: key,value pairs for text to be entered in the named columns.
+    """
+    assert ((comment is not None) or (wipe_all==True)), "'comment' is mandatory!"
+    # TODO: update google spreadsheet
+
+
+def get_datalog_entries(dataset, ant):
+    """ Retrieve all log messages against a dataset as used for a specific antenna.
+        
+        @param dataset: katdal dataset or CaptureBlockId
+        @param ant: the ID of the antenna that the log message is relevant for.
+        @return: list of {comment:..., column_x:..., ...} entries that have been logged against the dataset
+    """
+    # TODO: read from google spreadsheet
+    return []
 
