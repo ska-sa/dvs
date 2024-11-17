@@ -102,10 +102,11 @@ def apply(kat):
     """ Apply mandatory hacks - if in a configured OBS framework """
     if not kat.dry_run:
         # HACK 1: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
+        # NB: this must happen after dish proxy STOP - which happens in session.standard_setup()
         try:
             import tango
             dsm = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/lmc/ds_manager')
             dsm.tiltPointCorrEnabled = False
-            user_logger.warn("APPLIED HACK: Dish#119 Tilt Corrections Disabled")
+            user_logger.warning("APPLIED HACK: Dish#119 Tilt Corrections Disabled")
         except Exception as e:
             user_logger.warning("Failed to disable Tilt Corrections on Dish#119: %s" % e)
