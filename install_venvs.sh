@@ -38,7 +38,7 @@ git clone https://github.com/ska-sa/katsdpscripts.git
 # TODO: At present, the above package is private - a temporary situation. The workaround is the following:
 gdown 1Ep3o1mElx2YsJM_B4Hh6j_LKU4mkFYpU && unzip systems-analysis-master.zip -d systems-analysis && rm systems-analysis-master.zip
 ln -f -s `pwd`/systems-analysis/analysis dvs/libraries/analysis
-ln -f -s `pwd`/katsdpscripts dvs/libraries/katsdpscripts
+ln -f -s `pwd`/katsdpscripts/katsdpscripts dvs/libraries/katsdpscripts
 
 ipython3 kernel install --name "dvs" --user
 # Add a custom pythonpath
