@@ -16,11 +16,13 @@ def wrap(angle, period):
     """ @return: angle in the interval -period/2 ... period/2 """
     return (angle + 0.5*period) % period - 0.5*period
 
-MKAT = True # This code currently only works with homogenous subarrays - either MeerKAT Receptors or SKA1-MID Dishes!
+
+az_sensor_names = ["ap.actual-azim", "dsm.azPosition"] # For MeerKAT Receptors & SKA1-MID Dishes
 
 
 def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, dry_run=False):
     """ Turn ants from center azim,elev at the specified speeds for a duration to cover specified azim_range & elev_range. """
+    global az_sensor_names
     
     azim = wrap(azim, 360)
     target = "Scan, azel, %f,%f, d_az %f..%f, d_el %f..%f"%(azim,elev, -azim_range/2,azim_range/2, -elev_range/2,elev_range/2)
@@ -57,10 +59,10 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     if not dry_run:
         time.sleep(2) # Avoid triggering before the antennas have started moving
         # Note: ants.wait('ap.on-target', True, timeout) & 'dsm.targetLock' are True during the SCAN, so must use following:
-        sensor_name = "ap.actual-azim" if MKAT else "dsm.azPosition"
-        ants.set_sampling_strategy(sensor_name, "period 0.5")
         threshold = 1 # To catch it at 0.5 second polling period at full speed (2 deg/sec).
-        wait_on_target = lambda t_az,t_el,timeout: ants.wait(sensor_name, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
+        def wait_on_target(t_az,t_el,timeout):
+            for s_n in az_sensor_names:
+                ants.wait(s_n, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
         try: # Wait until we are at the expected end point
             try: # Wait for the shortest possible time required
                 wait_on_target(end_azim, end_elev, timeout=T_duration+100)
@@ -114,14 +116,17 @@ opts.az_range = abs(opts.az_range)
 # Check options and build KAT configuration, connecting to proxies and devices
 with verify_and_connect(opts) as kat:
 
-    ant_types = set([ant.name[0] for ant in kat.ants])
-    assert (len(ant_types) == 1), "This procedure only works with subarrays consisting of just one type of receptor!"
-    MKAT = "m" in ant_types # Global
+    # The interfaces for these two are different in some respects
+    mkat_ants = [ant for ant in kat.ants if (ant.name[0] == "m")]
+    ska_ants = [ant for ant in kat.ants if (ant.name[0] == "s")]
+    TILT_state = {} # ant name:tilt_corr_enabled boolean
     
     # Set sensor strategies
     kat.ants.set_sampling_strategy("ap.on-target", "event") # This is a combination of mount-lock & lock, so set all three
     kat.ants.set_sampling_strategy("mount-lock", "event")
     kat.ants.set_sampling_strategy("lock", "event")
+    for s_n in az_sensor_names:
+        kat.ants.set_sampling_strategy(s_n, "period 0.5")
 
     if not kat.dry_run and kat.ants.req.mode('STOP'):
         user_logger.info("Setting antennas to mode 'STOP'")
@@ -133,14 +138,14 @@ with verify_and_connect(opts) as kat:
     mean_az = opts.start_az + opts.az_range/2
     mean_el = opts.start_el + opts.el_range/2
     try:
-        if opts.no_corrections and not kat.dry_run:
-            if MKAT:
-                SPEM_state = False # For MeerKAT in operation it is safe to assume this is always False
-                TILT_state = [(ant,ant.sensor.ap_point_error_tiltmeter_enabled.get_value()) for ant in kat.ants]
-                kat.ants.req.ap_enable_point_error_systematic(False)
-                kat.ants.req.ap_enable_point_error_tiltmeter(False)
-            else:
-                kat.ants.req.dsm_DisablePointingCorrections() # TODO: doesn't seem to work like this, but does work via Jive
+        if opts.no_corrections and not kat.dry_run: # Disable tilt correction
+            for ant in mkat_ants:
+                TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
+                ant.req.ap_enable_point_error_tiltmeter(False)
+            for ant in ska_ants:
+                user_logger.warning("TODO: disable Dish tilt corrections")
+                # TILT_state[ant.name] = ant.sensor.dshTiltCorrections.get_value()
+                # ant.req.dsh_DisableTiltCorrections()
 
         for n in range(opts.repeats):
             rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
@@ -156,14 +161,14 @@ with verify_and_connect(opts) as kat:
         if not kat.dry_run:
             if opts.no_corrections:
                 user_logger.info("Restoring ACU pointing correction states...")
-                if MKAT:
-                    kat.ants.req.ap_enable_point_error_systematic(SPEM_state)
-                    for ant,state in TILT_state:
-                        resp = ant.req.ap_enable_point_error_tiltmeter(state)
-                        if not resp.succeeded:
-                            user_logger.error("FAILED to restore ACU state for %s: %s"%(ant.name, resp.reply))
-                else:
-                    kat.ants.req.dsm_EnablePointingCorrections()
+                for ant in mkat_ants:
+                    resp = ant.req.ap_enable_point_error_tiltmeter(TILT_state[ant.name])
+                    if not resp.succeeded:
+                        user_logger.error("FAILED to restore ACU state for %s: %s"%(ant.name, resp.reply))
+                for ant in ska_ants:
+                    if (TILT_state[ant.name] == True):
+                        user_logger.warning("TODO: re-enable Dish tilt corrections")
+                        # ant.req.dsh_EnableTiltCorrections()
 
             kat.ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
