@@ -10,7 +10,7 @@ import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
 
 
-def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, **kwargs):
+def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, temp=False, **kwargs):
     """ Use this to open a dataset recorded with DVS, instead of katdal.open(), for the following reasons:
         1) easily accommodate the "hacked L-band digitiser"
         2) override the antennas' "receiver" serial numbers, which are some times set incorrectly with DVS "slip-ups"
@@ -28,7 +28,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         
         Use as "context manager"
         
-            with  open_dataset(cbid, ..., cache_root='CONTEXT') as ds:
+            with  open_dataset(cbid, ..., temp=True) as ds:
                 ...
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
@@ -37,13 +37,13 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                   are interpreting the data for SKA-type Dishes, because their activities have a time offset from MeerKAT).
         @param hackedL: True if the dataset was generated with the hacked L-band digitiser i.e. sampled in 1st Nyquist zone.
         @param ant_rx_override: {ant:rx_serial} to override (default None)
-        @param cache_root: None, or 'CONTEXT', or the folder to download the dataset to, until the cache is deleted (default None).
-                           If 'CONTEXT' then a context manager is returned to automate clean up of the cache.
+        @param cache_root: None, or the folder to download the dataset to, until the cache is deleted (default None).
                            Note: will be ignored if 'dataset' is a URL. 
+        @param temp: if True then a context manager is returned to automate clean up of the cache.
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
-    _ctx_ = (cache_root == 'CONTEXT')
-    cache_root = tempfile.gettempdir() if _ctx_ else cache_root
+    if temp and not cache_root:
+        cache_root = tempfile.gettempdir()
     
     __del_cache__ = lambda: None # Default function, overridden below
     if (cache_root): # Try to download
@@ -101,7 +101,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     dataset.del_cache = __del_cache__
     
     # If requested, create a context manager to automate the cache clean up
-    if _ctx_:
+    if temp:
         class ctx_wrapper(object):
             def __init__(self, dataset):
                 self.dataset = dataset
