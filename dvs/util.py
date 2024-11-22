@@ -10,7 +10,7 @@ import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
 
 
-def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, temp=False, **kwargs):
+def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, **kwargs):
     """ Use this to open a dataset recorded with DVS, instead of katdal.open(), for the following reasons:
         1) easily accommodate the "hacked L-band digitiser"
         2) override the antennas' "receiver" serial numbers, which are some times set incorrectly with DVS "slip-ups"
@@ -28,7 +28,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         
         Use as "context manager"
         
-            with  open_dataset(cbid, ..., temp=True) as ds:
+            with  open_dataset(cbid, ...).cache_manager as ds:
                 ...
         
         @param dataset: the URL of the katdal dataset to open (or an already opened dataset to modify in-situ).
@@ -39,7 +39,6 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         @param ant_rx_override: {ant:rx_serial} to override (default None)
         @param cache_root: None, or the folder to download the dataset to, until the cache is deleted (default None).
                            Note: will be ignored if 'dataset' is a URL. 
-        @param temp: if True then a context manager is returned to automate clean up of the cache.
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
     if temp and not cache_root:
@@ -99,17 +98,15 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
 
     # An explicit function to clean-up in case it's been cached locally
     dataset.del_cache = __del_cache__
-    
-    # If requested, create a context manager to automate the cache clean up
-    if temp:
-        class ctx_wrapper(object):
-            def __init__(self, dataset):
-                self.dataset = dataset
-            def __enter__(self):
-                return self.dataset
-            def __exit__(self, except_type, except_val, except_tb):
-                self.dataset.del_cache()
-        dataset = ctx_wrapper(dataset)
+    # A context manager to automate the cache clean up
+    class ctx_wrapper(object):
+        def __init__(self, dataset):
+            self.dataset = dataset
+        def __enter__(self):
+            return self.dataset
+        def __exit__(self, except_type, except_val, except_tb):
+            self.dataset.del_cache()
+    dataset.cache_manager = ctx_wrapper(dataset)
     
     return dataset
 
