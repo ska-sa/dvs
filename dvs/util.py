@@ -3,7 +3,7 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, shutil, tempfile
+import katdal, os, shutil
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 
 
@@ -41,9 +41,6 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                            Note: will be ignored if 'dataset' is a URL. 
         @param kwargs: passed to katdal.open()
         @return: the opened dataset. """
-    if temp and not cache_root:
-        cache_root = tempfile.gettempdir()
-    
     __del_cache__ = lambda: None # Default function, overridden below
     if (cache_root): # Try to download
         try:
