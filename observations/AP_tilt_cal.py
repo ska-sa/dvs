@@ -16,7 +16,21 @@ def wrap(angle, period):
     """ @return: angle in the interval -period/2 ... period/2 """
     return (angle + 0.5*period) % period - 0.5*period
 
+def wait_on_sensor(ants, sensor_name, check_function, timeout):
+    """ As of 11/2024, this is a work around for ants.wait() breaks if the sensor is not defined for both types of antennas. """
+    try:
+        ants.wait(sensor_name, check_function, timeout=timeout)
+    except KeyError: # Sensor not defined for some antennas
+        mkat_ants = [ant for ant in kat.ants if (ant.name[0] == "m")]
+        ska_ants = [ant for ant in kat.ants if (ant.name[0] != "m")]
+        try:
+            for a in mkat_ants:
+                a.wait(sensor_name, check_function, timeout=timeout)
+        except KeyError:
+            for a in ska_ants:
+                a.wait(sensor_name, check_function, timeout=timeout)
 
+    
 az_sensor_names = ["ap.actual-azim", "dsm.azPosition"] # For MeerKAT Receptors & SKA1-MID Dishes
 
 
@@ -55,6 +69,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     user_logger.info("Performing scan to azimuth %s at %s deg/sec.", end_azim, azim_speed)
     if not dry_run:
         ants.req.mode('SCAN') # Start the configured scan
+        ants.req.dsm_DisablePointingCorrections() # TODO: hack necessary 11/2024 because ACU re-enables it
     
     if not dry_run:
         time.sleep(2) # Avoid triggering before the antennas have started moving
@@ -62,7 +77,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
         threshold = 1 # To catch it at 0.5 second polling period at full speed (2 deg/sec).
         def wait_on_target(t_az,t_el,timeout):
             for s_n in az_sensor_names:
-                ants.wait(s_n, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
+                wait_on_sensor(ants, s_n, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
         try: # Wait until we are at the expected end point
             try: # Wait for the shortest possible time required
                 wait_on_target(end_azim, end_elev, timeout=T_duration+100)
@@ -118,7 +133,7 @@ with verify_and_connect(opts) as kat:
 
     # The interfaces for these two are different in some respects
     mkat_ants = [ant for ant in kat.ants if (ant.name[0] == "m")]
-    ska_ants = [ant for ant in kat.ants if (ant.name[0] == "s")]
+    ska_ants = [ant for ant in kat.ants if (ant.name[0] != "m")]
     TILT_state = {} # ant name:tilt_corr_enabled boolean
     
     # Set sensor strategies
@@ -143,9 +158,8 @@ with verify_and_connect(opts) as kat:
                 TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
                 ant.req.ap_enable_point_error_tiltmeter(False)
             for ant in ska_ants:
-                user_logger.warning("TODO: disable Dish tilt corrections")
-                # TILT_state[ant.name] = ant.sensor.dshTiltCorrections.get_value()
-                # ant.req.dsh_DisableTiltCorrections()
+                TILT_state[ant.name] = True # ant.sensor.dshTiltCorrections.get_value() # TODO: not exposed 11/2024
+            kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt
 
         for n in range(opts.repeats):
             rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
@@ -167,8 +181,8 @@ with verify_and_connect(opts) as kat:
                         user_logger.error("FAILED to restore ACU state for %s: %s"%(ant.name, resp.reply))
                 for ant in ska_ants:
                     if (TILT_state[ant.name] == True):
-                        user_logger.warning("TODO: re-enable Dish tilt corrections")
-                        # ant.req.dsh_EnableTiltCorrections()
+                        user_logger.warning("TODO: re-enable %s tilt corrections" % ant.name)
+                        # ant.req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
 
             kat.ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
