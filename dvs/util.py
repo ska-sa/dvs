@@ -5,6 +5,8 @@
 """
 import katdal, os, shutil
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
+from analysis.katselib import GSheet
+from analysis import __res__
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
@@ -108,26 +110,45 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     return dataset
 
 
-def add_datalog_entry(dataset, ant, wipe_all=False, comment=None, **column_entries):
+def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditions, test_procedures=[],
+                      replace_all=False):
     """ Update the log messages against a dataset as used for a specific antenna.
         
-        @param dataset: katdal dataset or CaptureBlockId
-        @param ant: the ID of the antenna that the log message is relevant for.
-        @param wipe_all: True to remove all existing log messages for this dataset & antenna (default False).
-        @param comment: the text to register in the log (only optional if wipe_all=True).
-        @param column_entries: key,value pairs for text to be entered in the named columns.
-    """
-    assert ((comment is not None) or (wipe_all==True)), "'comment' is mandatory!"
-    # TODO: update google spreadsheet
+        @param ant: the ID of the antenna that the log message is relevant for, e.g. "SKA119".
+        @param dataset: a specific CaptureBlockId
+        @param description..env_conditions: column entries as text or numbers.
+        @param test_procedures: list of names of test procedures where this dataset has been used.
+        @param replace_all: True to remove all existing log messages for this dataset & antenna before adding the new entry (default False). """
+    assert (isinstance(dataset, int) or isinstance(dataset, str)), "Dataset may not be unspecified!"
+    
+    gs = GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
 
+    if replace_all:
+        # Find the rows to clear
+        values = gs[f"{ant}!A2:Z"] # Skip the headings and expect no more than 26 columns
+        dataset = str(dataset)
+        rows = [2+i for i,r in enumerate(values) if (str(r[0]).startswith(dataset))]
+        # Clear just those rows
+        gs.clear([f"{ant}!A{r}:Z" for r in rows])
+    
+    entry = [dataset, description, center_freq, notes, env_conditions] + test_procedures
+    gs.append(f"{ant}!A2:Z", [entry])
+    
 
-def get_datalog_entries(dataset, ant):
+def get_datalog_entries(ant, dataset="*"):
     """ Retrieve all log messages against a dataset as used for a specific antenna.
         
-        @param dataset: katdal dataset or CaptureBlockId
-        @param ant: the ID of the antenna that the log message is relevant for.
-        @return: list of {comment:..., column_x:..., ...} entries that have been logged against the dataset
-    """
-    # TODO: read from google spreadsheet
-    return []
-
+        @param ant: the ID of the antenna that the log message is relevant for, e.g. "SKA119".
+        @param dataset: a specific CaptureBlockId or "*" for all
+        @return: (headings, values) of entries have been logged against the dataset """
+    gs = GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
+    
+    values = gs[f"{ant}!A1:Z"] # Expect no more than 26 columns
+    headings, values = values[0], values[1:]
+    
+    if (dataset != "*"): # Select the rows to return
+        dataset = str(dataset)
+        selected = [r for r in values if (str(r[0]).startswith(dataset))]
+        values = selected
+    
+    return headings, values
