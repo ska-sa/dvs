@@ -115,10 +115,11 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
     return figs
 
 
-def analyse(h5, ant, channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
+def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
            xK=[1.03,1.05,1.1,1.15]):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
         
+        @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param channels: channel indices (list or slice) to select (default None)
         @param timerange: passed to select, after selecting 'track' (default None)
         @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
@@ -131,7 +132,7 @@ def analyse(h5, ant, channels=None, timerange=None, t_spike_start=None, t_spike_
     """
     filename = h5.name.split()[0].split(" ")[0] # "rdb files are different
     # Select the correct scan. It's always the last 'track'
-    h5.select(reset="TFB", scans='track')
+    h5.select(reset="TFB", scans='track', flags=flags)
     h5.select(scans=h5.scan_indices[-1], ants=[ant])
     if (timerange is not None):
         h5.select(reset="", timerange=timerange)
@@ -145,9 +146,11 @@ def analyse(h5, ant, channels=None, timerange=None, t_spike_start=None, t_spike_
         print("Discrepancy between dump period and recorded time intervals, using latter")
         dt = np.mean(np.diff(h5.timestamps))
     pols = [i for i,x in enumerate(h5.corr_products) if x[0][-1]==x[1][-1]] # Only XX & YY
-    p_h = np.abs(h5.vis[:,:,pols[0]].squeeze())
-    p_v = np.abs(h5.vis[:,:,pols[1]].squeeze())
-    p_hv = np.abs(h5.vis[:,:,[i for i,x in enumerate(h5.corr_products) if x[0][-1]!=x[1][-1]][0]].squeeze())
+    vis = h5.vis[:]
+    if flags: vis[h5.flags[:]] = np.nan
+    p_h = np.abs(vis[:,:,pols[0]].squeeze())
+    p_v = np.abs(vis[:,:,pols[1]].squeeze())
+    p_hv = np.abs(vis[:,:,[i for i,x in enumerate(h5.corr_products) if x[0][-1]!=x[1][-1]][0]].squeeze())
     if cycle_50pct: # Take differences of consecutive [ON,OFF,ON,OFF...] samples -> [ON-OFF,OFF-ON,ON-OFF...],
                     # convert all to |ON-OFF| and finally trim time vector to match
         p_h = np.diff(p_h, axis=0); p_h[::2,:] *= -1; p_h = np.abs(p_h)
