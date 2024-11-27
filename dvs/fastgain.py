@@ -47,12 +47,12 @@ def calculate_allanvariance(data):
     # (The python compiler does a good job at optimizing this, so I focused on readability.)
     def R(i, K, x):
         y = [x[i*K + n] for n in range(K)]
-        return np.mean(y)
+        return np.nanmean(y)
     
     def s2(K, x):
         M = int(len(x)/K)-1
         y = [(R(i+1, K, x) - R(i, K, x))**2 for i in range(M)]
-        return np.mean(y)/2.
+        return np.nanmean(y)/2.
     
     # Calculate the Allan variances vs. integration intervals:
     Ks = range(1,int(len(data)/3))
@@ -82,7 +82,7 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
     time = time - time[0] # Ensure there are no confusing sample offsets
     p_data = np.asarray(x)
     if normalize: # Legacy support: has no impact on the slope of Allan variance curve
-        p_data = p_data/np.mean(p_data)
+        p_data = p_data/np.nanmean(p_data)
     
     figs = [None]*2 if (figs is None) else figs
     
