@@ -95,6 +95,7 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
         xlabel(xylabels[0]); ylabel(xylabels[1]); plt.grid(grid)
         plt.title("Time series: %s"%title)
     
+    # TODO: figure out why, when flags are applied (values set to nan), the AVAR typically gets spikes.
     K, sA2 = calculate_allanvariance(p_data)
     sA2 *= sfact**2 # sfact applies to stddev
     # Calculate and plot the Allan variances vs. integration time:
@@ -448,15 +449,17 @@ def get_fft_shift_and_gains(h5, channel=123, verbose=False):
     if h5.sensor.store:
         subarray = "subarray_%d" % (h5.sensor["Observation/subarray_index"][0] + 1)
         band = h5.sensor.get(subarray+"_band")[0]
-        
-        atten_sensor = {"u":"dig_u_band_rfcu_%spol_attenuation",
-                        "l":"dig_l_band_rfcu_%spol_attenuation",
-                        "s":"rsc_rxs_signalprocessors_sp%s_attenuation",
-                        "x":"dig_x_band_rfcu_%spol_attenuation"}[band]
-        atten_hv = ["01","02"] if (band=="s") else ["h","v"]
-        for ant in h5.ants:
-            for pol in atten_hv:
-                atten[ant.name+pol] = h5.sensor.get(ant.name+"_"+atten_sensor%pol)[0]
+        try:
+            atten_sensor = {"u":"dig_u_band_rfcu_%spol_attenuation",
+                            "l":"dig_l_band_rfcu_%spol_attenuation",
+                            "s":"rsc_rxs_signalprocessors_sp%s_attenuation",
+                            "x":"dig_x_band_rfcu_%spol_attenuation"}[band]
+            atten_hv = ["01","02"] if (band=="s") else ["h","v"]
+            for ant in h5.ants:
+                for pol in atten_hv:
+                    atten[ant.name+pol] = h5.sensor.get(ant.name+"_"+atten_sensor%pol)[0]
+        except Exception as e:
+            print("WARNING: Encountered an error while retrieving attenuation values - continuing.", type(e), e)
         
     if verbose:
         print("Band: %s" % band)
