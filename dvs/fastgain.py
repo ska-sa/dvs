@@ -2,8 +2,11 @@
 """
     Script that analyses fast gain stability measurement at SCP
     Typical use:
-        analyze_fastgain.py --ant m021 /var/kat/archive4/data/RTS/telescope_products/2018/06/04/1528106528.h5
+        fastgain.py --ant m021 /var/kat/archive4/data/RTS/telescope_products/2018/06/04/1528106528.h5
     
+    or:
+        fastgain.troubleshoot(util.open_dataset(cbid, ref_ant=ant), [ant])
+        
     @author aph@sarao.ac.za
 """
 
@@ -112,7 +115,7 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
     return figs
 
 
-def analyse(h5, ant, t_spike_start, t_spike_end, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
+def analyse(h5, ant, t_spike_start=None, t_spike_end=None, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
            xK=[1.03,1.05,1.1,1.15]):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
         
@@ -292,7 +295,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     
     # Generate the flags for spikes in time series
     t_A, t_B = None, None # Flags identifying the clean & spike windows respectively
-    if t_spike_start is not None and t_spike_end is not None:
+    try:
+        t_spike_start, t_spike_end = kwargs['t_spike_start'], kwargs['t_spike_end']
         AB = t_spike_end-t_spike_start
         if (t_spike_end < t[len(t)//2]): # Spike in first half of data, choose clean window after spike
             t_A = np.nonzero(np.abs(t-(t_spike_end+AB/2.))<=AB/2.) # Clean
@@ -300,7 +304,9 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         else: # Spike in second half of data, choose clean window before spike
             t_A = np.nonzero(np.abs(t-(t_spike_start-AB/2.))<=AB/2.) # Clean
             t_B = np.nonzero(np.abs(t-(t_spike_start+AB/2.))<=AB/2.) # Spike here
-
+    except KeyError:
+        pass
+    
     # Debug in case time-domain spikes are noticed
     if t_A is not None and t_B is not None:
         # Time domain
@@ -391,6 +397,9 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
 
 
 def get_fft_shift_and_gains(h5, channel=123, verbose=False):
+    # TODO: also print out attenuator values
+    
+    
     # in v4, fft_shift sensor values are stored per timestamp, but these never change
     try: # v4 after 2019?
         fft_shift = h5.sensor['wide_antenna_channelised_voltage_fft_shift'][0]
