@@ -115,12 +115,13 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
     return figs
 
 
-def analyse(h5, ant, t_spike_start=None, t_spike_end=None, channels=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
+def analyse(h5, ant, channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
            xK=[1.03,1.05,1.1,1.15]):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
         
-        @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
         @param channels: channel indices (list or slice) to select (default None)
+        @param timerange: passed to select, after selecting 'track' (default None)
+        @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
         @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
         @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
@@ -132,6 +133,8 @@ def analyse(h5, ant, t_spike_start=None, t_spike_end=None, channels=None, vs_fre
     # Select the correct scan. It's always the last 'track'
     h5.select(reset="TFB", scans='track')
     h5.select(scans=h5.scan_indices[-1], ants=[ant])
+    if (timerange is not None):
+        h5.select(reset="", timerange=timerange)
     if (channels is not None):
         h5.select(channels=channels)
     fft_shift, gains = get_fft_shift_and_gains(h5)
