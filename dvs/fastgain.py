@@ -304,7 +304,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         else: # Spike in second half of data, choose clean window before spike
             t_A = np.nonzero(np.abs(t-(t_spike_start-AB/2.))<=AB/2.) # Clean
             t_B = np.nonzero(np.abs(t-(t_spike_start+AB/2.))<=AB/2.) # Spike here
-    except KeyError:
+    except Exception:
         pass
     
     # Debug in case time-domain spikes are noticed
