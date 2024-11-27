@@ -201,9 +201,9 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     
     # Waterfall plots for debugging
     figure(figsize=(16,8)); suptitle(_suptitle_)
-    subplot(2,1,1); imshow(p_h/np.median(p_h,axis=0), vmin=0.99,vmax=1.01,cmap='jet', aspect='auto',extent=[xvalues[0],xvalues[-1],t[-1],t[0]], origin='upper')
+    subplot(2,1,1); imshow(p_h/np.nanmedian(p_h,axis=0), vmin=0.99,vmax=1.01,cmap='jet', aspect='auto',extent=[xvalues[0],xvalues[-1],t[-1],t[0]], origin='upper')
     ylabel(r"$dP_H/<P_H>$\ntime [sec]"); colorbar()
-    subplot(2,1,2); imshow(p_v/np.median(p_v,axis=0), vmin=0.99,vmax=1.01,cmap='jet', aspect='auto',extent=[xvalues[0],xvalues[-1],t[-1],t[0]], origin='upper')
+    subplot(2,1,2); imshow(p_v/np.nanmedian(p_v,axis=0), vmin=0.99,vmax=1.01,cmap='jet', aspect='auto',extent=[xvalues[0],xvalues[-1],t[-1],t[0]], origin='upper')
     ylabel(r"$dP_V/<P_V>$\ntime [sec]"); xlabel("frequency [%s]"%xunit); colorbar()
 
     # Plots to identify RFI-free bits of spectrum
@@ -211,8 +211,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     suptitle("%s\n%s %s; BWch,tau~(%.3fHz, %.3fsec)"%(_suptitle_, _pol_lbl_("H"),_pol_lbl_("V"), df,dt))
 
     subplot(2,1,1) # H & V sigma/mu spectra
-    plot(xvalues, np.std(p_h,axis=0)/np.mean(p_h,axis=0))
-    plot(xvalues, np.std(p_v,axis=0)/np.mean(p_v,axis=0))
+    plot(xvalues, np.nanstd(p_h,axis=0)/np.nanmean(p_h,axis=0))
+    plot(xvalues, np.nanstd(p_v,axis=0)/np.nanmean(p_v,axis=0))
     K = 1/np.sqrt(df*dt) # Expected radiometer scatter
     if cycle_50pct: # TODO: Work in progress - why is this necessary for cycle_50pct?
         K *= 40 # Perhaps requant gains wrong?
@@ -220,7 +220,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     ylabel(r"$\sigma/\mu$ []"); title("Complete spectrum")
 
     subplot(2,1,2) # HV power
-    plot(xvalues, 10*np.log10(np.mean(p_hv,axis=0)))
+    plot(xvalues, 10*np.log10(np.nanmean(p_hv,axis=0)))
     ylabel(r"HV [dB]")
 
     xlabel("Frequency [%s]"%xunit);
@@ -229,8 +229,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     M = max(int(10/dt),32) # Need something like 20/dt MHz to beat system noise?
     ch_chunks = [range(100+M*n,100+M*(n+1)) for n in range(1,(len(freqs)-200)//M)] # Omit 100 channels at both edges
 
-    snr_h = [np.mean(np.std(p_h[:,C],axis=0)/np.mean(p_h[:,C],axis=0)) for C in ch_chunks]
-    snr_v = [np.mean(np.std(p_v[:,C],axis=0)/np.mean(p_v[:,C],axis=0)) for C in ch_chunks]
+    snr_h = [np.mean(np.nanstd(p_h[:,C],axis=0)/np.nanmean(p_h[:,C],axis=0)) for C in ch_chunks]
+    snr_v = [np.mean(np.nanstd(p_v[:,C],axis=0)/np.nanmean(p_v[:,C],axis=0)) for C in ch_chunks]
     if (abs(1-np.nanmedian(snr_h)/np.nanmedian(snr_v)) > 1): # One pol is significantly worse than the other
         snr = np.nanmin([snr_h,snr_v],axis=0) # Min over frequency
     else:
@@ -247,7 +247,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     print("Proceeding with analysis on %d/%d channels passing RFI threshold of %g%%"%(np.count_nonzero(snr_flags),len(snr_flags),(x-1)*100))
     print(snr[snr_flags])
     
-    hv = np.asarray([np.std(p_hv[:,C]/np.mean(p_hv[:,C],axis=0))-1 for C in ch_chunks]) # APH 06/2018 changed /np.std() to /np.mean()
+    hv = np.asarray([np.nanstd(p_hv[:,C]/np.nanmean(p_hv[:,C],axis=0))-1 for C in ch_chunks]) # APH 06/2018 changed /np.std() to /np.mean()
     print(hv[snr_flags])
     hv_flags = hv<10*np.percentile(hv,10) # flag out chunks where HV varies greatly
 
@@ -261,14 +261,14 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     figure(figsize=(16,8)); suptitle(_suptitle_)
     subplot(2,1,1) # H & V sigma/mu spectra
     for ch in ch_chunks:
-        plot(xvalues[ch], np.std(p_h[:,ch],axis=0)/np.mean(p_h[:,ch],axis=0))
-        plot(xvalues[ch], np.std(p_v[:,ch],axis=0)/np.mean(p_v[:,ch],axis=0))
+        plot(xvalues[ch], np.nanstd(p_h[:,ch],axis=0)/np.nanmean(p_h[:,ch],axis=0))
+        plot(xvalues[ch], np.nanstd(p_v[:,ch],axis=0)/np.nanmean(p_v[:,ch],axis=0))
     plot(xvalues,K+0*freqs,'k,'); ylim(K/2.,3*K)
     ylabel(r"$\sigma/\mu$ []"); legend([_pol_lbl_("H"),_pol_lbl_("V")]); title("Pristine spectrum")
 
     subplot(2,1,2) # HV power
     for ch in ch_chunks:
-        plot(xvalues[ch], 10*np.log10(np.mean(p_hv[:,ch],axis=0)))
+        plot(xvalues[ch], 10*np.log10(np.nanmean(p_hv[:,ch],axis=0)))
     plot(xvalues,K+0*freqs,'k,');
     ylabel(r"HV [dB]")
 
@@ -285,8 +285,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     axes = subplots(len(_ch_chunks),1,figsize=(16,2+2*len(_ch_chunks)))[1]; suptitle("Compare to known RFI\n%s"%dataset_id)
     axes = np.atleast_1d(axes)
     for i,(key,ch) in enumerate(_ch_chunks):
-        axes[i].plot(t, np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]), label="H")
-        axes[i].plot(t, np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]), label="V", alpha=0.7)
+        axes[i].plot(t, np.nanmean(p_h[:,ch],axis=1)/np.nanmean(p_h[:,ch]), label="H")
+        axes[i].plot(t, np.nanmean(p_v[:,ch],axis=1)/np.nanmean(p_v[:,ch]), label="V", alpha=0.7)
         axes[i].set_ylabel(r"%s $\delta P/P$"%key); axes[i].legend(); axes[i].set_title("~%.f MHz"%(freqs[ch].mean()/1e6))
     axes[-1].set_xlabel("time [sec]")
 
@@ -294,11 +294,11 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     figure(figsize=(16,8)); suptitle(_suptitle2_)
     subplot(2,1,1)
     for ch in ch_chunks:
-        plot(t, np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]))
+        plot(t, np.nanmean(p_h[:,ch],axis=1)/np.nanmean(p_h[:,ch]))
     xlabel("time [sec]"); ylabel(r"$\delta P/P$ [linear]")
     subplot(2,1,2)
     for ch in ch_chunks:
-        plot(t, np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]))
+        plot(t, np.nanmean(p_v[:,ch],axis=1)/np.nanmean(p_v[:,ch]))
     xlabel("time [sec]"); ylabel(r"$\delta P/P$ [linear]");
     
     # Generate the flags for spikes in time series
@@ -320,16 +320,16 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         # Time domain
         figure(figsize=(16,8)); suptitle(_suptitle2_)
         for ch in ch_chunks:
-            plot(t[t_A], (np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]))[t_A])
-            plot(t[t_A], (np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]))[t_A])
-            plot(t[t_B], (np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch]))[t_B])
-            plot(t[t_B], (np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch]))[t_B])
+            plot(t[t_A], (np.nanmean(p_h[:,ch],axis=1)/np.nanmean(p_h[:,ch]))[t_A])
+            plot(t[t_A], (np.nanmean(p_v[:,ch],axis=1)/np.nanmean(p_v[:,ch]))[t_A])
+            plot(t[t_B], (np.nanmean(p_h[:,ch],axis=1)/np.nanmean(p_h[:,ch]))[t_B])
+            plot(t[t_B], (np.nanmean(p_v[:,ch],axis=1)/np.nanmean(p_v[:,ch]))[t_B])
         xlabel("time [sec]"); ylabel(r"$\delta P/P$ []")
 
         # Spectral domain
         figure(figsize=(16,8)); suptitle(_suptitle2_)
-        plot(xvalues, 10*np.log10(np.mean(p_h[t_B,:].squeeze(),axis=0) / np.mean(p_h[t_A,:].squeeze(),axis=0)))
-        plot(xvalues, 10*np.log10(np.mean(p_v[t_B,:].squeeze(),axis=0) / np.mean(p_v[t_A,:].squeeze(),axis=0)))
+        plot(xvalues, 10*np.log10(np.nanmean(p_h[t_B,:].squeeze(),axis=0) / np.nanmean(p_h[t_A,:].squeeze(),axis=0)))
+        plot(xvalues, 10*np.log10(np.nanmean(p_v[t_B,:].squeeze(),axis=0) / np.nanmean(p_v[t_A,:].squeeze(),axis=0)))
         ylim(-0.1,0.1)
         xlabel("Frequency [%s]"%xunit); ylabel("P(spike)/P(nospike) [dB#]")
   
@@ -350,21 +350,21 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     figure(figsize=(12,8)); suptitle(_suptitle2_)
     subplot(2,1,1)
     for ch in ch_chunks:
-        psd(np.mean(p_h[:,ch],axis=1)/np.mean(p_h[:,ch])-1, Fs=1/dt, NFFT=len(t))
+        psd(np.nanmean(p_h[:,ch],axis=1)/np.nanmean(p_h[:,ch])-1, Fs=1/dt, NFFT=len(t))
     subplot(2,1,2)
     for ch in ch_chunks:
-        psd(np.mean(p_v[:,ch],axis=1)/np.mean(p_v[:,ch])-1, Fs=1/dt, NFFT=len(t))
+        psd(np.nanmean(p_v[:,ch],axis=1)/np.nanmean(p_v[:,ch])-1, Fs=1/dt, NFFT=len(t))
 
     # All good channels combined, un-normalized
     figure(figsize=(12,6)); suptitle(_suptitle2_)
     P_h=np.take(p_h,ch_chunks,axis=1).reshape(len(t),np.prod(ch_chunks.shape))
-    psd(np.mean(P_h,axis=1)-np.mean(P_h), Fs=1/dt, NFFT=len(t))
+    psd(np.nanmean(P_h,axis=1)-np.nanmean(P_h), Fs=1/dt, NFFT=len(t))
     P_v=np.take(p_v,ch_chunks,axis=1).reshape(len(t),np.prod(ch_chunks.shape))
-    psd(np.mean(P_v,axis=1)-np.mean(P_v), Fs=1/dt, NFFT=len(t));       
+    psd(np.nanmean(P_v,axis=1)-np.nanmean(P_v), Fs=1/dt, NFFT=len(t));       
     BW = P_h.shape[1] * df
     
     if savefile: # Save combined time series data
-        np.savetxt(savefile, [np.mean(P_h,axis=1), np.mean(P_v,axis=1)], delimiter=",",
+        np.savetxt(savefile, [np.nanmean(P_h,axis=1), np.nanmean(P_v,axis=1)], delimiter=",",
                    header="Autocorrelation stability from %s with BW=%gMHz, dT=%gsec. Format: H, V [linear P_sys]"%(dataset_id,BW/1e6,dt))
 
     sfact = 2**-.5 if cycle_50pct else 1. # Scale factor for RMS & std, in case the samples are differences
@@ -373,7 +373,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle2_)
     for i,(pol,p_t) in enumerate([("H",p_h), ("V",p_v)]):
         for ch in ch_chunks:
-            p_tch = np.mean(p_t[:,ch],axis=1)/np.mean(p_t[:,ch])
+            p_tch = np.nanmean(p_t[:,ch],axis=1)/np.nanmean(p_t[:,ch])
             axes[2*i].plot(t, p_tch,'+', t, fit_avg(p_tch,T_interval/dt), '.'); axes[2*i].set_ylabel("Sampled power [linear]")
             axes[2*i].set_title("%s pol"%pol)
             axes[2*i+1].plot(t, 100*sliding_rms(p_tch,T_interval/dt)*sfact, label="ch ~%.f"%ch.mean());  axes[2*i+1].set_ylabel("RMS over %.f sec [%%]"%T_interval)
@@ -387,7 +387,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     ret = []
     axes = subplots(4, 1, figsize=(12,20))[1]; suptitle(_suptitle3_)
     for i,(pol,p_t) in enumerate([("H",P_h), ("V",P_v)]):
-        p_t = np.mean(p_t,axis=1)/np.mean(p_t)
+        p_t = np.nanmean(p_t,axis=1)/np.nanmean(p_t)
         ret.append(p_t)
         axes[2*i].plot(t, p_t,'+', t, fit_avg(p_t,T_interval/dt), '.'); axes[2*i].set_ylabel("Sampled power [linear]")
         result = 100*sliding_rms(p_t,T_interval/dt)*sfact
