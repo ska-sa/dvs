@@ -135,20 +135,21 @@ parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
 parser.add_option('-e', '--scan-in-elevation', action="store_true", default=False,
                   help="Scan in elevation rather than in azimuth (default=%default)")
-# Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/3
+# Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/2
 styles = { 
     # Standard for MeerKAT
     'uhf': dict(num_scans=9, scan_duration=60, scan_extent=5.5, scan_spacing=5.5/8),
     'l': dict(num_scans=9, scan_duration=40, scan_extent=3.5, scan_spacing=3.5/8),
     's': dict(num_scans=9, scan_duration=30, scan_extent=2.0, scan_spacing=2.0/8),
     'ku': dict(num_scans=9, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/8),
-    # Standard for SKA Dish
-    'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.0, scan_spacing=6.0/8),
-    'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
-    'skab3': dict(num_scans=9, scan_duration=16, scan_extent=1.6, scan_spacing=1.6/8),
-    'skaku': dict(num_scans=9, scan_duration=8, scan_extent=0.36, scan_spacing=0.36/8),
     # Ku-band initial pointing, either MeerKAT or SKA Dish
+    'ku-slow': dict(num_scans=9, scan_duration=30, scan_extent=0.5, scan_spacing=0.5/8),
     'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg
+    # Standard for SKA Dish
+    'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8),
+    'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
+    'skab3': dict(num_scans=9, scan_duration=16, scan_extent=1.8, scan_spacing=1.8/8),
+    'skab5a': dict(num_scans=9, scan_duration=16, scan_extent=0.6, scan_spacing=0.6/8),
 }
 parser.add_option('--style', type='choice', choices=styles.keys(),
                   help="Raster scan style determining number of scans, scan duration, scan extent, "
