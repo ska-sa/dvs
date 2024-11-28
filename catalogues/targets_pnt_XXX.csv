@@ -34,25 +34,29 @@ J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
 #J1008+0730 | PKS 1005+077 | 3C237,                           radec gaincal, 10:08:00.02, 07:30:16.55, ,
 
-J1219+0549 | 3C 270 | NGC 4261 | PKS 1216+06,                radec, 12:19:23.22,  +05:49:29.7,  (20.0 6000.0 1.888 0.369 -0.1855),                              0.5x0.5    SDSS,               281.80,  67.37,     18 Jy,  v=2238,  LINER; Sy              X          no   double lobe ~ 7'; FRI                   
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J1219+0549 | 3C 270 | NGC 4261 | PKS 1216+06,                radec, 12:19:23.22,  +05:49:29.7,  (20.0 6000.0 1.888 0.369 -0.1855),                              0.5x0.5    SDSS,               281.80,  67.37,     18 Jy,  v=2238,  LINER; Sy              X          no   double lobe ~ 7'; FRI                   
 
 J1229+0203 | 3C 273 | PKS 1226+02,                           radec, 12:29:06.70,  +02:03:08.6,  (1410.0 8400.0 10.0465955419 -4.90623613415 0.709890678937),    mas        VLBI 2.3/8.4 GHz,   289.95,  64.36,     45 Jy,  z=0.16,  Sy 1.0; ULIRG; blazar  I; X; Gam  ok   compact core and jet of ~25"; circ pol               
 
 J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,  +12:23:28.0,  (1408.0 10550.0 4.484 -0.603 -0.0280),                          mas        VLBI 2.3/8.4 GHz,   283.78,  74.49,    220,  v=1307,  Sy; LINER; FRI; cD     I; X       ok   < ~1'; core dominated                   
 
-J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
 
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
 #J1311-2216 | PKS 1308-220 | 3C283,                           radec gaincal, 13:11:39.33, -22:16:41.75, ,
 
 J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
 
-J1330+2509 | 3C287,                                          radec gaincal, 13:30:37.69, +25:09:10.9, (80 14900 1.0388 0.5265 -0.2145 0.0089),
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J1330+2509 | 3C287,                                          radec gaincal, 13:30:37.69, +25:09:10.9, (80 14900 1.0388 0.5265 -0.2145 0.0089),
 
 J1331+3030 | 3C 286,                                         radec, 13:31:08.29,  +30:30:33.0,  (1408.0 43200.0 0.956 0.584 -0.1644),                           mas        VLBI 2.3/8.4 GHz,    56.52,  80.67,     15 Jy,  z=0.85,  DLAS; Sy 1.5; core-do  X          ok   <~5"; primary flux calib (no variab)               
 
 J1411+5212 | 3C 295,                                         radec, 14:11:20.46,  +52:12:09.5,  (1408.0 32000.0 1.49 0.756 -0.2545),                            1.25x1.25  2Mass,               97.51,  60.80,     22 Jy,  z=0.46,  E/S0; NLRG; FRII       X          ok   ~10"; ext double lobe; no core; no flux var: prim flux calib      
 
+# Very extended above 8GHz!
 J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,  +04:59:34.9,  (1408.0 10550.0 3.852 -0.361 -0.1053),                          1.25x1.25  2Mass,               23.05,  28.95,     48,  z=0.15,  i.a. E/S0 pair; NLRG   X          no   ~5'; FRI/FRII                     
 
 J1720-0058 | 3C 353 | PKS 1717-00,                           radec, 17:20:28.15,  -00:58:47.1,  (1408.0 10550.0 3.148 -0.157 -0.0911),                          1.25x1.25  2Mass,               21.20,  19.65,     56 Jy,  v=9120,  S0; NLRG                          no   ~5'; FRII               
@@ -72,6 +76,5 @@ J2253+1608 | PKS 2251+158 | 3C454.3,                         radec gaincal, 22:5
 J233828+270126 | 3C 465,                                     radec, 23:38:29.39, +27:01:53.2, ,                                                                            CRATES
 
 # These planets yield T_a>0.15K in ~14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
-Venus,                                                       special
 Jupiter,                                                     special
 Saturn,                                                      special
