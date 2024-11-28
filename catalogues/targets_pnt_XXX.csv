@@ -61,7 +61,9 @@ J1651+0459 | Her A | Hercules A | 3C 348 | PKS 1648+05,      radec, 16:51:08.02,
 
 J1720-0058 | 3C 353 | PKS 1717-00,                           radec, 17:20:28.15,  -00:58:47.1,  (1408.0 10550.0 3.148 -0.157 -0.0911),                          1.25x1.25  2Mass,               21.20,  19.65,     56 Jy,  v=9120,  S0; NLRG                          no   ~5'; FRII               
 
-J1745-2900 | Sgr A | Sagittarius A | CTB 42,                 radec, 17:46:06, -28:51:0,         (1000.0 10000.0 4.32 -0.55),                                    mas        VLA high-fr,        359.94,  -0.04,     ?? Jy,        ,  MBH                    X; Gam     no                 
+# Above 11GHz Sag A* is dominant over Sag A
+Sgr A* | Sagittarius A*,                                     radec, 17:45:40.04, -29:00:28.17, ,                                                                           VLBA	24-17cm arXiv:astro-ph/0608004
+#J1745-2900 | Sgr A | Sagittarius A | CTB 42,                 radec, 17:46:06, -28:51:0,         (1000.0 10000.0 4.32 -0.55),                                    mas        VLA high-fr,        359.94,  -0.04,     ?? Jy,        ,  MBH                    X; Gam     no                 
 
 J1959+4044 | Cyg A | Cygnus A | 3C 405,                      radec, 19:59:28.36,  +40:44:02.1,  (20.0 2000.0 4.695 0.085 -0.178),                               mas        VLBI,                76.19,   5.76,   1590,  z=0.06,  Sy 2                   I; X       ok   ~3'; double radio src; cD; FRII                 
 
