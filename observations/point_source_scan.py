@@ -143,8 +143,8 @@ styles = {
     's': dict(num_scans=9, scan_duration=30, scan_extent=2.0, scan_spacing=2.0/8),
     'ku': dict(num_scans=9, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/8),
     # Ku-band initial pointing, either MeerKAT or SKA Dish
-    'ku-slow': dict(num_scans=9, scan_duration=30, scan_extent=0.5, scan_spacing=0.5/8),
-    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg
+    'ku-slow': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 2sec per spacing
+    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 1sec per spacing
     # Standard for SKA Dish
     'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8),
     'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
