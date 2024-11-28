@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Track target(s) for a specified time.
 
-import time
+import time, os, katpoint
 import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
