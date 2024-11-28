@@ -82,4 +82,3 @@ J233828+270126 | 3C 465,                                     radec, 23:38:29.39,
 
 # These planets yield T_a>0.15K in ~14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
 Jupiter,                                                     special
-Saturn,                                                      special
