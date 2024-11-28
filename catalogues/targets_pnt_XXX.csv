@@ -4,11 +4,13 @@ J0137+3309 | 3C 48,                                          radec, 01:37:41.30,
 
 J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79,  -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,                 240.16, -56.69,   ~148 Jy,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes   
 
-J0358+1026 | 3C 98 | PKS 0356+10,                            radec, 03:58:54.43,  +10:26:03.0,  (400.0 2000.0 3.32 -0.74),                                      1.25x1.25  2Mass,              179.84, -31.05,     10 Jy,  v=9130,  Sy 2; FRII; NLRG                  no   ~5'; double lobes             
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J0358+1026 | 3C 98 | PKS 0356+10,                            radec, 03:58:54.43,  +10:26:03.0,  (400.0 2000.0 3.32 -0.74),                                      1.25x1.25  2Mass,              179.84, -31.05,     10 Jy,  v=9130,  Sy 2; FRII; NLRG                  no   ~5'; double lobes             
 
 J0437+2940 | 3C 123,                                         radec, 04:37:04.38,  +29:40:13.8,  (1408.0 23780.0 2.525 0.246 -0.1638),                           mas        VLBI 2.3/8.4 GHz,   170.58, -11.66,     47 Jy,  z=0.22,  LERG; FRII             X          ok   <1'                 
 
-J0521+1638 | 3C 138 | PKS 0518+16,                           radec, 05:21:09.89,  +16:38:22.1,  (1410.0 8400.0 -1.32934004351 1.91278744917 -0.376296576679),   mas        VLBI 2.3/8.4 GHz,   187.40, -11.34,      9 Jy,  z=0.76,  Sy 1.5; core-dom       X          ok   compact <1"; CSS src; pol; triple-comp; no flux var: flux calib   
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J0521+1638 | 3C 138 | PKS 0518+16,                           radec, 05:21:09.89,  +16:38:22.1,  (1410.0 8400.0 -1.32934004351 1.91278744917 -0.376296576679),   mas        VLBI 2.3/8.4 GHz,   187.40, -11.34,      9 Jy,  z=0.76,  Sy 1.5; core-dom       X          ok   compact <1"; CSS src; pol; triple-comp; no flux var: flux calib   
 
 J0534+2200 | Tau A | Taurus A | 3C 144 | Crab | PKS 0531+21, radec, 05:34:31.94,  +22:00:52.2,  (1400.0 10000.0 3.915 -0.299),                                  0.5x0.5    opt/psr,            184.56,  -5.78,    930,        ,  SNR; Psr               I; X; Gam  no   ~5' @ 160MHz; single comp           
 
@@ -16,17 +18,21 @@ J0535-0523 | Ori A | Orion A | M42 | 3C 145 | PKS 0532-05,   radec, 05:35:17.30,
 
 J0541-0153 | 3C 147.1 | PKS 0539-01,                         radec, 05:41:42.60,  -01:54:17.0,  (100.0 6000.0 -3.564 3.208 -0.4861),                           12.5x12.5   Molonglo 408 MHz,   206.53, -16.36,     64 Jy,        ,  HII                               no   prob ext'd               
 
-J0627-0553 | 3C 161 | PKS 0624-05,                           radec, 06:27:10.12,  -05:53:05.2,  (1408.0 10550.0 1.250 0.726 -0.2286),                           0.4x0.4    PKS90,              215.44,  -8.07,     18 Jy,        ,  --                                ok?  VLA resolved; symm double           
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J0627-0553 | 3C 161 | PKS 0624-05,                           radec, 06:27:10.12,  -05:53:05.2,  (1408.0 10550.0 1.250 0.726 -0.2286),                           0.4x0.4    PKS90,              215.44,  -8.07,     18 Jy,        ,  --                                ok?  VLA resolved; symm double           
 
 J0813-4813 | 3C 196,                                         radec, 08:13:36.03,  +48:13:02.6,  (26.0 22000.0 4.73 -1.09 0 0 -3.59 -1),                         0.2x0.13   opt/rad,            171.17,  33.24,     14 Jy,  z=0.87,  Sy1.8; DLAS; FRII                 ok   <10"; double src                     
 
-J0833-4543 | *Vela X | CTB 26,                               radec, 08:34:30.00, -45:46:58.8,    (400.0 2000.0 2.377),                                         180x180      Simbad/radio,       263.81,  -3.37,     ?? Jy,        ,  Gal Rad src: SNR?      Gam        no                                            
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J0833-4543 | *Vela X | CTB 26,                               radec, 08:34:30.00, -45:46:58.8,    (400.0 2000.0 2.377),                                         180x180      Simbad/radio,       263.81,  -3.37,     ?? Jy,        ,  Gal Rad src: SNR?      Gam        no                                            
 
-J0918-1205 | Hyd A | Hydra A | 3C 218 | PKS 0915-11,         radec, 09:18:05.65,  -12:05:44.0,  (1408.0 10550.0 4.729 -1.025 0.0130),                           10x10      phot,               242.93,  25.09,     43 Jy,  z=0.05,  S0; Sy 3; LINER; FRI   X          ok?  tot ext ~7'; main comp ~1.5'; tailed radio src             
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J0918-1205 | Hyd A | Hydra A | 3C 218 | PKS 0915-11,         radec, 09:18:05.65,  -12:05:44.0,  (1408.0 10550.0 4.729 -1.025 0.0130),                           10x10      phot,               242.93,  25.09,     43 Jy,  z=0.05,  S0; Sy 3; LINER; FRI   X          ok?  tot ext ~7'; main comp ~1.5'; tailed radio src             
 
 J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,  +07:25:20.6,  (1408.0 4750.0 6.757 -2.801 0.2969),                            0.5x0.5    SDSS,               228.58,  42.29,      7 Jy,  z=0.09,  Sy 1.5; BLRG                      ok?  ~4'; FRII               
 
-J1008+0730 | PKS 1005+077 | 3C237,                           radec gaincal, 10:08:00.02, 07:30:16.55, ,
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J1008+0730 | PKS 1005+077 | 3C237,                           radec gaincal, 10:08:00.02, 07:30:16.55, ,
 
 J1219+0549 | 3C 270 | NGC 4261 | PKS 1216+06,                radec, 12:19:23.22,  +05:49:29.7,  (20.0 6000.0 1.888 0.369 -0.1855),                              0.5x0.5    SDSS,               281.80,  67.37,     18 Jy,  v=2238,  LINER; Sy              X          no   double lobe ~ 7'; FRI                   
 
@@ -36,7 +42,8 @@ J1230+1223 | Vir A | Virgo A | 3C 274 | M87 | PKS 1228+12,   radec, 12:30:49.42,
 
 J1256-0547 | 3C 279 | PKS 1253-05,                           radec, 12:56:11.17,  -05:47:21.5,  (1410.0 8400.0 -2.63293588849 2.11780853682 -0.300277548642),   mas        VLBI 2.3/8.4 GHz,   305.10,  57.06,     10 Jy,  z=0.54,  blazar                 I; X; Gam  ok   <20"; BLLAC; OVV                     
 
-J1311-2216 | PKS 1308-220 | 3C283,                           radec gaincal, 13:11:39.33, -22:16:41.75, ,
+# SKA Dish @ 12.5GHz: in the noise 28/11/2024
+#J1311-2216 | PKS 1308-220 | 3C283,                           radec gaincal, 13:11:39.33, -22:16:41.75, ,
 
 J1325-4301 | Cen A | Centaurus A | PKS 1322-42 | NGC 5128,   radec, 13:25:27.62,  -43:01:08.8,  (400.0 2000.0 5.08 -0.87),                                      mas        VLBI 2.3/8.4 GHz,   309.52,  19.42,    278,  v= 547,  S0 pec; Sy2            I; X; Gam  no?  core ~ 10"; lobes ~ 9deg                   
 
@@ -63,3 +70,8 @@ J2225-0457 | PKS 2223-052 | 3C446,                           radec gaincal, 22:2
 J2253+1608 | PKS 2251+158 | 3C454.3,                         radec gaincal, 22:53:57.75, 16:08:53.56
 
 J233828+270126 | 3C 465,                                     radec, 23:38:29.39, +27:01:53.2, ,                                                                            CRATES
+
+# These planets yield T_a>0.15K in ~14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
+Venus,                                                       special
+Jupiter,                                                     special
+Saturn,                                                      special
