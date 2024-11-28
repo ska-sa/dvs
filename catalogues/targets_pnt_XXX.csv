@@ -16,6 +16,9 @@ J0534+2200 | Tau A | Taurus A | 3C 144 | Crab | PKS 0531+21, radec, 05:34:31.94,
 
 J0535-0523 | Ori A | Orion A | M42 | 3C 145 | PKS 0532-05,   radec, 05:35:17.30,  -05:23:28.0,  (1000.0 10000.0 -0.429874080747 1.64134149914 -0.219515164089), 7.5x7.5    Molonglo 408MHz,    209.01, -19.38,    410,        ,  HII; Cl                X          no   < ~60'?                       
 
+J0538-6904 | J053844-690542 | MC 74,                         radec, 05:38:44.26,  -69:05:42.4,  (200.0 12000.0 -3.94 3.799 -0.6469),                            50x50       PKS,                279.44, -31.67,     34,        ,  HII                               no   prob ext'd; in 30 Dor
+
+# Close to the GEOS band - flag < 12.7GHz!
 J0541-0153 | 3C 147.1 | PKS 0539-01,                         radec, 05:41:42.60,  -01:54:17.0,  (100.0 6000.0 -3.564 3.208 -0.4861),                           12.5x12.5   Molonglo 408 MHz,   206.53, -16.36,     64 Jy,        ,  HII                               no   prob ext'd               
 
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
@@ -29,7 +32,7 @@ J0813-4813 | 3C 196,                                         radec, 08:13:36.03,
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
 #J0918-1205 | Hyd A | Hydra A | 3C 218 | PKS 0915-11,         radec, 09:18:05.65,  -12:05:44.0,  (1408.0 10550.0 4.729 -1.025 0.0130),                           10x10      phot,               242.93,  25.09,     43 Jy,  z=0.05,  S0; Sy 3; LINER; FRI   X          ok?  tot ext ~7'; main comp ~1.5'; tailed radio src             
 
-J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,  +07:25:20.6,  (1408.0 4750.0 6.757 -2.801 0.2969),                            0.5x0.5    SDSS,               228.58,  42.29,      7 Jy,  z=0.09,  Sy 1.5; BLRG                      ok?  ~4'; FRII               
+#J0947+0725 | 3C 227 | PKS 0945+07,                           radec, 09:47:45.15,  +07:25:20.6,  (1408.0 4750.0 6.757 -2.801 0.2969),                            0.5x0.5    SDSS,               228.58,  42.29,      7 Jy,  z=0.09,  Sy 1.5; BLRG                      ok?  ~4'; FRII               
 
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
 #J1008+0730 | PKS 1005+077 | 3C237,                           radec gaincal, 10:08:00.02, 07:30:16.55, ,
@@ -70,6 +73,8 @@ J1959+4044 | Cyg A | Cygnus A | 3C 405,                      radec, 19:59:28.36,
 
 J2123+2504 | 3C 433,                                         radec, 21:23:44.58,  +25:04:27.23,  (20.0 6000.0 2.29 0.1239 -0.1597),                             0.8x0.7    Texas Int 365 MHz,   74.48, -17.69,     11 Jy,  z=0.10,  Sy 2; NLRG; FRI                   ok   <2'; edge-darkened appearance                 
 
+J2157-6941 | PKS 2153-69 | ESO 075-G041,                     radec, 21:57:05.98,  -69:41:23.7,  (200.0 12000.0 2.923 -0.1222 -0.1043),                          mas        VLBI 2.3/8.4 GHz,   321.32, -40.65,     30,  v=8476,  S0; Sy 1/2?            I; X       ok   ~4' incl faint comp; FRII           
+
 # SKA Dish @ 12.5GHz: in the noise 28/11/2024
 #J2223-0206 | PKS 2223-0206 | 3C445,                          radec, 22:23:49.7, -02:06:13, ,                                                                                                                                     ; Elliptical Galaxy < 0.3arcmin
 
@@ -79,6 +84,8 @@ J2123+2504 | 3C 433,                                         radec, 21:23:44.58,
 J2253+1608 | PKS 2251+158 | 3C454.3,                         radec gaincal, 22:53:57.75, 16:08:53.56
 
 J233828+270126 | 3C 465,                                     radec, 23:38:29.39, +27:01:53.2, ,                                                                            CRATES
+
+J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes                                   
 
 # These planets yield T_a>0.15K in ~14m dish at 12GHz (i.e. 20sigma if Tsys=130K, BW=700MHz & dT=1sec)
 Jupiter,                                                     special
