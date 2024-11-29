@@ -1,9 +1,14 @@
-""" Temporary hacks and "hack frameworks", for use in the OBS environment.
+""" Temporary hacks and "hack frameworks", for use in the DVS observation framework.
+    Usage: in the observe script, immediately after the `with verify_and_connect() as kat:` line, add the following:
+    
+        import _hacks_ 
+    
     @author: aph@sarao.ac.za
 """
 try:
     from katcorelib import user_logger
 except:
+    user_logger = None
     print("INFO: not running in the OBS framework, some hacks may break!")
 import katpoint, time, numpy
 
@@ -98,15 +103,63 @@ class start_session(object):
             return True                    
 
 
-def apply(kat):
-    """ Apply mandatory hacks - if in a configured OBS framework """
-    if not kat.dry_run:
-        # HACK 1: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
-        # NB: this must happen after dish proxy STOP - which happens in session.standard_setup()
-        try:
-            import tango
-            dsm = tango.DeviceProxy('10.96.66.100:10000/mid_dsh_0119/lmc/ds_manager')
-            dsm.tiltPointCorrEnabled = False
-            user_logger.warning("APPLIED HACK: Dish#119 Tilt Corrections Disabled")
-        except Exception as e:
-            user_logger.warning("Failed to disable Tilt Corrections on Dish#119: %s" % e)
+def match_ku_siggen_freq(cam):
+    """ Permanent "hack" for DVS: the frequency of the Ku-band reference LO signal generator must be changed manually,
+        the subarray's "x band" center frequency only updates sensors and metadata.
+        See https://skaafrica.atlassian.net/browse/MKT-50 
+    
+        A change is only made if all active "x band" subarrays have the same center frequency.
+    """
+    active_subs = [sa for sa in [cam.subarray_1,cam.subarray_2,cam.subarray_3,cam.subarray_4] if (sa.sensors.state.get_value()=='active')]
+    xband_subs = [sa for sa in active_subs if (sa.sensors.band.get_value()=='x')]
+    xband_fc = [sa.sensors.requested_rx_centre_frequency.get_value() for sa in xband_subs]
+    if (len(set(xband_fc)) == 1):
+        fc = xband_fc[0]
+        fLO = (fc -  1712e6*3/4.) / 100. # Hz
+        current_fLO = cam.anc.sensors.siggen_ku_frequency.get_value()
+        if (abs(current_fLO-fLO) > 0.01):
+            cam.anc.req.siggen_ku_frequency(fLO)
+            user_logger.info("UPDATED Ku reference LO from %g to %g" % (current_fLO, fLO))
+    else:
+        user_logger.warning("MANUAL OVERRIDE ASSUMED. Multiple x band subarrays are active at present with different center frequencies.") 
+
+
+def temp_hack_DisableAllPointingCorrections(cam):
+    """ Temporary hack to disable the MKE ACU static and dynamic pointing corrections - which gets automatically re-enabled
+        by the ACU when there's a transition out of STANDBY (ESTOP/STOW/STOP) to OPERATE.
+        
+        MPI/OHB have been requested to make the "disabling" a latching configuration setting in the ACU.
+        
+        RE static corrections: this should always be disabled when CAM DishProxy is used
+        RE tilt corrections: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
+        """
+    # Find the antennas that expose this functionality:
+    resp = cam.ants.req.dsm_DisablePointingCorrections()
+    d_ants = [a for a,r in resp.items() if (r is not None)]
+    
+    # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
+    for ant in cam.ants:
+        if (ant.name in d_ants):
+            azel0 = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
+            print(ant.name, azel0)
+            ant.req.target_azel(*azel0)
+            ant.req.mode("POINT")
+    time.sleep(5)
+    resp = cam.ants.req.dsm_DisablePointingCorrections()
+    
+    user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
+    user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
+
+
+# Apply mandatory hacks - if in a configured OBS framework
+try:
+    _g_ = globals()
+    cam = _g_["cam"] if ("cam" in _g_) else _g_["kat"]
+    
+    if not cam.dry_run:
+        match_ku_siggen_freq(cam)
+        
+        temp_hack_DisableAllPointingCorrections(cam)
+
+except:
+    raise Exception("No 'cam' or 'kat' connection defined; import this module after the `with verify_and_connect() as kat:` line!")
