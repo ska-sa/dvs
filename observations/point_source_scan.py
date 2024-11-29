@@ -181,6 +181,7 @@ with verify_and_connect(opts) as kat:
     else:
         with start_session(kat, **vars(opts)) as session:
             session.standard_setup(**vars(opts))
+            import _hacks_; _hacks_.apply(kat)
             session.capture_start()
 
             start_time = time.time()

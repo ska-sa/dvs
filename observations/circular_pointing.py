@@ -241,6 +241,7 @@ if __name__=="__main__":
             with start_session(kat, **vars(opts)) as session:
                 # Use the command-line options to set up the system
                 session.standard_setup(**vars(opts))
+                import _hacks_; _hacks_.apply(kat)
                 all_ants = session.ants
                 session.obs_params['num_scans'] = len(compositex)
                 
@@ -378,11 +379,13 @@ if __name__=="__main__":
                                 lastisslew=cs[iarm][it]
                                 session.telstate.add('obs_label','slew' if lastisslew else '%d.0.%d'%(cycle,iarm),ts=scan_data[it,0])
                         
-                        time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
+                        if not kat.dry_run:
+                            time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
                         lasttime = scan_data[-1,0]
 
                     session.telstate.add('obs_label','slew',ts=lasttime)
-                    time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
+                    if not kat.dry_run:
+                        time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants

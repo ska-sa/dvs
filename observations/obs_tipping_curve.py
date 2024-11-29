@@ -67,6 +67,7 @@ with verify_and_connect(opts) as kat:
 
     with start_session(kat, **vars(opts)) as session:
         session.standard_setup(**vars(opts))
+        import _hacks_; _hacks_.apply(kat)
         session.capture_start()
         for el in spacings:
             session.label('track')

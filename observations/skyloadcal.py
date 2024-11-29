@@ -36,6 +36,7 @@ with verify_and_connect(opts) as kat:
     moon = kat.sources.lookup['moon'][0]
     with start_session(kat, **vars(opts)) as session:
         session.standard_setup(**vars(opts))
+        import _hacks_; _hacks_.apply(kat)
         session.nd_params = nd_off
         session.capture_start()
         once = True

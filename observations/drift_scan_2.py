@@ -44,8 +44,8 @@ with verify_and_connect(opts) as kat:
         user_logger.warning("No targets are currently visible - please re-run the script later")
     else:
         with start_session(kat, **vars(opts)) as session:
-
             session.standard_setup(**vars(opts))
+            import _hacks_; _hacks_.apply(kat)
             session.capture_start()
             target = observation_sources.filter(el_limit_deg=opts.horizon).targets[0]
 

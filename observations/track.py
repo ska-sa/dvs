@@ -94,6 +94,7 @@ with verify_and_connect(opts) as kat:
             nd_switching = None
 
         session.standard_setup(**vars(opts))
+        import _hacks_; _hacks_.apply(kat)
         if opts.fft_shift is not None:
             session.cbf.fengine.req.fft_shift(opts.fft_shift)
         session.capture_start()
