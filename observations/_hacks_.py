@@ -1,7 +1,20 @@
-""" Temporary hacks and "hack frameworks", for use in the DVS observation framework.
-    Usage: in the observe script, immediately after the `with verify_and_connect() as kat:` line, add the following:
+""" Hacks for use in the DVS observation framework.
+    Intended to be used in the observe scripts as per following examples:
     
-        import _hacks_ 
+        with verify_and_connect() as kat:
+            ...
+            with start_session() as...:
+                session.standard_setup()
+                import _hacks_; _hacks_.apply(kat) # MUST be after session.standard_setup()
+                ...
+    
+    Or:
+    
+        with verify_and_connect() as kat:
+            ...
+            from _hacks_ import start_nocapture_session as start_session
+            with start_session() as...:
+                ...
     
     @author: aph@sarao.ac.za
 """
@@ -13,7 +26,7 @@ except:
 import katpoint, time, numpy
 
 
-class start_session(object):
+class start_nocapture_session(object):
     """ Hacked "no capture session" to ignore cbf & sdp """
     def __enter__(self):
         return self
@@ -110,7 +123,7 @@ def match_ku_siggen_freq(cam):
     
         A change is only made if all active "x band" subarrays have the same center frequency.
     """
-    active_subs = [sa for sa in [cam.subarray_1,cam.subarray_2,cam.subarray_3,cam.subarray_4] if (sa.sensors.state.get_value()=='active')]
+    active_subs = [cam.sub] # TODO: see other active subarrays?
     xband_subs = [sa for sa in active_subs if (sa.sensors.band.get_value()=='x')]
     xband_fc = [sa.sensors.requested_rx_centre_frequency.get_value() for sa in xband_subs]
     if (len(set(xband_fc)) == 1):
@@ -132,7 +145,7 @@ def temp_hack_DisableAllPointingCorrections(cam):
         
         RE static corrections: this should always be disabled when CAM DishProxy is used
         RE tilt corrections: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
-        """
+    """
     # Find the antennas that expose this functionality:
     resp = cam.ants.req.dsm_DisablePointingCorrections()
     d_ants = [a for a,r in resp.items() if (r is not None)]
@@ -140,9 +153,8 @@ def temp_hack_DisableAllPointingCorrections(cam):
     # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
     for ant in cam.ants:
         if (ant.name in d_ants):
-            azel0 = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
-            print(ant.name, azel0)
-            ant.req.target_azel(*azel0)
+            az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
+            ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
             ant.req.mode("POINT")
     time.sleep(5)
     resp = cam.ants.req.dsm_DisablePointingCorrections()
@@ -151,15 +163,12 @@ def temp_hack_DisableAllPointingCorrections(cam):
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
 
 
-# Apply mandatory hacks - if in a configured OBS framework
-try:
-    _g_ = globals()
-    cam = _g_["cam"] if ("cam" in _g_) else _g_["kat"]
-    
+def apply(cam):
+    """ Apply mandatory hacks - if in a configured OBS framework.
+        NB: must be called after `session.standard_setup()` because that causes a "major state transition" during which the
+        ACU resets some things which we are trying to hack around.
+    """
     if not cam.dry_run:
         match_ku_siggen_freq(cam)
         
         temp_hack_DisableAllPointingCorrections(cam)
-
-except:
-    raise Exception("No 'cam' or 'kat' connection defined; import this module after the `with verify_and_connect() as kat:` line!")
