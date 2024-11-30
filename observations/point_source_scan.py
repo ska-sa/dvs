@@ -10,6 +10,8 @@ import katpoint
 
 def collect_targets(cam, args, opts):
     """ Similar to katcorelib.collect_targets(), but this can take TLE files!
+        @param args: either empty list, or the first string should contain a target name or comma-separated list of names
+        @param opts: parsed options containing at least `.catalogue`, the filename of the catalogue to load.
         @return: katpoint.Catalogue
     """
     try:
@@ -24,10 +26,10 @@ def collect_targets(cam, args, opts):
         if (len(args) == 0):
             return cat
         else:
-            tgt = cat[args[0]]
-            if (tgt is None):
-                raise ValueError("No target retrieved from argument list!")
-            return katpoint.Catalogue(tgt, antenna=cam.sources.antenna)
+            tgts = [cat[tgt] for tgt in args[0].split(",")]
+            tgts = [tgt for tgt in tgts if (tgt is not None)]
+            assert (len(tgts) > 0), "No target retrieved from argument list!"
+            return katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
     except Exception as e:
         user_logger.warning("Didn't find a specific catalogue and/or target to load, continuing with default catalogue.\n\t[ %s ]" % e)
         return cam.sources
@@ -144,8 +146,8 @@ styles = {
     'ku': dict(num_scans=11, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/10),
     'ku-slow': dict(num_scans=11, scan_duration=40, scan_extent=0.5, scan_spacing=0.5/10),
     # Ku-band initial pointing, either MeerKAT or SKA Dish
-    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 2sec per spacing
-    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 1sec per spacing
+    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 2sec per 0.06deg
+    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 1sec per 0.09deg
     # Standard for SKA Dish
     'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8),
     'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
