@@ -131,9 +131,9 @@ def match_ku_siggen_freq(cam):
         fLO = (fc -  1712e6*3/4.) / 100. # Hz
         current_fLO = cam.anc.sensors.siggen_ku_frequency.get_value()
         if (abs(current_fLO-fLO) > 0.01):
-            cam.anc.req.siggen_ku_frequency(fLO)
+            cam.anc.req.siggen_ku_frequency(fLO) # TODO: not exposed, even if "anc" added to the subarray controlled resources!
             user_logger.info("UPDATED Ku reference LO from %g to %g" % (current_fLO, fLO))
-    else:
+    elif (len(set(xband_fc)) > 1):
         user_logger.warning("MANUAL OVERRIDE ASSUMED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
