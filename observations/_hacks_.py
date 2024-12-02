@@ -21,9 +21,11 @@
 try:
     from katcorelib import user_logger
 except:
-    user_logger = None
-    print("INFO: not running in the OBS framework, some hacks may break!")
-import katpoint, time, numpy
+    import logging
+    user_logger = logging.getLogger("user")
+    user_logger.info("Not running in the OBS framework, some hacks may break!")
+import time, numpy, telnetlib
+import katpoint
 
 
 class start_nocapture_session(object):
@@ -116,25 +118,37 @@ class start_nocapture_session(object):
             return True                    
 
 
-def match_ku_siggen_freq(cam):
+def match_ku_siggen_freq(cam, override=False):
     """ Permanent "hack" for DVS: the frequency of the Ku-band reference LO signal generator must be changed manually,
         the subarray's "x band" center frequency only updates sensors and metadata.
         See https://skaafrica.atlassian.net/browse/MKT-50 
     
         A change is only made if all active "x band" subarrays have the same center frequency.
     """
-    active_subs = [cam.sub] # TODO: see other active subarrays?
+    try:
+        active_subs = [sa for sa in [cam.subarray_1,cam.subarray_2,cam.subarray_3,cam.subarray_4] if (sa.sensors.state.get_value()=='active')]
+    except: # subarray_X is not configured when this is run from an observation session
+        active_subs = [cam.sub] # TODO: see other active subarrays?
     xband_subs = [sa for sa in active_subs if (sa.sensors.band.get_value()=='x')]
     xband_fc = [sa.sensors.requested_rx_centre_frequency.get_value() for sa in xband_subs]
-    if (len(set(xband_fc)) == 1):
+    if (len(set(xband_fc)) == 1) or override:
         fc = xband_fc[0]
         fLO = (fc -  1712e6*3/4.) / 100. # Hz
         current_fLO = cam.anc.sensors.siggen_ku_frequency.get_value()
         if (abs(current_fLO-fLO) > 0.01):
-            cam.anc.req.siggen_ku_frequency(fLO) # TODO: not exposed, even if "anc" added to the subarray controlled resources!
-            user_logger.info("UPDATED Ku reference LO from %g to %g" % (current_fLO, fLO))
+            # cam.anc.req.siggen_ku_frequency(fLO) # Not exposed in observation session, even if "anc" added to the subarray controlled resources!
+            kumc_conf = cam.anc.sensors.siggen_address.get_value()
+            kumc = telnetlib.Telnet(*kumc_conf, timeout=5)
+            kumc.write("?ku-frequency %.2f\n" % fLO)
+            resp = kumc.read_very_eager().decode("UTF-8")
+            kumc.close()
+            if ("!ku-frequency ok" in resp):
+                user_logger.info("UPDATED Ku reference LO from %g to %g" % (current_fLO, fLO))
+            else:
+                user_logger.error("ERROR! Failed to update Ku reference. Response:")
+                user_logger.error(resp)
     elif (len(set(xband_fc)) > 1):
-        user_logger.warning("MANUAL OVERRIDE ASSUMED. Multiple x band subarrays are active at present with different center frequencies.") 
+        user_logger.error("MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
 def temp_hack_DisableAllPointingCorrections(cam):
