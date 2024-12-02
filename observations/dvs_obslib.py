@@ -1,26 +1,25 @@
 """ Hacks for use in the DVS observation framework.
     Intended to be used in the observe scripts as per following examples:
     
-        with verify_and_connect() as kat:
+        from dvs_obslib import start_hacked_session as start_session
+        
+        with verify_and_connect(...) as kat:
             ...
-            with start_session() as...:
-                session.standard_setup()
-                import _hacks_; _hacks_.apply(kat) # MUST be after session.standard_setup()
+            with start_session(...) as...:
+                session.standard_setup(...)
                 ...
     
     Or:
     
-        with verify_and_connect() as kat:
-            ...
-            from _hacks_ import start_nocapture_session as start_session
-            with start_session() as...:
-                ...
+        from dvs_obslib import start_nocapture_session as start_session
+        ...
     
     @author: aph@sarao.ac.za
 """
 try:
-    from katcorelib import user_logger
+    from katcorelib import user_logger, start_session as _kcl_start_session_
 except:
+    kcl_start_session = None
     import logging
     user_logger = logging.getLogger("user")
     user_logger.info("Not running in the OBS framework, some hacks may break!")
@@ -32,8 +31,10 @@ class start_nocapture_session(object):
     """ Hacked "no capture session" to ignore cbf & sdp """
     def __enter__(self):
         return self
+    
     def __exit(self, *a):
         pass
+    
     def __init__(self, kat, *a, **k):
         self.obs_params = {}
         self.nd_params = {}
@@ -41,12 +42,16 @@ class start_nocapture_session(object):
         kat.ants.set_sampling_strategy("lock", "event")
         self.dry_run = kat.dry_run
         self.telstate = self
+    
     def add(self, *a, **k): # For telstate
         pass
+    
     def capture_start(self): # Ignored
         pass
+    
     def standard_setup(self, *a, **k): # Ignored
         pass
+    
     def set_target(self, target): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
         if self.ants is None:
             raise ValueError('No antennas specified for session - '
@@ -64,6 +69,7 @@ class start_nocapture_session(object):
             if target != current_target:
                 # Set the antenna target (antennas will already move there if in mode 'POINT')
                 ant.req.target(target.description)
+    
     def on_target(self, target): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
         if self.ants is None:
             return False
@@ -79,6 +85,7 @@ class start_nocapture_session(object):
                     not ant.sensor.lock.get_value()):
                 return False
         return True
+    
     def track(self, target, duration=20.0, announce=True): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
         if self.ants is None:
             raise ValueError('No antennas specified for session - '
@@ -109,6 +116,7 @@ class start_nocapture_session(object):
         time.sleep(duration)
         user_logger.info('target tracked for %g seconds', duration)
         return True
+    
     def load_scan(self, timestamp, az, el): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
         samples = numpy.atleast_2d(numpy.c_[timestamp, az, el])
         csv = '\n'.join([('%.3f,%.4f,%.4f' % (t, a, e)) for t, a, e in samples])
@@ -177,12 +185,28 @@ def temp_hack_DisableAllPointingCorrections(cam):
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
 
 
-def apply(cam):
-    """ Apply mandatory hacks - if in a configured OBS framework.
-        NB: must be called after `session.standard_setup()` because that causes a "major state transition" during which the
-        ACU resets some things which we are trying to hack around.
-    """
-    if not cam.dry_run:
-        match_ku_siggen_freq(cam)
+def start_hacked_session(cam, **kwargs):
+    """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
+        1. `standard_setup()` checks & updates Ku-band siggen frequency
+        2. `standard_setup()` disables pointing corrections for MKE Dish ACU's
         
-        temp_hack_DisableAllPointingCorrections(cam)
+        @return: the session object.
+    """
+    # Start the session in the standard way
+    session = _kcl_start_session_(cam, **kwargs)
+    
+    # Hack the "standard setup" function
+    session._standard_setup_ = session.standard_setup
+    session._cam_ = cam
+    def hacked_setup(*a, **k):
+        result = session._standard_setup_(*a, **k)
+        if not session.cam.dry_run:
+            match_ku_siggen_freq(session.cam)
+            # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
+            # during which the ACU resets some things which we are trying to hack around.
+            temp_hack_DisableAllPointingCorrections(session.cam)
+        return result
+    session.standard_setup = hacked_setup
+    
+    return session
+    
