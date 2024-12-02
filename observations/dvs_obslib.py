@@ -23,7 +23,7 @@ except:
     import logging
     user_logger = logging.getLogger("user")
     user_logger.info("Not running in the OBS framework, some hacks may break!")
-import time, numpy, telnetlib
+import time, numpy, os, telnetlib
 import katpoint
 
 
@@ -209,4 +209,35 @@ def start_hacked_session(cam, **kwargs):
     session.standard_setup = hacked_setup
     
     return session
-    
+
+
+def collect_targets(cam, args, opts=None):
+    """ Similar to katcorelib.collect_targets(), but this can take TLE files!
+        @param args: either empty list, or the first string should contain a target name or comma-separated list of names
+        @param opts: parsed options containing at least `.catalogue`, the filename of the catalogue to load.
+        @return: katpoint.Catalogue
+    """
+    try: # Optionally specify --catalogue
+        catfn = opts.catalogue
+    except: # Possibly first argument is the catalogue
+        if (len(args) > 0) and os.path.isfile(args[0]):
+            catfn = args[0]
+            args = args[1:]
+    if os.path.isfile(catfn):
+        cat = katpoint.Catalogue(antenna=cam.sources.antenna)
+        try: # Maybe a standard catalogue file
+            cat.add(open(catfn, 'rt'))
+        except ValueError: # Possibly a TLE formatted file
+            try:
+                cat.add_tle(open(catfn, 'rt'))
+            except:
+                raise ValueError("%s is not a valid target catalogue file!" % catfn)
+    else: # No catalogue file specified, use the standard one
+        cat = cam.sources
+    if (len(args) == 0):
+        return cat
+    else:
+        tgts = [cat[tgt] for tgt in args[0].split(",")]
+        tgts = [tgt for tgt in tgts if (tgt is not None)]
+        assert (len(tgts) > 0), "No target retrieved from argument list!"
+        return katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
