@@ -5,6 +5,7 @@ import time
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
+from dvs_obslib import start_hacked_session as start_session # Override previous import
 import katpoint
 from katpoint import wrap_angle
 import numpy as np
@@ -36,7 +37,6 @@ with verify_and_connect(opts) as kat:
     moon = kat.sources.lookup['moon'][0]
     with start_session(kat, **vars(opts)) as session:
         session.standard_setup(**vars(opts))
-        import _hacks_; _hacks_.apply(kat)
         session.nd_params = nd_off
         session.capture_start()
         once = True

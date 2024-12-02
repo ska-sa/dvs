@@ -5,7 +5,8 @@ import time, os, katpoint
 import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
-                        collect_targets, start_session, user_logger)
+                        start_session, user_logger)
+from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
 
 
 class NoTargetsUpError(Exception):
@@ -45,32 +46,14 @@ parser.set_defaults(description='Target track', nd_params='off')
 # Parse the command line
 opts, args = parser.parse_args()
 
-# Allow the user to specify both a catalogue file and a target (or to work around collect_targets() not taking TLE files)
-if os.path.isfile(opts.catalogue):
-    def collect_targets(cam, args): # Override the standard function imported earlier
-        cat = katpoint.Catalogue(antenna=cam.sources.antenna)
-        try: # Maybe a standard catalogue file
-            cat.add(open(opts.catalogue, 'rt'))
-        except ValueError: # Possibly a TLE formatted file
-            try:
-                cat.add_tle(open(opts.catalogue, 'rt'))
-            except:
-                raise ValueError("%s is not a valid target catalogue file!" % opts.catalogue)
-        if (len(args) == 0):
-            return cat
-        else:
-            tgt = cat[args[0]]
-            if (tgt is None):
-                raise ValueError("No target retrieved from argument list!")
-            return katpoint.Catalogue(tgt, antenna=cam.sources.antenna)
-elif len(args) == 0:
+if (not os.path.isfile(opts.catalogue)) and (len(args) == 0):
     raise ValueError("Please specify at least one target argument via name "
                      "('Cygnus A'), description ('azel, 20, 30') or catalogue "
                      "file name ('sources.csv')")
 
 # Check options and build KAT configuration, connecting to proxies and devices
 with verify_and_connect(opts) as kat:
-    targets = collect_targets(kat, args)
+    targets = collect_targets(kat, args, opts)
     # Start capture session, which creates HDF5 file
     with start_session(kat, **vars(opts)) as session:
         # Quit early if there are no sources to observe
@@ -94,7 +77,6 @@ with verify_and_connect(opts) as kat:
             nd_switching = None
 
         session.standard_setup(**vars(opts))
-        import _hacks_; _hacks_.apply(kat)
         if opts.fft_shift is not None:
             session.cbf.fengine.req.fft_shift(opts.fft_shift)
         session.capture_start()

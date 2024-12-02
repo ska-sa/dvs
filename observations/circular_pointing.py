@@ -9,7 +9,8 @@ import time
 import numpy as np
 import katpoint
 try:
-    from katcorelib import (standard_script_options, verify_and_connect,collect_targets, start_session, user_logger, ant_array)
+    from katcorelib import (standard_script_options, verify_and_connect, start_session, user_logger, ant_array)
+    from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
     testmode=False
 except:
     testmode=True
@@ -241,7 +242,6 @@ if __name__=="__main__":
             with start_session(kat, **vars(opts)) as session:
                 # Use the command-line options to set up the system
                 session.standard_setup(**vars(opts))
-                import _hacks_; _hacks_.apply(kat)
                 all_ants = session.ants
                 session.obs_params['num_scans'] = len(compositex)
                 

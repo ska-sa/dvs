@@ -6,33 +6,8 @@ import time
 import numpy as np
 
 from katcorelib import standard_script_options, verify_and_connect, start_session, user_logger
+from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
 import katpoint
-
-def collect_targets(cam, args, opts):
-    """ Similar to katcorelib.collect_targets(), but this can take TLE files!
-        @param args: either empty list, or the first string should contain a target name or comma-separated list of names
-        @param opts: parsed options containing at least `.catalogue`, the filename of the catalogue to load.
-        @return: katpoint.Catalogue
-    """
-    try:
-        cat = katpoint.Catalogue(antenna=cam.sources.antenna)
-        try: # Maybe a standard catalogue file
-            cat.add(open(opts.catalogue, 'rt'))
-        except ValueError: # Possibly a TLE formatted file
-            try:
-                cat.add_tle(open(opts.catalogue, 'rt'))
-            except:
-                raise ValueError("%s is not a valid target catalogue file!" % opts.catalogue)
-        if (len(args) == 0):
-            return cat
-        else:
-            tgts = [cat[tgt] for tgt in args[0].split(",")]
-            tgts = [tgt for tgt in tgts if (tgt is not None)]
-            assert (len(tgts) > 0), "No target retrieved from argument list!"
-            return katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
-    except Exception as e:
-        user_logger.warning("Didn't find a specific catalogue and/or target to load, continuing with default catalogue.\n\t[ %s ]" % e)
-        return cam.sources
 
 
 def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sunmoon_separation_deg=10):
@@ -182,7 +157,6 @@ with verify_and_connect(opts) as kat:
     else:
         with start_session(kat, **vars(opts)) as session:
             session.standard_setup(**vars(opts))
-            import _hacks_; _hacks_.apply(kat)
             session.capture_start()
 
             start_time = time.time()

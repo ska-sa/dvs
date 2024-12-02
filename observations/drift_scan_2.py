@@ -7,7 +7,8 @@
 from __future__ import with_statement
 
 import time
-from katcorelib import standard_script_options, verify_and_connect, collect_targets, start_session, user_logger
+from katcorelib import standard_script_options, verify_and_connect, start_session, user_logger
+from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
 import katpoint
 import math
 
@@ -45,7 +46,6 @@ with verify_and_connect(opts) as kat:
     else:
         with start_session(kat, **vars(opts)) as session:
             session.standard_setup(**vars(opts))
-            import _hacks_; _hacks_.apply(kat)
             session.capture_start()
             target = observation_sources.filter(el_limit_deg=opts.horizon).targets[0]
 
