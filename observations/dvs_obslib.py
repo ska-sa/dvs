@@ -200,11 +200,11 @@ def start_hacked_session(cam, **kwargs):
     session._cam_ = cam
     def hacked_setup(*a, **k):
         result = session._standard_setup_(*a, **k)
-        if not session.cam.dry_run:
-            match_ku_siggen_freq(session.cam)
+        if (not session._cam_.dry_run):
+            match_ku_siggen_freq(session._cam_)
             # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
             # during which the ACU resets some things which we are trying to hack around.
-            temp_hack_DisableAllPointingCorrections(session.cam)
+            temp_hack_DisableAllPointingCorrections(session._cam_)
         return result
     session.standard_setup = hacked_setup
     
