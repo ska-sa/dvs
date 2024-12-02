@@ -146,9 +146,9 @@ def match_ku_siggen_freq(cam, override=False):
         if (abs(current_fLO-fLO) > 0.01):
             # cam.anc.req.siggen_ku_frequency(fLO) # Not exposed in observation session, even if "anc" added to the subarray controlled resources!
             kumc_conf = cam.anc.sensors.siggen_address.get_value()
-            kumc = telnetlib.Telnet(*kumc_conf, timeout=5)
+            kumc = telnetlib.Telnet(*kumc_conf, timeout=2)
             kumc.write("?ku-frequency %.2f\n" % fLO)
-            resp = kumc.read_very_eager().decode("UTF-8")
+            resp = kumc.read_until("ok", timeout=2).decode("UTF-8")
             kumc.close()
             if ("!ku-frequency ok" in resp):
                 user_logger.info("UPDATED Ku reference LO from %g to %g" % (current_fLO, fLO))
