@@ -180,6 +180,7 @@ def temp_hack_DisableAllPointingCorrections(cam):
             ant.req.mode("POINT")
     time.sleep(5)
     resp = cam.ants.req.dsm_DisablePointingCorrections()
+    time.sleep(1)
     
     user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
@@ -205,6 +206,8 @@ def start_hacked_session(cam, **kwargs):
             # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
             # during which the ACU resets some things which we are trying to hack around.
             temp_hack_DisableAllPointingCorrections(session._cam_)
+            
+            # TODO: for holog-scans set attenuation from a table, for satellites
         return result
     session.standard_setup = hacked_setup
     
@@ -234,10 +237,13 @@ def collect_targets(cam, args, opts=None):
                 raise ValueError("%s is not a valid target catalogue file!" % catfn)
     else: # No catalogue file specified, use the standard one
         cat = cam.sources
-    if (len(args) == 0):
-        return cat
-    else:
-        tgts = [cat[tgt] for tgt in args[0].split(",")]
-        tgts = [tgt for tgt in tgts if (tgt is not None)]
-        assert (len(tgts) > 0), "No target retrieved from argument list!"
-        return katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
+    if (len(args) > 0):
+        try: # See if it is target definitions
+            for arg in args:
+                cat.add(arg)
+        except: # Perhaps just target names
+            tgts = [cat[tgt] for tgt in args[0].split(",")]
+            tgts = [tgt for tgt in tgts if (tgt is not None)]
+            assert (len(tgts) > 0), "No target retrieved from argument list!"
+            return katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
+    return cat
