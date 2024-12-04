@@ -11,8 +11,11 @@
         
         ...
         
-        reset_LMC(cam.s0002)
+        dvsmonctl.reset_LMC(cam.s0002)
         
+        ...
+        
+        cat = geo_cat(cam) # Download to /home/kat/usersnfs/aph/geo.txt by default
 
     @author: aph@sarao.ac.za
 '''
@@ -37,15 +40,13 @@ def reset_LMC(cam_ant):
     dsh.ResetDishTasks()
 
 
-def match_ku_siggen_freq(override=False):
+def match_ku_siggen_freq(cam, override=False):
     """ The frequency of the Ku-band reference LO signal generator must be changed manually,
         the subarray's "x band" center frequency only updates sensors and metadata.
         See https://skaafrica.atlassian.net/browse/MKT-50 
     
         A change is only made if all active "x band" subarrays have the same center frequency.
     """
-    global cam
-    
     active_subs = [sa for sa in [cam.subarray_1,cam.subarray_2,cam.subarray_3,cam.subarray_4] if (sa.sensors.state.get_value()=='active')]
     xband_subs = [sa for sa in active_subs if (sa.sensors.band.get_value()=='x')]
     xband_fc = [sa.sensors.requested_rx_centre_frequency.get_value() for sa in xband_subs]
@@ -60,7 +61,7 @@ def match_ku_siggen_freq(override=False):
         print("WARNING: MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
-def geo_cat(catfn="/home/kat/usersnfs/aph/geo.txt", groups="geo,intelsat"):
+def geo_cat(cam, catfn="/home/kat/usersnfs/aph/geo.txt", groups="geo,intelsat"):
     """ Download the current CelesTrak TLEs and combine it into one catalogue file.
         Then instantiates a katpoint catalogue from this file, using the current session's reference antenna.
         
@@ -68,7 +69,6 @@ def geo_cat(catfn="/home/kat/usersnfs/aph/geo.txt", groups="geo,intelsat"):
         @param groups: the TLE groups to download as comma-separated list (degault "geo,intelsat").
         @return: the katpoint.Catalogue 
     """
-    global cam
     import katpoint
     import urllib.request
     
@@ -76,7 +76,7 @@ def geo_cat(catfn="/home/kat/usersnfs/aph/geo.txt", groups="geo,intelsat"):
     urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%groups[0], catfn)
     for group in groups[1:]:
         urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%group, "/tmp/tle.txt")
-        with open(catfn,"wt") as geos:
+        with open(catfn,"at") as geos:
             with open("/tmp/tle.txt", "rt") as temp:
                 geos.writelines([line for line in temp])
     
