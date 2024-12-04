@@ -226,14 +226,19 @@ def start_holog_session(cam, **kwargs):
     if True: # TODO: only do this if the target list includes satellites
         old_eq = getattr(cam.cbf.sensors,"wide_antenna_channelised_voltage_%sv_eq"%cam.ants[0].name).get_value()
         old_eq = numpy.mean(eval(old_eq))
-        if (old_eq > 2000): # TODO: this assumes 4k, and ADC input of > -25dBFS? 
+        if (old_eq <= 2000): # Assume if this is significantly less than default (3234) that someone is trying something 
+            user_logger.info("EQ gain is far from default; skipping automatic adjustment for satellite spectrum.")
+        else:
+            # TODO: this assumes 4k, and ADC input of > -25dBFS?
             cam.cbf.req.wide_gain_all(500)
-            user_logger.info("Set EQ gain to 500!")
+            user_logger.info("Set EQ gain to 500 - expected good for satellite spectrum!")
         
-            def exit_session(exc_type, exc_val, exc_tb):
-                cam.cbf.req.wide_gain_all(old_eq) # TODO: this assumes all inputs and channels had the same
-                user_logger.info("Restored EQ gain to original '%s'." % old_eq)
-                session.__exit__(exc_type, exc_val, exc_tb)
+            def exit_session(*a):
+                try:
+                    cam.cbf.req.wide_gain_all(old_eq) # TODO: this assumes all inputs and channels had the same
+                    user_logger.info("Restored EQ gain to original '%s'." % old_eq)
+                finally:
+                    session.__exit__(*a)
             session.__exit__ = exit_session
     
     return session
