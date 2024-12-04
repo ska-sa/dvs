@@ -1180,7 +1180,7 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     # Don't fit to data that is too far off the expected smooth curve
     _s = np.stack([mat.smooth(ssigma[:,p], 3+N_freq//50) for p in range(N_prod)], -1) # Filter out deviations over < N_freq/50
     ff, ssigma, _s = f[fitchans], ssigma[fitchans], _s[fitchans]
-    ssigma.mask[np.abs(ssigma-_s)>0.05*_s] = True
+    ssigma.mask = ssigma.mask & (np.abs(ssigma-_s)>0.05*_s)
     if debug:
         plot_data(ff/1e6, K*ssigma*omega_e*180/np.pi, style='.', label="To fit", newfig=False)
     print("Fitting HPBW over %.f - %.f MHz assuming D=%.2f m"%(np.min(ff)/1e6, np.max(ff)/1e6, D))
