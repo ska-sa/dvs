@@ -238,7 +238,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         snr = 1/2**.5 * np.sqrt(np.asarray(snr_h)**2+np.asarray(snr_v)**2) # Average over frequency
 
     for x in xK: # K*(1+x) -- acceptable thresholds to filter out RFI
-        snr_flags = np.abs(snr/K - 1) < x # at most x% more than expected
+        snr_flags = np.abs(snr/K - 1) < x-1 # at most x% more than expected
         if (len(snr[snr_flags]) > 0):
             break
         else:
