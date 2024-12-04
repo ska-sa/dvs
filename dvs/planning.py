@@ -17,6 +17,14 @@ except:
     hp = None
 
 
+def to_ephem_date(datetime):
+    if isinstance(datetime, float):
+        datetime = katpoint.Timestamp(datetime)
+    if isinstance(datetime, katpoint.Timestamp):
+        datetime = datetime.to_ephem_date()
+    return datetime
+
+
 def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
              catfn='catalogues/sources_all.csv', listonly=None,
              llh0=('-30.713','21.444',1050), llh1=None, enu1=None, tabulate=True, figsize=(20,12), fontsize=8, **kwargs):
@@ -37,7 +45,7 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
     except:
         pass
     
-    date = katpoint.Timestamp(date).to_ephem_date() if isinstance(date,float) else date
+    date = to_ephem_date(date)
     refant = katpoint.Antenna("A0, %s, %s, %.1f, 13.5" % llh0)
     observer = refant.observer
     
@@ -115,9 +123,9 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         @param catfn, catant: defaults to use in case target is simply an identifier string.
         @return: target (a list, if multiple matches)- a katpoint.Target
     """
-    date = katpoint.Timestamp(date).to_ephem_date() if isinstance(date,float) else date
+    date = to_ephem_date(date)
     if (end_date is not None):
-        end_date = katpoint.Timestamp(end_date).to_ephem_date() if isinstance(end_date,float) else end_date
+        end_date = to_ephem_date(end_date)
     
     if isinstance(target,str):
         cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(catant))
@@ -171,7 +179,9 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         _name = target.name
         _flux = target.flux_density(freq/1e6) if (target.flux_model is not None) else np.nan
         try:
-            _rise, _set = observer.previous_rising(target.body), observer.next_setting(target.body)
+            _rise = observer.previous_rising(target.body) # observer date is still end_date, if given
+            observer.date = date
+            _set = observer.next_setting(target.body)
             if show_LST:
                 _rise, _set = LST(_rise),  LST(_set)
         except (ValueError, AttributeError): # ValueError->ephem.AlwaysUpError, AttributeError->StationaryBody has no attribute 'radius'
