@@ -32,7 +32,7 @@ class start_nocapture_session(object):
     def __enter__(self):
         return self
     
-    def __exit(self, *a):
+    def __exit__(self, *a):
         pass
     
     def __init__(self, kat, *a, **k):
@@ -210,6 +210,29 @@ def start_hacked_session(cam, **kwargs):
             # TODO: for holog-scans set attenuation from a table, for satellites
         return result
     session.standard_setup = hacked_setup
+    
+    return session
+
+
+def start_holog_session(cam, **kwargs):
+    """ Start a capture session with standard hacks as required for proper operation of the DVS system,
+        including setting the requantisation gain to 
+        1. `standard_setup()` checks & updates Ku-band siggen frequency
+        2. `standard_setup()` disables pointing corrections for MKE Dish ACU's
+        
+        @return: the session object.
+    """
+    session = start_hacked_session(cam, **kwargs)
+    
+    if True: # TODO: only do this if the target list includes satellites
+        old_eq = getattr(cam.cbf.sensors,"wide_antenna_channelised_voltage_%sv_eq"%cam.ants[0].name).get_value()
+        old_eq = numpy.mean(eval(old_eq))
+        cam.cbf.req.wide_gain_all(500) # TODO: this assumes 4k, and ADC input of > -25dBFS? 
+        
+        def exit_session(exc_type, exc_val, exc_tb):
+            cam.cbf.req.wide_gain_all(old_eq) # TODO: this assumes all inputs and channels had the same
+            session.__exit__(exc_type, exc_val, exc_tb)
+        session.__exit__ = exit_session
     
     return session
 
