@@ -521,7 +521,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
     # To speed up, fit only to 64 frequency channels
-    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, jump_zone=1, return_all=debug_level>0, debug=3)
+    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=3)
     f, bore, sigma = beamfits[:3]
     HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
