@@ -283,6 +283,7 @@ if __name__=="__main__":
                 start_time = time.time()
                 cycle = 0
                 targets = []
+                prev_target = None # To keep track of changes in targets
                 while cycle<opts.num_cycles or opts.num_cycles<0: # Override exit conditions are coded in the next ten lines
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
                         targets = list(catalogue.targets)
@@ -331,10 +332,11 @@ if __name__=="__main__":
                         user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
                         user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
                     session.set_target(target)
-                    user_logger.info("Performing azimuth unwrap")#ensures wrap of session.track is same as being used in load_scan
-                    targetazel=gen_track([time.time()],target)[0][1:]
-                    azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
-                    session.track(azeltarget, duration=0, announce=False)#azel target
+                    if (target != prev_target):#ensures wrap of session.track is same as being used in load_scan
+                        user_logger.info("Performing azimuth unwrap")
+                        targetazel=gen_track([time.time()],target)[0][1:]
+                        azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
+                        session.track(azeltarget, duration=0, announce=False)#azel target
 
                     user_logger.info("Performing initial track")
                     session.telstate.add('obs_label','track')
@@ -385,6 +387,7 @@ if __name__=="__main__":
 
                     session.telstate.add('obs_label','slew',ts=lasttime)
                     time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
+                    prev_target = target
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
