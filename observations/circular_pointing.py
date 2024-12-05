@@ -379,13 +379,11 @@ if __name__=="__main__":
                                 lastisslew=cs[iarm][it]
                                 session.telstate.add('obs_label','slew' if lastisslew else '%d.0.%d'%(cycle,iarm),ts=scan_data[it,0])
                         
-                        if not kat.dry_run:
-                            time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
+                        time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
                         lasttime = scan_data[-1,0]
 
                     session.telstate.add('obs_label','slew',ts=lasttime)
-                    if not kat.dry_run:
-                        time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
+                    time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
