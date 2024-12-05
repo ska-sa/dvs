@@ -23,21 +23,20 @@ import katuilib, time
 # configure_cam('all') # TODO: must run this manually in interactive console
 
 
-def reset_LMC(cam_ant):
-    """ Take authority & Clear old tasks - e.g. like after OHB GUI work.
-        This should be a temporary hack - if not sorted out by 01/03/2025 follow up with CAM team!
+def reset_ACU(cam_ant):
+    """ Let LMC take authority of ACU & clear old tasks etc. Necessary e.g. after ESTOP, manual control or OHB GUI /SCU work.
+        This should be a temporary hack - if not sorted out by 01/03/2025 follow up with LMC team!
     """
     import tango
     dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
     dsm = tango.DeviceProxy(dsm_addr)
     dsm.RequestAuthority(); time.sleep(1)
     dsm.AckInterlock(); time.sleep(5)
+    dsm.ClearLatchedErrors(); time.sleep(1)
+    dsm.ClearOldTasks(); time.sleep(1)
     dsm.SetStandbyFPMode(); time.sleep(5)
-    dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
-    dsh = tango.DeviceProxy(dsh_addr)
-    dsh.ClearOldTasks(); time.sleep(1)
-    dsh.ClearTaskHistory(); time.sleep(1)
-    dsh.ResetDishTasks()
+    dsm.ResetTrackTableBuffer(); time.sleep(1)
+    dsm.ResetTrackTable()
 
 
 def match_ku_siggen_freq(cam, override=False):
@@ -61,25 +60,25 @@ def match_ku_siggen_freq(cam, override=False):
         print("WARNING: MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
-def geo_cat(cam, catfn="/home/kat/usersnfs/aph/geo.txt", groups="geo,intelsat"):
+def geo_cat(cam, savefn="/home/kat/usersnfs/aph/geo.txt", download="geo,intelsat"):
     """ Download the current CelesTrak TLEs and combine it into one catalogue file.
         Then instantiates a katpoint catalogue from this file, using the current session's reference antenna.
         
-        @param catfn: the name of the file that will contain the downloaded TLEs (all concatenated in sequence)
-        @param groups: the TLE groups to download as comma-separated list (degault "geo,intelsat").
+        @param savefn: the name of the file that will contain the downloaded TLEs (all concatenated in sequence)
+        @param download: the TLE groups to download as comma-separated list (degault "geo,intelsat").
         @return: the katpoint.Catalogue 
     """
     import katpoint
     import urllib.request
     
-    groups = groups.split(",")
-    urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%groups[0], catfn)
+    groups = download.split(",")
+    urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%groups[0], savefn)
     for group in groups[1:]:
         urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%group, "/tmp/tle.txt")
-        with open(catfn,"at") as geos:
+        with open(savefn,"at") as geos:
             with open("/tmp/tle.txt", "rt") as temp:
                 geos.writelines([line for line in temp])
     
     cat = katpoint.Catalogue(add_specials=False, antenna=cam.sources.antenna)
-    cat.add_tle(open(catfn))
+    cat.add_tle(open(savefn))
     return cat
