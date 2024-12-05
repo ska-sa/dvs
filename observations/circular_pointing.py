@@ -2,6 +2,7 @@
 """ Modified from holography_scan.py to specifically implement continuous scan patterns for determining pointing offsets while tracking.
         circle: scans along a fixed radial offset from the target.
         cardioid: makes a "loopy heart"-shaped scan centred on the target.
+        epicycle: cycles around a circle centred on the target.
         
     @author: aph@sarao.ac.za
 """
