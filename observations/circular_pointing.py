@@ -29,7 +29,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     """ Generates the basic scan pattern in target coordinates.
         
         All quantities in seconds except:
-        @param kind: only 'circle'|'cardioid'|'epicycles' supported
+        @param kind: only 'circle'|'cardioid'|'epicycle' supported
         @param totextent: degrees
         @param scanspeed,slewspeed: degrees/second
         @param sampletime: seconds per sample
@@ -39,7 +39,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         a, b = 1, 0 # Constant radius
     elif (kind == 'cardioid'): # "Loopy hearth-shaped" scan around the target centre
         a, b = 0.4, 1.5 # Large inner loop; effective radius ~ a+b/2
-    elif (kind == 'epicycles'):
+    elif (kind == 'epicycle'):
         pass
     else:
         raise ValueError("Patterns of kind %s not supported!" % kind)
@@ -59,7 +59,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
         armx = radius*np.cos(th) - c/2
         army = radius*np.sin(th)
 
-    elif (kind == "epicycles"):
+    elif (kind == "epicycle"):
         r2 = radextent/2 # Sets the ratio of the circles to go between scanrad and center
         n = 4 # 2 looks like a cardioid, 3 is too "sparse"
         armx = r2*np.cos(th) + r2*np.cos(th*n)
@@ -163,7 +163,7 @@ if __name__=="__main__":
     parser.add_option('-l', '--scan-extent', type='float', default=10,
                       help='Diameter of pattern to measure, in degrees (default=%default)')
     parser.add_option('--kind', type='string', default='circle',
-                      help='Select the kind of pattern: may only be "circle"|"cardioid"|"epicycles" (default=%default)')
+                      help='Select the kind of pattern: may only be "circle"|"cardioid"|"epicycle" (default=%default)')
     parser.add_option('--cycle-tracktime', type='float', default=30,
                       help='time in seconds to track a new target before starting the pattern (default=%default)')
     parser.add_option('--sampletime', type='float', default=0.25,
