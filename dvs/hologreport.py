@@ -694,12 +694,13 @@ def plot_signalpathstats(rec, figsize=(14,16)):
             if (band != 's'):
                 v = katselib.getsensorvalues("%s_dig_%s_band_rfcu_%spol_overload"%(ant,band,P.lower()), T)[1]
                 axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
-            axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1); axes[0].legend()
+                axes[0].legend()
+            axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
             if (band != 's'):
                 v = katselib.getsensorvalues("%s_dig_%s_band_adc_%spol_rf_power_in"%(ant,band,P.lower()), T)[1]
-                axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
             else:
-                pass # TODO: add S-band sensor, once it is exposed to CAM
+                v = T*0 # TODO: add S-band sensor, once it is exposed to CAM
+            axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
             axes[1].set_ylabel("ADC RF input power [dBm]"); axes[1].grid(True); axes[1].legend()
     
     # Plot boresight visibilities
