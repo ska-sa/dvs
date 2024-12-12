@@ -277,7 +277,11 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
     clip = kwargs.get("clipextent",None)
-    if (load_cycles is not None): # Identify & load ALL cycles
+    select_loadscan_cycle = kwargs.get("select_loadscan_cycle",None)
+    select_loadscan_group = kwargs.get("select_loadscan_group",None)
+    if (select_loadscan_cycle is not None and select_loadscan_group is not None):
+        dud=0#do nothing, this is already passed onto Dataset and enacted
+    elif (load_cycles is not None): # Identify & load ALL cycles
         icycleoffset=0; timestart_hrs=0; timeduration_hrs=1e300; maxcycles=99
         print('Finding cycles using timestart_hrs %g, timeduration_hrs %g, icycleoffset %s'%(timestart_hrs,timeduration_hrs,icycleoffset))
         # Try different combinations to find the one that best detects cycles
