@@ -240,6 +240,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
                 a = katselib.getsensorvalues("%s_dsm_indexerActualPosition"%scanant, dataset.rawtime)[1]
         except: # Sensor database may not be available
             pass
+        if len(a)<3:#TODO: Note that above exception handling doesnt work because an exception is not raised, only a warning, resulting in a=[]
+            a = [np.nan]*3#temporary fix when kat-flap-cpt.mkat-rts.control.kat.ac.za offline
         out.feedindexer_deg = np.round([np.mean(a), np.min(a), np.max(a)],6) # (avg,min,max)
         
         # 'rawonboresight'
