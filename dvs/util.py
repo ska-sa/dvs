@@ -3,7 +3,7 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, shutil
+import katdal, os, subprocess, shutil
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 from analysis.katselib import GSheet
 from analysis import __res__
@@ -49,8 +49,19 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
             cbid = int(str(dataset))
             cache_fn = f"{cache_root}/{cbid}/{cbid}_sdp_l0.full.rdb"
             if not os.path.exists(cache_fn):
-                err = os.system(f"python {os.path.dirname(__file__)}/../bin/mvf_copy.py {cbid2url(cbid)} {cache_root}")
-                assert (err == 0), "mvf_copy.py failed with error code %s"%err
+                # err = os.system(f"python {os.path.dirname(__file__)}/../bin/mvf_download.py {cbid2url(cbid)} {cache_root}")
+                # The above one-liner is (currently) much too verbose, so use the following:
+                proc = subprocess.Popen(["python", os.path.dirname(__file__)+"/../bin/mvf_download.py", cbid2url(cbid), cache_root],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # Convert the verbose output to a more efficient form
+                while proc.poll() is None:
+                    out = proc.stdout.read(30).decode() # Arb. 30 chars - responsiveness vs excessiveness
+                    perc = [p for p in out.split(",") if ('%' in p) and (3 <= len(p) <= 5)] # Extracted percentages
+                    if perc:
+                        print("".join(perc), end="")
+                print()
+                err = proc.returncode
+                assert (err == 0), "mvf_download.py failed with error code %s"%err
             dataset = cache_fn
             # A function to remove the cached files
             __del_cache__ = lambda: [shutil.rmtree(f"{cache_root}/{cbid}", ignore_errors=True),
@@ -152,3 +163,4 @@ def get_datalog_entries(ant, dataset="*"):
         values = selected
     
     return headings, values
+
