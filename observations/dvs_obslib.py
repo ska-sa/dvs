@@ -1,5 +1,9 @@
-""" Hacks for use in the DVS observation framework.
+""" Common functions for use in the DVS observation framework.
     Intended to be used in the observe scripts as per following examples:
+    
+    Session "HACKS" to work around CAM/DVS gaps:
+    -------------------------------------------
+    Either this way:
     
         from dvs_obslib import start_hacked_session as start_session
         
@@ -9,10 +13,27 @@
                 session.standard_setup(...)
                 ...
     
-    Or:
+    or this way:
     
         from dvs_obslib import start_nocapture_session as start_session
         ...
+    
+    
+    Observation functions:
+    ----------------------
+    More versatile than the standard one:
+        from dvs_obslib import collect_targets
+    
+    
+    More efficient planning and filtering for target collections:
+        from dvs_obslib import plan_targets, filter_separation
+        
+        target = filter_separation(pointing_sources, time.time(), kat.sources.antenna,
+                                   separation_deg=opts.min_separation, sunmoon_separation_deg=5)
+        
+        target, expected_duration = plan_targets(targets, time.time(), t_observe=duration,
+                                                 antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)
+    
     
     @author: aph@sarao.ac.za
 """
