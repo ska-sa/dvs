@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # Track target(s) for a specified time.
 
-import time, os, katpoint
+import time, os
 import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
-from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
+from dvs_obslib import plan_targets, collect_targets, start_hacked_session as start_session # Override previous import
 
 
 class NoTargetsUpError(Exception):
@@ -94,8 +94,12 @@ with verify_and_connect(opts) as kat:
         while keep_going:
             keep_going = (opts.max_duration is not None) and opts.repeat
             targets_before_loop = len(targets_observed)
-            # Iterate through source list, picking the next one that is up
-            for n, target in enumerate(targets.iterfilter(el_limit_deg=opts.horizon)):
+            if False: # Iterate through source list, picking the next one that is up
+                sequence_of_targets = targets.iterfilter(el_limit_deg=opts.horizon)
+            else: # OR in a nearest-neighbour sequence
+                sequence_of_targets = plan_targets(targets, time.time(), t_observe=opts.track_duration,
+                                                   antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]
+            for n, target in enumerate(sequence_of_targets):
                 # Cut the track short if time ran out
                 duration = opts.track_duration
                 if opts.max_duration is not None:
