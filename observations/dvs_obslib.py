@@ -23,7 +23,8 @@ except:
     import logging
     user_logger = logging.getLogger("user")
     user_logger.info("Not running in the OBS framework, some hacks may break!")
-import time, numpy, os, telnetlib
+import time, os, telnetlib
+import numpy as np
 import katpoint
 
 
@@ -118,7 +119,7 @@ class start_nocapture_session(object):
         return True
     
     def load_scan(self, timestamp, az, el): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
-        samples = numpy.atleast_2d(numpy.c_[timestamp, az, el])
+        samples = np.atleast_2d(np.c_[timestamp, az, el])
         csv = '\n'.join([('%.3f,%.4f,%.4f' % (t, a, e)) for t, a, e in samples])
         if not self.dry_run:
             return self.ants.req.load_scan(csv)
@@ -225,7 +226,7 @@ def start_holog_session(cam, **kwargs):
     
     if not cam.dry_run: # TODO: also only do this if the target list includes satellites
         old_eq = getattr(cam.cbf.sensors,"wide_antenna_channelised_voltage_%sv_eq"%cam.ants[0].name).get_value()
-        old_eq = numpy.mean(eval(old_eq))
+        old_eq = np.mean(eval(old_eq))
         if (abs(old_eq-3234) <= 500): # Assume if this is significantly less than default (3234) that someone is trying something 
             user_logger.info("EQ gain is far from default; skipping automatic adjustment for satellite spectrum.")
         else:
@@ -283,3 +284,84 @@ def collect_targets(cam, args, opts=None):
             assert (len(tgts) > 0), "No target retrieved from argument list!"
             cat = katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
     return cat
+
+
+def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sunmoon_separation_deg=10):
+    """ Removes targets from the supplied catalogue which are within the specified distance from others or either the Sun or Moon.
+
+        @param catalogue: [katpoint.Catalogue]
+        @param T_observed: UTC timestamp, seconds since epoch [sec].
+        @param antenna: None to use the catalogue's antenna (default None) [katpoint.Antenna or str]
+        @param separation_deg: eliminate targets closer together than this (default 1) [deg]
+        @param sunmoon_separation_deg: omit targets that are closer than this distance from Sun & Moon (default 10) [deg]
+        @return: katpoint.Catalogue (a filtered copy of input catalogue)
+    """
+    antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
+    antenna = catalogue.antenna if (antenna is None) else antenna
+    targets = list(catalogue.targets)
+    avoid_sol = [katpoint.Target('%s, special'%n) for n in ['Sun','Moon']] if (sunmoon_separation_deg>0) else []
+
+    separation_rad = separation_deg*np.pi/180.
+    sunmoon_separation_rad = sunmoon_separation_deg*np.pi/180.
+
+    # Remove targets that are too close together (unfortunately also duplicated pairs)
+    overlap = np.zeros(len(targets), float)
+    for i in range(len(targets)-1):
+        t_i = targets[i]
+        sep = [(t_i.separation(targets[j], T_observed, antenna) < separation_rad) for j in range(i+1, len(targets))]
+        sep = np.r_[np.any(sep), sep] # Flag t_j too, if overlapped
+        overlap[i:] += np.asarray(sep, int)
+        # Check for t_i overlapping with solar system bodies
+        sep = [(t_i.separation(j, T_observed, antenna) < sunmoon_separation_rad) for j in avoid_sol]
+        if np.any(sep):
+            user_logger.info("%s appears within %g deg from %s"%(t_i, sunmoon_separation_deg, np.compress(sep,avoid_sol)))
+            overlap[i] += 1
+    if np.any(overlap > 0):
+        user_logger.info("Planning drops the following due to being within %g deg away from other targets:\n%s"%(separation_deg, np.compress(overlap>0,targets)))
+        targets = list(np.compress(overlap==0, targets))
+
+    filtered = katpoint.Catalogue(targets, antenna=antenna)
+    return filtered
+
+
+def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, antenna=None, el_limit_deg=20):
+    """ Generates a "nearest-neighbour" sequence of targets to observe, starting at the specified time.
+        This does not consider behaviour around the azimuth wrap zone.
+         
+        @param catalogue: [katpoint.Catalogue]
+        @param T_start: UTC timestamp, seconds since epoch [sec].
+        @param t_observe: duration of an observation per target [sec]
+        @param dAdt: angular rate when slewing (default 1.8) [deg/sec]
+        @param antenna: None to use the catalogue's antenna (default None) [katpoint.Antenna or str or antenna proxy]
+        @param el_limit_deg: observation elevation limit (default 20) [deg]
+        @return: [list of Targets], expected duration in seconds
+    """
+    # If it's an "antenna proxy, use current coordinates as starting point
+    try:
+        az0, el0 = antenna.sensor.pos_actual_scan_azim.get_value(), antenna.sensor.pos_actual_scan_elev.get_value()
+        antenna = antenna.sensor.observer.value
+    except: # No "live" coordinates so start from zenith
+        az0, el0 = 0, 90
+    start_pos = katpoint.construct_azel_target(az0*np.pi/180., el0*np.pi/180.)
+    
+    antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
+    antenna = catalogue.antenna if (antenna is None) else antenna
+    
+    todo = list(catalogue.targets)
+    done = []
+    T = T_start # Absolute time
+    available = catalogue.filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
+    next_tgt = available.closest_to(start_pos, T, antenna)[0] if (len(available.targets) > 0) else None
+    while (next_tgt is not None):
+        # Observe
+        next_tgt.antenna = antenna
+        done.append(next_tgt)
+        todo.pop(todo.index(next_tgt))
+        T += t_observe
+        # Find next visible target
+        available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
+        next_tgt, dGC = available.closest_to(done[-1], T, antenna)
+        # Slew to next
+        if next_tgt:
+            T += dGC * dAdt
+    return done, (T-T_start)
