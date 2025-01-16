@@ -83,7 +83,7 @@ with verify_and_connect(opts) as kat:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
                 raster_duration = raster_params["num_scans"] * (raster_params["scan_duration"]+5) # Incl. buffer between scans. TODO: Ignoring ND
-                for target in plan_targets(pointing_sources, start_time, t_observe=raster_duration,
+                for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
                     session.label('raster')
                     az, el = target.azel()
