@@ -251,10 +251,11 @@ def collect_targets(cam, args, opts=None):
         @param opts: parsed options containing at least `.catalogue`, the filename of the catalogue to load.
         @return: katpoint.Catalogue
     """
-    catfn = ''
     try: # Optionally specify --catalogue
         catfn = opts.catalogue
-    except: # Possibly first argument is the catalogue
+    except:
+        catfn = None
+    if not catfn: # Possibly first argument is the catalogue
         if (len(args) > 0) and os.path.isfile(args[0]):
             catfn = args[0]
             args = args[1:]
