@@ -92,7 +92,7 @@ with verify_and_connect(opts) as kat:
                 sequence_of_targets = targets.iterfilter(el_limit_deg=opts.horizon)
             else: # OR in a nearest-neighbour sequence
                 sequence_of_targets = plan_targets(targets, time.time(), t_observe=opts.track_duration,
-                                                   antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]
+                                                   antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             for n, target in enumerate(sequence_of_targets):
                 # Cut the track short if time ran out
                 duration = opts.track_duration
