@@ -62,13 +62,8 @@ with verify_and_connect(opts) as kat:
                                    "please re-run the script later")
         # Set the gain to a single non complex number if needed
         if opts.reset_gain is not None:
-            if not session.cbf.fengine.inputs:
-                raise RuntimeError("Failed to get correlator input labels, "
-                                   "cannot set the F-engine gains")
-            for inp in session.cbf.fengine.inputs:
-                session.cbf.fengine.req.gain(inp, opts.reset_gain)
-                user_logger.info("F-engine %s gain set to %g",
-                                 inp, opts.reset_gain)
+            session.cbf.fengine.req.wide_gain_all(opts.reset_gain)
+            user_logger.info("F-engine gains all set to %g", opts.reset_gain)
 
         try:
             nd_switching = list(map(int, opts.nd_switching.split(",")))
