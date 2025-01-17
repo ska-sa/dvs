@@ -62,8 +62,7 @@ with verify_and_connect(opts) as kat:
                                    "please re-run the script later")
         # Set the gain to a single non complex number if needed
         if opts.reset_gain is not None:
-            session.cbf.fengine.req.wide_gain_all(opts.reset_gain)
-            user_logger.info("F-engine gains all set to %g", opts.reset_gain)
+            session.set_fengine_gains(opts.reset_gain)
 
         try:
             nd_switching = list(map(int, opts.nd_switching.split(",")))
@@ -73,7 +72,7 @@ with verify_and_connect(opts) as kat:
 
         session.standard_setup(**vars(opts))
         if opts.fft_shift is not None:
-            session.cbf.fengine.req.fft_shift(opts.fft_shift)
+            session.set_fengine_fft_shift(opts.fft_shift)
         session.capture_start()
 
         start_time = time.time()
