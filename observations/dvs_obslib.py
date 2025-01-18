@@ -236,37 +236,6 @@ def start_hacked_session(cam, **kwargs):
     return session
 
 
-def start_holog_session(cam, **kwargs):
-    """ Start a capture session with standard hacks as required for proper operation of the DVS system,
-        including setting the requantisation gain to a value that is suitable for satellite observations
-        (to avoid X-engine accumulator numerical errors).
-        
-        @return: the session object.
-    """
-    session = start_hacked_session(cam, **kwargs)
-    
-    if not cam.dry_run: # TODO: also only do this if the target list includes satellites
-        old_eq = getattr(cam.cbf.sensors,"wide_antenna_channelised_voltage_%sv_eq"%cam.ants[0].name).get_value()
-        old_eq = np.mean(eval(old_eq))
-        if (abs(old_eq-3234) <= 500): # Assume if this is significantly less than default (3234) that someone is trying something 
-            user_logger.info("EQ gain is far from default; skipping automatic adjustment for satellite spectrum.")
-        else:
-            # TODO: this assumes 4k, and ADC input of > -25dBFS?
-            cam.cbf.req.wide_gain_all(500)
-            user_logger.info("Set EQ gain to 500 - expected good for satellite spectrum!")
-            
-            session__exit__ = session.__exit__
-            def exit_session(*a):
-                try:
-                    cam.cbf.req.wide_gain_all(old_eq) # TODO: this assumes all inputs and channels had the same
-                    user_logger.info("Restored EQ gain to original '%s'." % old_eq)
-                finally:
-                    session__exit__(*a)
-            session.__exit__ = exit_session
-    
-    return session
-
-
 def collect_targets(cam, args, opts=None):
     """ Similar to katcorelib.collect_targets(), but this can take TLE files!
         @param args: either empty list, or the first string should contain a target name or comma-separated list of names
