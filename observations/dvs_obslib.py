@@ -250,7 +250,7 @@ def collect_targets(cam, args, opts=None):
         if (len(args) > 0) and os.path.isfile(args[0]):
             catfn = args[0]
             args = args[1:]
-    if os.path.isfile(catfn):
+    if catfn and os.path.isfile(catfn):
         cat = katpoint.Catalogue(antenna=cam.sources.antenna)
         try: # Maybe a standard catalogue file
             cat.add(open(catfn, 'rt'))
