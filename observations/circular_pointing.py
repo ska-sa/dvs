@@ -50,7 +50,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     radextent = totextent/2.
     
     orbittime = 2*np.pi*radextent/scanspeed
-    norbits = int(tottime/orbittime + 0.5)
+    norbits = max(1, int(tottime/orbittime + 0.5)) # At least 1
     dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
     th = 2.0*np.pi*dt
     if (kind in ['cardioid', 'circle', '_circle_']): # These are all generically the same pattern
