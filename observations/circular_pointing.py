@@ -392,7 +392,4 @@ if __name__=="__main__":
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
                     user_logger.info("Safe to interrupt script now if necessary")
-                    if kat.dry_run:#only test one cycle - dryrun takes too long and causes CAM to bomb out
-                        user_logger.info("Testing only one cycle for dry-run")
-                        break
                     cycle+=1
