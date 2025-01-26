@@ -337,10 +337,12 @@ if __name__=="__main__":
                         targetazel=gen_track([time.time()],target)[0][1:]
                         azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
                         session.track(azeltarget, duration=0, announce=False)#azel target
-
-                    user_logger.info("Performing initial track")
-                    session.telstate.add('obs_label','track')
-                    session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
+                    
+                    if (target != prev_target) or (opts.cycle_tracktime > 0):
+                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        user_logger.info("Performing initial track")
+                        session.telstate.add('obs_label','track')
+                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
@@ -365,6 +367,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
+                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         for iant,track_ant in enumerate(track_ants):#also include always_scan_ants in track_ant list
                             if track_ant.name not in always_scan_ants_names:
                                 continue
@@ -375,6 +378,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
+                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         
                         lastisslew=None#so that first sample's state is also recorded
                         for it in range(len(cx[iarm])):
