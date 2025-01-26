@@ -11,7 +11,7 @@ import numpy as np
 import katpoint
 try:
     from katcorelib import (standard_script_options, verify_and_connect, start_session, user_logger, ant_array)
-    from dvs_obslib import collect_targets, start_hacked_session as start_session # Override previous import
+    from dvs_obslib import plan_targets, filter_separation, collect_targets, start_hacked_session as start_session # Override previous import
     testmode=False
 except:
     testmode=True
@@ -178,6 +178,11 @@ if __name__=="__main__":
     parser.add_option('--prepopulatetime', type='float', default=10.0,
                       help='time in seconds to prepopulate buffer in advance (default=%default)')
                   
+    parser.add_option('--min-separation', type="float", default=1.0,
+                      help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
+    parser.add_option('--sunmoon-separation', type="float", default=10,
+                      help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
+    
     # Set default value for any option (both standard and experiment-specific options)
     parser.set_defaults(description='Circular pointing scan', quorum=1.0, nd_params='off')
     # Parse the command line
@@ -235,10 +240,14 @@ if __name__=="__main__":
         # Check basic command-line options and obtain a kat object connected to the appropriate system
         with verify_and_connect(opts) as kat:
             catalogue = collect_targets(kat, args)
-            targets=catalogue.targets
-            if len(targets) == 0:
+            if len(catalogue) == 0:
                 raise ValueError("Please specify a target argument via name ('Ori A'), "
                                  "description ('azel, 20, 30') or catalogue file name ('sources.csv')")
+            # Remove sources that crowd too closely
+            catalogue = filter_separation(catalogue, time.time(), kat.sources.antenna,
+                                          separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
+            targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
+                                   antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             # Initialise a capturing session
             with start_session(kat, **vars(opts)) as session:
                 # Use the command-line options to set up the system
@@ -286,7 +295,8 @@ if __name__=="__main__":
                 prev_target = None # To keep track of changes in targets
                 while cycle<opts.num_cycles or opts.num_cycles<0: # Override exit conditions are coded in the next ten lines
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
-                        targets = list(catalogue.targets)
+                        targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
+                                               antenna=track_ants[0], el_limit_deg=opts.horizon)[0]
                     if (len(targets) == 0):
                         user_logger.warning("No targets defined!")
                         break
