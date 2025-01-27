@@ -969,7 +969,8 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                             ax.set_xlabel("degrees"); ax.set_ylabel("degrees")
                             ax.set_xlim(*eb_extent); ax.set_ylim(*eb_extent)
                     if (ci == 0): # Only figures for the first cycle
-                        plt.colorbar(im, ax=axes[-1])
+                        for ax in axes:
+                            plt.colorbar(im, ax=ax)
                         pp.report_fig(max(plt.get_fignums()))
                     print("Error Beam")
                     print("    %s\t\t%s"%(sHV[0],sHV[1]))
