@@ -216,7 +216,9 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         
         POL_ORDER = [list(dataset.pols_to_use).index(p) for p in POL_ORDER] # Convert to indices
         dataset.pols_to_use = [dataset.pols_to_use[p] for p in POL_ORDER] # Swap the order used by all loading & processing
-        
+    
+    dMHz = max(dMHz, abs(dataset.h5.channel_freqs[1]-dataset.h5.channel_freqs[0])/2/1e6)
+    
     def _load_extrainfo_(dataset, f_MHz, dMHz, out): # Add attributes to 'out', based on dataset as currently flagged.
         out.time_avg = dataset.env_times[0]
         out.deg_per_sec = np.percentile(dataset.deg_per_min, 95, axis=0)/60. # (Az,El)
@@ -232,16 +234,15 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         
         # Feed Indexer angles
         scanant = dataset.radialscan_allantenna[dataset.scanantennas[0]]
-        a = [np.nan]*3
-        try: # TODO: consider changing below to katdal's equivalent mechanism
-            if (telescope.upper() == "MEERKAT"):
-                a = katselib.getsensorvalues("%s_ap_indexer_position_raw"%scanant, dataset.rawtime)[1]
-            elif (telescope.upper() == "SKA"):
-                a = katselib.getsensorvalues("%s_dsm_indexerActualPosition"%scanant, dataset.rawtime)[1]
-        except: # Sensor database may not be available
-            pass
-        if len(a)<3:#TODO: Note that above exception handling doesnt work because an exception is not raised, only a warning, resulting in a=[]
-            a = [np.nan]*3#temporary fix when kat-flap-cpt.mkat-rts.control.kat.ac.za offline
+        a = []
+        # TODO: consider changing below to katdal's equivalent mechanism
+        if (telescope.upper() == "MEERKAT"):
+            a = katselib.getsensorvalues("%s_ap_indexer_position_raw"%scanant, dataset.rawtime)[1]
+        elif (telescope.upper() == "SKA"):
+            a = katselib.getsensorvalues("%s_dsm_indexerActualPosition"%scanant, dataset.rawtime)[1]
+        if (len(a) == 0):
+            print("WARNING: No indexer positions retrieved from sensor database. Continuing with nan's.")
+            a = [np.nan]*3
         out.feedindexer_deg = np.round([np.mean(a), np.min(a), np.max(a)],6) # (avg,min,max)
         
         # 'rawonboresight'
