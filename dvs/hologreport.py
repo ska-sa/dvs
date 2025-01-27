@@ -840,7 +840,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             _predicted_ = None
             if (predicted is not None):
                 _predicted_ = [(abs(f-f_MHz),f,p,b,h,v) for f,p,b,h,v in zip(predicted.f_MHz,predicted.beacon_pol,predicted.beams,predicted.apmapsH,predicted.apmapsV) if (p==beacon_pol) and (abs(f-f_MHz)<=DF)]
-                _predicted_ = None if (len(_predicted_) == 0) else sorted(_predicted_)[0] # Sorted by df, ascending
+                _predicted_ = None if (len(_predicted_) == 0) else sorted(_predicted_, key=lambda x:x[0])[0] # Sorted by df, ascending
             
             snr = snr_mask(beams)[0] # (cycles,products)
             for ci,(beam,apmapH,apmapV) in enumerate(zip(np.atleast_1d(beams),np.atleast_1d(apmapsH),np.atleast_1d(apmapsV))): # Walk through each measurement in the set
