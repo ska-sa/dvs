@@ -110,9 +110,8 @@ with verify_and_connect(opts) as kat:
                     duration = min(duration, time_left)
                 if opts.hold_delays:
                     session.label('delaytrack')
-                    session.track(target, duration=0, announce=False)
                     session.cbf.req.auto_delay('on')
-                    time.sleep(1)
+                    session.track(target, duration=0, announce=False)
                     session.cbf.req.auto_delay('off')
                 session.label('track')
                 if session.track(target, duration=duration):
