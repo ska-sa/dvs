@@ -40,6 +40,9 @@ parser.add_option('--fft-shift', type='int',
 parser.add_option('--nd-switching', type='string', default=None,
                   help='Enable synchronous switching of noise diode in multiples of accumulation interval '
                        'e.g. "3,27" to be ON for three, off for 27 dumps (default=%default)')
+parser.add_option('--hold-delays', action='store_true', default=False,
+                  help='Apply the delay tracking solutions calculated at the start of the track, for the duration. '
+                       'This differs from "--no-delays" which applies constant but arbitrary delays.')
 
 # Set default value for any option (both standard and experiment-specific options)
 parser.set_defaults(description='Target track', nd_params='off')
@@ -105,6 +108,12 @@ with verify_and_connect(opts) as kat:
                         keep_going = False
                         break
                     duration = min(duration, time_left)
+                if opts.hold_delays:
+                    session.label('delaytrack')
+                    session.track(target, duration=0, announce=False)
+                    session.cbf.req.auto_delay('on')
+                    time.sleep(1)
+                    session.cbf.req.auto_delay('off')
                 session.label('track')
                 if session.track(target, duration=duration):
                     targets_observed.append(target.description)
