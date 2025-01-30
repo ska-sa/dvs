@@ -266,10 +266,13 @@ def collect_targets(cam, args, opts=None):
         try: # See if it is target definitions
             tgts = katpoint.Catalogue(antenna=cam.sources.antenna)
             for arg in args:
-                tgts.add(arg)
+                try: # Perhaps a target name?
+                    tgts.add(cat[arg])
+                except ValueError: # Or else a full target description?
+                    tgts.add(arg)
             cat = tgts
         except: # Perhaps just target names
-            tgts = [cat[tgt] for tgt in args[0].split(",")]
+            tgts = [cat[tgt] for tgt in args[0].split(",")] 
             tgts = [tgt for tgt in tgts if (tgt is not None)]
             assert (len(tgts) > 0), "No target retrieved from argument list!"
             cat = katpoint.Catalogue(tgts, antenna=cam.sources.antenna)
