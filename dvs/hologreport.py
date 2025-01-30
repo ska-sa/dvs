@@ -274,8 +274,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
         # TODO: polswap does not seem to affect BeamCube!
         b_buf.append(katholog.BeamCube(dataset, scanantennaname=scanant, freqMHz=f_MHz, dMHz=dMHz, applypointing=applypointing, interpmethod='scipy', xyzoffsets=xyzoffsets, gridsize=gridsize))
-        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, **flip))
-        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, **flip))
+        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
+        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
