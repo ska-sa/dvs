@@ -293,7 +293,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         beams, apmapsH, apmapsV = [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)]
         for ic, select_loadscan_cycle in enumerate(loadscan_cycles):
             print('--------------------------------------------\nProcessing cycle %d (%d of %d)\n'%(select_loadscan_cycle, ic+1,len(loadscan_cycles)))
-            dataset.flagdata(select_loadscan_cycle=select_loadscan_cycle, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
+            dataset.flagdata(cycle=select_loadscan_cycle, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
             for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                 _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
         
