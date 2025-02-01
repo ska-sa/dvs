@@ -1043,9 +1043,10 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         if (ci > 0): # Multiple cycles
             plot_vs_hod([[results]], ["%d"%measured.fid], False, spec_freq_MHz, figsize=(14,4))
             pp.report_fig(max(plt.get_fignums()))
-            plot_errbeam_cycles([measured], predicted, DF=DF, beampolydegree=None, contourdB=contourdB, extent=eb_extent, ncols=6,
-                                clim=[i*np.nanmedian(results.errbeamH[:,0]) for i in [-1,1]])
-            pp.report_fig(max(plt.get_fignums()))
+            if (_predicted_ is not None):
+                plot_errbeam_cycles([measured], predicted, DF=DF, beampolydegree=None, contourdB=contourdB, extent=eb_extent, ncols=6,
+                                    clim=[i*np.nanmedian(results.errbeamH[:,0]) for i in [-1,1]])
+                pp.report_fig(max(plt.get_fignums()))
     finally:
         pp.close()
     
