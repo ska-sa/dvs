@@ -638,12 +638,12 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
                 offsets = offsets[~np.isnan(offsets)]
                 if (fit == "theil-sen"):
                     fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
-                    fitted = model(fitp, sorted(el))
+                    fitted = model(fitp, np.sort(el))
                     status = 0 if (np.max(_el)-np.min(_el) > 15) else 3
                 else:
                     model = lambda offset, slope, el: offset + slope*el
                     fitp, *_, status = sop.fmin_powell(lambda p: np.sum((offsets-model(*p,el=_el))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
-                    fitted = model(*fitp, el=sorted(el))
+                    fitted = model(*fitp, el=np.sort(el))
                     status = status if (np.max(_el)-np.min(_el) > 15) else 3
                 # Solid line if fitted without warnings
                 ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (status==0) else '--'), alpha=0.3)
