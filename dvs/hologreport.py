@@ -31,7 +31,7 @@ import zernike
 import pylab as plt
 
 
-FID2FN = {} # Overrid fid -> filename
+FID2FN = {} # Override fid -> filename
 TIME_OFFSETS = {} # Base timingoffset to load data with, e.g. where global synch failed.
 fid2fn = lambda fid: FID2FN.get(fid, "http://archive-gw-1.kat.ac.za/%d/%d_sdp_l0.full.rdb"%(fid,fid))
 
@@ -522,6 +522,7 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
     layout = _plan_layout_([[_unsqueeze_(r) for r in rs] for rs in RS], labels, separate_freqs)
     
     axes = np.atleast_1d(plt.subplots(5*len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*5*len(layout)))[1])
+    prev_oort = katpoint.projection.set_out_of_range_treatment("nan")
     for i,(fs,rs,lbl) in enumerate(layout):
         # For each HologResults in 'rs', indices for cycles that are 'masked out'. feedoffsets & errbeam share the same mask
         mask_ix = [[] if not hasattr(r.feedoffsetsH, "mask") else [ci for ci in range(len(r.el_deg)) if (np.all(r.feedoffsetsH[i,ci,...].mask) and np.all(r.feedoffsetsV[i,ci,...].mask))] for r in rs]
@@ -601,6 +602,7 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
         ax_.set_ylabel("Aperture deviation RMS [mm]", color="b")
     ax.set_xlabel("Hour of Day [local time]")
     ax.set_xlim(-0.01,24.01)
+    katpoint.projection.set_out_of_range_treatment(prev_oort)
 
 
 def _flatten_(twod, invmask=False): # Concatenates arrays (even zero-dimensional arrays) along the first axis
@@ -1105,6 +1107,7 @@ def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=
         @param what: a comma-separated subset of {wind, temp, humidity, elevation} """
     what = what.split(",")
     time_range = [np.nan, np.nan]
+    prev_oort = katpoint.projection.set_out_of_range_treatment("nan")
     axes = plt.subplots(len(what), 1, sharex=True, figsize=(figsize[0],figsize[1]*len(what)))[1]
     for r in recs:
         beams = np.atleast_1d(r.beams[0])
@@ -1150,6 +1153,7 @@ def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=
     # First axis gets the title
     label = "" if (label is None) else label
     axes[0].set_title("%s\n%s - %s [local time]"%(label, time.ctime(time_range[0]+tzoffset*3600), time.ctime(time_range[-1]+tzoffset*3600)))
+    katpoint.projection.set_out_of_range_treatment(prev_oort)
 
 
 def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None, masked=True):
