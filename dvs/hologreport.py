@@ -553,7 +553,7 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
         for r,mi in zip(rs,mask_ix):
             time_hod = np.asarray(r.info["time_hod"])
             # Sun & wind angles are from boresight to sun & to wind origin, but attack vector is from those to boresight so change sign of l & m
-            ae2lm = lambda Daz,Del,el: -np.asarray(katpoint._projection.sphere_to_ortho(az0=0,el0=el*np.pi/180,az=Daz*np.pi/180,el=(el+Del)*np.pi/180)[:2]) # deg,deg,deg -> -l,-m in tangent plane on bore sight
+            ae2lm = lambda Daz,Del,el: -np.asarray(katpoint.projection.sphere_to_ortho(az0=0,el0=el*np.pi/180,az=Daz*np.pi/180,el=(el+Del)*np.pi/180)[:2]) # deg,deg,deg -> -l,-m in tangent plane on bore sight
             sun_ae = np.transpose([np.asarray(e["sun_rel_deg"]) for e in r.info["enviro"]]) # dAz,dEl from bore to sun
             ax.quiver(time_hod, 0*time_hod, *ae2lm(sun_ae[0], sun_ae[1], r.el_deg), scale=None, color='r', alpha=0.5)
             wind_ae = (np.asarray([e["wind_rel_deg"] for e in r.info["enviro"]]), (0-r.el_deg)) # dAz,dEl from bore to wind origin
@@ -1122,7 +1122,7 @@ def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=
             elif ("elev" in key): # Sun & wind attack angle centred on boresight elevation angle
                 el_deg = np.asarray([bm.el_deg for bm in np.atleast_1d(r.beams[0])])
                 # Sun & wind angles are from boresight to sun & to wind origin, but attack vector is from those to boresight so change sign of l & m
-                ae2lm = lambda Daz,Del,el: -np.asarray(katpoint._projection.sphere_to_ortho(az0=0,el0=el*np.pi/180,az=Daz*np.pi/180,el=(el+Del)*np.pi/180)[:2]) # deg,deg,deg -> -l,-m in tangent plane on bore sight
+                ae2lm = lambda Daz,Del,el: -np.asarray(katpoint.projection.sphere_to_ortho(az0=0,el0=el*np.pi/180,az=Daz*np.pi/180,el=(el+Del)*np.pi/180)[:2]) # deg,deg,deg -> -l,-m in tangent plane on bore sight
                 sun_ae = np.transpose([np.asarray(bm.sun_rel_deg) for bm in np.atleast_1d(r.beams[0])]) # dAz,dEl from bore to sun
                 axes[ax].quiver(time_hod, el_deg, *ae2lm(sun_ae[0], sun_ae[1], el_deg), scale=None, color='r', alpha=0.5)
                 windaz_deg = np.asarray([bm.wind_rel_deg for bm in np.atleast_1d(r.beams[0])]) # dAz from bore sight to wind origin
