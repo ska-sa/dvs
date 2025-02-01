@@ -283,7 +283,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
-    selectkwargs = dict(targetname=kwargs.get("targetname",None), ignoreantennas=kwargs.get("ignoreantennas",[]), group=kwargs.get("select_loadscan_group",None), clipextent=kwargs.get("clipextent",None))
+    selectkwargs = dict(targetname=kwargs.get("targetname",None), ignoreantennas=kwargs.get("ignoreantennas",[]), group=kwargs.get("select_loadscan_group",0), clipextent=kwargs.get("clipextent",None))
     print('Selecting data according to:', selectkwargs)
     
     loadscan_cycles = loadscan_cycles if (loadscan_cycles) else kwargs.get("select_loadscan_cycle",None)
