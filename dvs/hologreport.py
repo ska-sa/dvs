@@ -184,7 +184,7 @@ def e_bn(pol, deg):
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
-              flag_slew=False, flag_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
+              flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
         @param fn: the filename or URL for the dataset.
@@ -196,7 +196,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         @param load_cycles: indices of individual cycles to load e.g. [0,1,3] or None to load it as a single cycle (default None)
         @param overlap_cycles: how many additional cycles to combine into a single map (default 0)
         @param flag_slew: True to ensure "slew" activities are always flagged out, otherwise may include "slew" if quality is OK (default False).
-        @param flag_hrs: explicit time-based flagging, as lists of (hrs_start,hrs_end) with 'hrs' the time since the start of the measurement (default None)
+        @param flags_hrs: explicit time-based flagging, as lists of (hrs_start,hrs_end) with 'hrs' the time since the start of the measurement (default None)
         @param kwargs: passed to katdal.Dataset e.g. 'timingoffset', 'clipextent'
         @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles.
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
@@ -220,7 +220,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         dataset.pols_to_use = [dataset.pols_to_use[p] for p in POL_ORDER] # Swap the order used by all loading & processing
     
     dMHz = max(dMHz, abs(dataset.h5.channel_freqs[1]-dataset.h5.channel_freqs[0])/2/1e6)
-    flag_hrs = [] if (flag_hrs is None) else flag_hrs
+    flags_hrs = [] if (flags_hrs is None) else flags_hrs
     
     def _load_extrainfo_(dataset, f_MHz, dMHz, out): # Add attributes to 'out', based on dataset as currently flagged.
         out.time_avg = dataset.env_times[0]
@@ -296,7 +296,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         print('Attempting to find the best combination of flagslew & onradial...')
         for _onradial,_flagslew in [([0.5, 0.75],False), ([0.25,0.5],False), ([0.05,0.2],False), ([0.05,0.2],True)]: # Defaults then progressivley more robust against poor pointing
             _flagslew = _flagslew or flag_slew # Allow override
-            dataset.flagdata(timestart_hrs=timestart_hrs, timeduration_hrs=timeduration_hrs, clipextent=clip, flagslew=_flagslew, flag_hrs=flag_hrs)
+            dataset.flagdata(timestart_hrs=timestart_hrs, timeduration_hrs=timeduration_hrs, clipextent=clip, flagslew=_flagslew, flags_hrs=flags_hrs)
             try:
                 _cyclestart,_cyclestop,_nscanspercycle = dataset.findcycles(cycleoffset=icycleoffset, onradial=_onradial, doplot=debug)
                 if (len(_cyclestart) > len(cyclestart)) or (len(_cyclestart) == len(cyclestart) and _nscanspercycle > nscanspercycle): # Best so far
@@ -312,7 +312,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
             for ic in [n for n in range(min([len(cycles), maxcycles])) if (n in load_cycles)]: # Filter as per load_cycles
                 cycle = cycles[ic]
                 print('--------------------------------------------\nProcessing cycle %d of %d (%.2f hrs)\n'%(ic+1,len(cycles),cycle[1]-cycle[0]))
-                dataset.flagdata(timestart_hrs=cycle[0], timeduration_hrs=cycle[1]-cycle[0], clipextent=clip, flagslew=flagslew, flag_hrs=flag_hrs)
+                dataset.flagdata(timestart_hrs=cycle[0], timeduration_hrs=cycle[1]-cycle[0], clipextent=clip, flagslew=flagslew, flags_hrs=flags_hrs)
                 for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                     _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
             
@@ -320,9 +320,9 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
             return beams, apmapsH, apmapsV
         else:
             print("No cycles found, fall back as if load_cycles=None")
-            dataset.flagdata(clipextent=clip, flagslew=flag_slew, flag_hrs=flag_hrs) # Reset
+            dataset.flagdata(clipextent=clip, flagslew=flag_slew, flags_hrs=flags_hrs) # Reset
     else:
-        dataset.flagdata(clipextent=clip, flagslew=flag_slew, flag_hrs=flag_hrs) # Reset
+        dataset.flagdata(clipextent=clip, flagslew=flag_slew, flags_hrs=flags_hrs) # Reset
     
     # Just load the data as currently selected.
     beams, apmapsH, apmapsV = [], [], []
