@@ -416,9 +416,10 @@ def BDF(apmap, D, f, k=0.36):
 
 
 # Data structure for processed datasets
-_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","polswap","tags"]) # Work-around for defaults keyword not available in current version of python
-ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,polswap=False,tags=None: _ResultSet_(
-                fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,clipextent,cycles,overlap_cycles,polswap,[] if tags==None else tags)
+_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","tags"]) # Work-around for defaults keyword not available in current version of python
+ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,tags=None: _ResultSet_(
+                fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
+                clipextent,cycles,overlap_cycles,flags_hrs,polswap,[] if tags==None else tags)
 
 def load_records(holo_recs, scanant, timingoffset, DISHPARAMS, clipextent=None, flag_slew=False, inspect_DT=False,  gridsize=512, flush=False, **load_kwargs):
     """ Loads the datasets into the records' results fields. Uses global TIME_OFFSETS.
@@ -631,16 +632,24 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
             if (q in hide): continue
             ax.plot(el, _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)]), 'C%do'%p, label="%s_f H"%q)
             ax.plot(el, _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)]), 'C%d^'%p, label="%s_f V"%q)
-            if (fit != None) and (np.max(el)-np.min(el) > 15): # Fit offsets vs. elevation angle
-                model = lambda offset, slope, el: offset + slope*el
-                C = [[r.feedoffsetsH[f,p], r.feedoffsetsV[f,p]] for f,r in zip(fs,rs)]
-                el, C = np.asarray(el), np.asarray(C)
-                fitp = sop.fmin_powell(lambda p: np.nansum((C-np.stack([model(*p,el=el)]*2,-1))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
+            if (fit != None): # Fit offsets vs. elevation angle
+                offsets = np.array([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)] + [r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
+                _el = np.concatenate([el, el])[~np.isnan(offsets)]
+                offsets = offsets[~np.isnan(offsets)]
+                if (fit == "theil-sen"):
+                    fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
+                    fitted = model(fitp, sorted(el))
+                    status = 0 if (np.max(_el)-np.min(_el) > 15) else 3
+                else:
+                    model = lambda offset, slope, el: offset + slope*el
+                    fitp, *_, status = sop.fmin_powell(lambda p: np.sum((offsets-model(*p,el=_el))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
+                    fitted = model(*fitp, el=sorted(el))
+                    status = status if (np.max(_el)-np.min(_el) > 15) else 3
                 # Solid line if fitted without warnings
-                ax.plot(np.sort(el), model(*fitp[0], el=np.sort(el)), ('C%d'%p) + ('-' if (fitp[-1]==0) else '--'), alpha=0.3)
-                fits.append("%s_f=%.2f + %.2fEl"%(q, fitp[0][0], fitp[0][1]))
+                ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (status==0) else '--'), alpha=0.3)
+                fits.append("%s_f=%.2f + %.2fEl"%(q, fitp[0], fitp[1]))
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join([str(f) for f in fits])))
+            print("%s\t %s"%(lbl, ";".join([f for f in fits])))
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
             
     ax.set_xlabel("Elevation [deg]"); ax.legend()
