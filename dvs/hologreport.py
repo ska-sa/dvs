@@ -184,7 +184,7 @@ def e_bn(pol, deg):
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
-              flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
+              loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
         @param fn: the filename or URL for the dataset.
@@ -195,9 +195,10 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
                        but m0xx will always be 0 if the other antenna is s0xxx) (default None)
         @param load_cycles: indices of individual cycles to load e.g. [0,1,3] or None to load it as a single cycle (default None)
         @param overlap_cycles: how many additional cycles to combine into a single map (default 0)
+        @param loadscan_cycles: similar to 'load_cycles', but specifically for "loadscan" style datasets and NOT affected by 'overlap_cycles' (default None)
         @param flag_slew: True to ensure "slew" activities are always flagged out, otherwise may include "slew" if quality is OK (default False).
         @param flags_hrs: explicit time-based flagging, as lists of (hrs_start,hrs_end) with 'hrs' the time since the start of the measurement (default None)
-        @param kwargs: passed to katdal.Dataset e.g. 'timingoffset', 'clipextent'
+        @param kwargs: passed to katdal.Dataset e.g. 'timingoffset', 'clipextent', 'select_loadscan_group'
         @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles.
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
     """
@@ -282,13 +283,23 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
-    clip = kwargs.get("clipextent",None)
-    select_loadscan_cycle = kwargs.get("select_loadscan_cycle",None)
-    select_loadscan_group = kwargs.get("select_loadscan_group",None)
-    if (select_loadscan_cycle is not None and select_loadscan_group is not None):
-        #do nothing, this is already passed onto Dataset and enacted
-        print('Using specified cycles, groups:',select_loadscan_cycle,select_loadscan_group)
-    elif (load_cycles is not None): # Identify & load ALL cycles
+    selectkwargs = dict(targetname=kwargs.get("targetname",None), ignoreantennas=kwargs.get("ignoreantennas",None), group=kwargs.get("select_loadscan_group",None), clipextent=kwargs.get("clipextent",None))
+    print('Selecting data according to:', selectkwargs)
+    
+    loadscan_cycles = loadscan_cycles if (loadscan_cycles) else kwargs.get("select_loadscan_cycle",None)
+    if (loadscan_cycles): # Identify & load ALL specified "loadscan"-type cycles
+        print('Using specified cycles:', loadscan_cycles)
+        loadscan_cycles = np.atleast_1d(loadscan_cycles)
+        beams, apmapsH, apmapsV = [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)]
+        for ic, select_loadscan_cycle in enumerate(loadscan_cycles):
+            print('--------------------------------------------\nProcessing cycle %d (%d of %d)\n'%(select_loadscan_cycle, ic+1,len(loadscan_cycles)))
+            dataset.flagdata(select_loadscan_cycle=select_loadscan_cycle, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
+            for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
+                _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
+        
+        dataset.h5 = None # This object is not used further and since it is not serializable, it complicates use cases 
+        return beams, apmapsH, apmapsV
+    elif (load_cycles): # Identify & load ALL specified cycles
         icycleoffset=0; timestart_hrs=0; timeduration_hrs=1e300; maxcycles=99
         print('Finding cycles using timestart_hrs %g, timeduration_hrs %g, icycleoffset %s'%(timestart_hrs,timeduration_hrs,icycleoffset))
         # Try different combinations to find the one that best detects cycles
@@ -296,7 +307,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         print('Attempting to find the best combination of flagslew & onradial...')
         for _onradial,_flagslew in [([0.5, 0.75],False), ([0.25,0.5],False), ([0.05,0.2],False), ([0.05,0.2],True)]: # Defaults then progressivley more robust against poor pointing
             _flagslew = _flagslew or flag_slew # Allow override
-            dataset.flagdata(timestart_hrs=timestart_hrs, timeduration_hrs=timeduration_hrs, clipextent=clip, flagslew=_flagslew, flags_hrs=flags_hrs)
+            dataset.flagdata(timestart_hrs=timestart_hrs, timeduration_hrs=timeduration_hrs, flagslew=_flagslew, flags_hrs=flags_hrs, **selectkwargs)
             try:
                 _cyclestart,_cyclestop,_nscanspercycle = dataset.findcycles(cycleoffset=icycleoffset, onradial=_onradial, doplot=debug)
                 if (len(_cyclestart) > len(cyclestart)) or (len(_cyclestart) == len(cyclestart) and _nscanspercycle > nscanspercycle): # Best so far
@@ -312,7 +323,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
             for ic in [n for n in range(min([len(cycles), maxcycles])) if (n in load_cycles)]: # Filter as per load_cycles
                 cycle = cycles[ic]
                 print('--------------------------------------------\nProcessing cycle %d of %d (%.2f hrs)\n'%(ic+1,len(cycles),cycle[1]-cycle[0]))
-                dataset.flagdata(timestart_hrs=cycle[0], timeduration_hrs=cycle[1]-cycle[0], clipextent=clip, flagslew=flagslew, flags_hrs=flags_hrs)
+                dataset.flagdata(timestart_hrs=cycle[0], timeduration_hrs=cycle[1]-cycle[0], flagslew=flagslew, flags_hrs=flags_hrs, **selectkwargs)
                 for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                     _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
             
@@ -320,9 +331,9 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
             return beams, apmapsH, apmapsV
         else:
             print("No cycles found, fall back as if load_cycles=None")
-            dataset.flagdata(clipextent=clip, flagslew=flag_slew, flags_hrs=flags_hrs) # Reset
+            dataset.flagdata(flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs) # Reset
     else:
-        dataset.flagdata(clipextent=clip, flagslew=flag_slew, flags_hrs=flags_hrs) # Reset
+        dataset.flagdata(flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs) # Reset
     
     # Just load the data as currently selected.
     beams, apmapsH, apmapsV = [], [], []
