@@ -151,7 +151,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     if (beacon_pol is not None):
         beacon_pol = [1,-1j] if (beacon_pol == "RCP") else ([1,1j] if (beacon_pol == "LCP") else beacon_pol)
         fcH = dict(feedcombine=[beacon_pol[0],beacon_pol[1],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
-        fcV = dict(feedcombine=[0,0,beacon_pol[0],beacon_pol[1]]) # feedcombine: [Gx, Dx, Dy, Gy]
+        fcV = dict(feedcombine=[0,0,beacon_pol[-2],beacon_pol[-1]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (incl. measured - see 'load_data()')
         _H = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcH)
@@ -633,7 +633,7 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
     """ Generates a figure of feed offsets vs elevation angle 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
-        @param fit: e.g. 'lin' to generate linear fits for each of X, Y & Z (default None)
+        @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
         @param hide: any subset of "XYZ", to hide the corresponding offset (default "") """
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     
@@ -647,17 +647,16 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
             ax.plot(el, _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)]), 'C%d^'%p, label="%s_f V"%q)
             if (fit != None): # Fit offsets vs. elevation angle
                 offsets = np.array([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)] + [r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
-                _el = np.concatenate([el, el])[~np.isnan(offsets)]
-                offsets = offsets[~np.isnan(offsets)]
+                _el = np.concatenate([el, el])
                 if (fit == "theil-sen"):
                     fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
+                    status = 0
                     fitted = model(fitp, np.sort(el))
-                    status = 0 if (np.max(_el)-np.min(_el) > 15) else 3
                 else:
                     model = lambda offset, slope, el: offset + slope*el
-                    fitp, *_, status = sop.fmin_powell(lambda p: np.sum((offsets-model(*p,el=_el))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
+                    fitp, *_, status = sop.fmin_powell(lambda p: np.nansum((offsets-model(*p,el=_el))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
                     fitted = model(*fitp, el=np.sort(el))
-                    status = status if (np.max(_el)-np.min(_el) > 15) else 3
+                status = status if (np.nanmax(_el)-np.nanmin(_el) > 15) else 4
                 # Solid line if fitted without warnings
                 ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (status==0) else '--'), alpha=0.3)
                 fits.append("%s_f=%.2f + %.2fEl"%(q, fitp[0], fitp[1]))
@@ -1309,7 +1308,7 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
             pass
     
     # Make plots
-    plot_offsets_el(sets, labels, figsize=(14,3), fit="lin")
+    plot_offsets_el(sets, labels, figsize=(14,3), fit="theil-sen")
     plot_errbeam_el(sets, labels, figsize=(14,3), extra="RMS")
     for eff_ix in range(-len(fspec_MHz),0):
         plot_eff_el(sets, labels, fspec_MHz=fspec_MHz, eff_ix=eff_ix, figsize=(14,3))
