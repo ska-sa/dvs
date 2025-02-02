@@ -640,10 +640,12 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
         el = _flatten_([r.el_deg for r in rs])
         for p,q in enumerate("XYZ"):
             if (q in hide): continue
-            ax.plot(el, _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)]), 'C%do'%p, label="%s_f H"%q)
-            ax.plot(el, _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)]), 'C%d^'%p, label="%s_f V"%q)
+            foH = _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)])
+            foV = _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
+            ax.plot(el, foH, 'C%do'%p, label="%s_f H"%q)
+            ax.plot(el, foV, 'C%d^'%p, label="%s_f V"%q)
             if (fit != None): # Fit offsets vs. elevation angle
-                offsets = np.array([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)] + [r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
+                offsets = np.concatenate([foH, foV])
                 _el = np.concatenate([el, el])
                 if (fit == "theil-sen"):
                     fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
