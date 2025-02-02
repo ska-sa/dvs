@@ -885,11 +885,15 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAs-is")
                     plt.subplot(4,2,1); beam.plot("Gx", doclf=False); plt.title("Gx")
-                    if (_predicted_ is not None): plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gx[0])), [-43], alpha=0.2)
+                    if (_predicted_ is not None):
+                        plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gx[0])), [-43], alpha=0.2)
+                        plt.gca().set_xlim(beam.margin[0], beam.margin[-1]); plt.gca().set_ylim(beam.margin[0], beam.margin[-1])
                     plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.title("Dx")
                     plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.title("Dy")
                     plt.subplot(4,2,4); beam.plot("Gy", doclf=False); plt.title("Gy")
-                    if (_predicted_ is not None): plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gy[0])), [-43], alpha=0.2)
+                    if (_predicted_ is not None):
+                        plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gy[0])), [-43], alpha=0.2)
+                        plt.gca().set_xlim(beam.margin[0], beam.margin[-1]); plt.gca().set_ylim(beam.margin[0], beam.margin[-1])
                     plt.subplot(4,2,5); _apmapH.plot('amp', doclf=False); plt.title("Aperture amplitude x")
                     plt.subplot(4,2,6); _apmapV.plot('amp', doclf=False); plt.title("Aperture amplitude y")
                     if (devcmap is not None): # Adjust this only for the devmaps
