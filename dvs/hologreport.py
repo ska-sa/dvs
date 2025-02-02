@@ -169,18 +169,15 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
 
 
 def e_bn(pol, deg):
-    """ @param pol: "H" | "V" for 100% linear | "HV" for partial linear
+    """ @param pol: ignored
         @param deg: angle [deg] by which to rotate the aperture plane to align +V to NCP relative to the source.
-                    When looking from the aperture to the source, +V is "up", +H is to the east and this angle is anticlockwise.
-                    So if observer's latitude is south of the declination of the source then there's an extra 180deg.
+                    When looking from the aperture to the source, +V is "up", +H is to the east and this angle is positive if anticlockwise
+                    as viewed by an observer in the Southern Hemisphere.
         @return: [e_H, e_V] components
     """
-    if (pol == "H"):
-        return [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180)]
-    elif (pol == "V"):
-        return [np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)]
-    elif (pol == "HV"):
-        return [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180), np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)]
+    e_H = [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180)] # H_from_H, H_from_V
+    e_V = [np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)] # V_from_H. V_from_V
+    return e_H + e_V
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
