@@ -168,16 +168,20 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     return (beamcube, apmapH, apmapV)
 
 
-def e_bn(pol, deg):
-    """ @param pol: ignored
-        @param deg: angle [deg] by which to rotate the aperture plane to align +V to NCP relative to the source.
-                    When looking from the aperture to the source, +V is "up", +H is to the east and this angle is positive if anticlockwise
-                    as viewed by an observer in the Southern Hemisphere.
-        @return: [e_H, e_V] components
-    """
-    e_H = [np.cos(deg*np.pi/180), -np.sin(deg*np.pi/180)] # H_from_H, H_from_V
-    e_V = [np.sin(deg*np.pi/180), np.cos(deg*np.pi/180)] # V_from_H. V_from_V
-    return e_H + e_V
+def e_bn(pol, tilt_deg, pos_clockwise=False):
+    """ Generates the E-field components for a linear polarised signal radiated from a satellite,
+        according to the convention that the satellite's +V points towards the NCP, and the observed
+        tilt angle from the surface of the Earth in the northerh hemisphere is positive in a
+        clockwise sense. Tilt angles from e.g. https://www.satbeams.com/footprints?beam=8511.
+        
+        @param tit_deg: the angle by which the satellite's V plane is tilted away from the observer's meridian.
+        @param pos_clockwise: True if tilt_deg angle > 0 means the tilt is clockwise i.e. norhtern hemisphere observer (default False).
+        @return: [eH, eV] components for the specified satellite beacon """
+    if not pos_clockwise: # Correct for Southern Hemisphere angle (+V towards NCP is observed as -V)
+        tilt_deg = 180 - tilt_deg
+    # tilt_deg=0 is V-pol, with tilt_deg>0 towards (-H)-pol
+    if (pol=="H"): tilt_deg -= 90
+    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
