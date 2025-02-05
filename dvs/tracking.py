@@ -147,43 +147,69 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
             
 
 
-def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, verbose=True, debug=False, kind=None):
-    """ Generates pointing offsets for a dataset created with circular_pointing.py
+def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_lost', strict=True, verbose=True, debug=False, kind=None):
+    """ Generates pointing offsets for a dataset created with circular_pointing.py, exactly equivalent to how
+        `analyse_point_source_scans.py` calculates it.
+    
         @param ds: the dataset (selection is reset!)
         @param ant: the identifier of the scanning antenna in the dataset
         @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
+        @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)]
-                   [(temperature, pressure, humidity, wind_speed, wind_dir), ...(for each cycle)] )
+                   [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
     if (not callable(chanmapping)) and (chanmapping is not None):
         _chans_ = chanmapping
         chanmapping = lambda *a: _chans_
     
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
-    enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir)
+    enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
     
     ds.select(scans="track", compscans="~slew")
     if (track_ant):
         ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
     else:
         ds.select(pol=["HH","VV"], ants=[ant])
+    if flags:
+        ds.select(flags=flags)
     fGHz = np.round(ds.spectral_windows[0].centre_freq/1e9, 4)
     
     ant_ix = [a.name for a in ds.ants].index(ant)
     ant = ds.ants[ant_ix]
-    for scan in ds.scans():
+    sun = katpoint.Target('Sun, special')
+    rc = katpoint.RefractionCorrection()
+    for (_, _, target) in ds.scans():
         # Fit offsets to circular scan total power
-        target = ds.catalogue.targets[ds.target_indices[0]]
         if chanmapping:
             ds.select(channels=chanmapping(target.name, fGHz))
-        mask = slice(None) # TODO: mask any extra data, e.g. too high acceleration, or data lost?
+        mask = np.any(~ds.flags[:],axis=(1,2)) if flags else slice(None)
+        
+        # Obtain middle timestamp of compound scan, where all pointing calculations are done
+        t_ref = np.median(ds.timestamps[mask])
+        
+        # Environmental parameters
+        sun_azel = katpoint.rad2deg(np.array(sun.azel(t_ref, antenna=ant)))
+        temperature, pressure, humidity = np.mean(ds.temperature[mask]), np.mean(ds.pressure[mask]), np.mean(ds.humidity[mask])
+        # Do a 2-D vector average of wind speed + direction
+        raw_wind_speed = ds.wind_speed[mask]
+        raw_wind_direction = ds.wind_direction[mask]/R2D
+        mean_north_wind = np.mean(raw_wind_speed * np.cos(raw_wind_direction))
+        mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
+        wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
+        wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
+        enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
+        
+        # Start with requested (az, el) coordinates, as they apply at the middle time for a moving target
+        rAz, rEl = target.azel(t_ref, antenna=ant) # [rad]
+        # Correct for refraction, which becomes the requested value at input of pointing model
+        rEl = rc.apply(rEl, temperature, pressure, humidity)
+        
+        # Fit the beam
         hv = np.abs(ds.vis[mask])
-        hv /= np.median(hv,axis=0) # Normalise for H-V gains & bandpass
+        hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        t_ref = np.mean(ds.timestamps[mask])
-        rAz, rEl = target.azel(t_ref, antenna=ant)
         if debug: # Prepare figure for debugging
             axs = plt.subplots(1,3, figsize=(14,3))[1]
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
@@ -192,13 +218,20 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/ant.diameter * R2D
+        # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
                                                                         powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
-        try:
+        # Convert this offset back to spherical (az, el) coordinates
+        with katpoint.projection.out_of_range_context('nan'):
             aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=ant, coord_system='azel') # [rad]
-        except: # Sometimes if fit is way out it may appear to be in the other hemisphere - OutOfRangeError!
-            aAz, aEl = np.nan, np.nan
-        dAz, dEl = (aAz - rAz)*R2D, (aEl - rEl)*R2D
+        
+        # Now correct the measured (az, el) for refraction and then apply the old pointing model
+        aEl = rc.apply(aEl, temperature, pressure, humidity)
+        mAz, mEl = ant.pointing_model.apply(aAz, aEl)
+        # Get a "raw" measured (az, el) at the output of the pointing model
+        dAz, dEl = (mAz - rAz)*R2D, (mEl - rEl)*R2D
+        # Make sure the offset is a small angle around 0 degrees - TODO?
+        
         if debug: # Report
             plt.suptitle("%s %s [Fit: %s]"%(ds.compscan_indices, target, valid))
         if debug or verbose:
@@ -207,15 +240,6 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, strict=True, 
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid))
-        
-        # Do a 2-D vector average of wind speed + direction
-        raw_wind_speed = ds.wind_speed
-        raw_wind_direction = ds.wind_direction/R2D
-        mean_north_wind = np.mean(raw_wind_speed * np.cos(raw_wind_direction))
-        mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
-        wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
-        wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
-        enviro.append((np.mean(ds.temperature), np.mean(ds.pressure), np.mean(ds.humidity), wind_speed, wind_direction))
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
@@ -235,6 +259,7 @@ def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid"
                 @param n_cycles: the number of cycles at each "scan"
                 @param Dant: diameter of the individual dish [meter]
             """
+            self.name = '1234567890_sdp_l0'
             self.spectral_windows = [typing.NamedTuple('SpectralWindow', centre_freq=float)(f_c)]
             self.channels = np.arange(16) # Not important, this keeps it easy
             self.freqs = f_c + np.linspace(-10e6,10e6,len(self.channels)) 
@@ -263,7 +288,7 @@ def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid"
             """ Generate the test data for a single cycle at a time (yields) """
             for i,tgt in enumerate(self.__targets_scanned__):
                 self.compscan_indices = [i]
-                self.target_indices = [k for k,t in enumerate(self.catalogue.targets) if (tgt in t.name)]
+                target = [t for t in self.catalogue.targets if (tgt in t.name)][0]
                 for s in range(self.__n_cycles__):
                     kind, scanrad, ampl, SEFD, BW, ox,oy = self.__testopts__
                     scanrad = self.__hpbw__ if (scanrad == 'hpbw') else scanrad 
@@ -271,20 +296,22 @@ def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid"
                                                       hpbw=self.__hpbw__, scanrad=scanrad, ox=ox, oy=oy)
                     m = np.transpose(np.stack([m]*len(self.channels),axis=0)) # time,freq
                     self.target_x, self.target_y, self.vis = np.stack([x],axis=1), np.stack([y],axis=1), np.stack([m/2,m/2],axis=2)
+                    self.flags = np.full(self.vis.shape, False)
                     self.timestamps = t + (t[-1]-t[0])*(i*self.__n_cycles__ + s)
                     self.temperature = 15 + np.random.rand(len(self.timestamps))
                     self.pressure = 900 + 5*np.random.rand(len(self.timestamps))
                     self.humidity = 20 + 10*np.random.rand(len(self.timestamps))
                     self.wind_speed = 1 + np.random.rand(len(self.timestamps))
                     self.wind_direction = 123 + 10*np.random.rand(len(self.timestamps))
-                    yield
+                    yield (s, "scan", target)
 
     ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
     hpbw = ds.__hpbw__ # deg
     for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
         print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
         ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
-        reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
+        fitted, enviro = reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
+        save_apss_file("./_demo_reduce_circular_pointing_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
 
 
 def analyse_circ_scans(ds, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
@@ -317,49 +344,38 @@ def analyse_circ_scans(ds, ants, chanmapping, output_filepattern=None, debug=Fal
 
 
 def save_apss_file(output_filename, ds, ant, fitted, enviro):
-    """ Creates a CSV file like what's generated by analyse_point_source_scans.py
+    """ Creates a CSV file like what's generated by `analyse_point_source_scans.py`
+        
         @param ds: the dataset with selection applied
         @param ant: the katpoint.Antenna (with pointing model in use at the time)
         @param fitted, enviro: as returned by `reduce_circular_pointing()`
     """
-    fields = ['target', 'timestamp', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
-              'beam_height_I','beam_height_I_std','beam_width_I','beam_width_HH','beam_width_VV']
-    record = {k:[] for k in fields}
-    for rec in fitted: # (timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]
-        record['timestamp'].append(rec[0])
-        record['target'].append(rec[1])
-        record['azimuth'].append(rec[2])
-        record['elevation'].append(rec[3])
-        record['delta_azimuth'].append(rec[4])
-        record['delta_elevation'].append(rec[5])
-        record['beam_width_I'].append((rec[6]*rec[7])**.5)
-        record['beam_width_HH'].append(rec[6])
-        record['beam_width_VV'].append(rec[7])
-        record['beam_height_I'].append(rec[8])
-        record['beam_height_I_std'].append(rec[9]) # Not quite the same, but relevant
+    fitted = np.asarray(fitted) # Mixed types!
+    enviro = np.asarray(enviro)
+    
+    # Field names as used by 'analyse_point_source_scans.py' in the order out of reduce_circular_pointing()
+    fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
+              'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std']
+    # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
+    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el']
+    string_fields = ['target']
+    record = {}
+    for c,f in enumerate(fields):
+        record[f] = fitted[:,c] if (f in string_fields) else np.asarray(fitted[:,c], float)
     record['dataset'] = [ds.name.split(" ")[-1]]*len(fitted)
     record['frequency'] = [np.mean(ds.freqs)]*len(fitted)
     record['timestamp_ut'] = [str(katpoint.Timestamp(_)) for _ in record['timestamp']]
     record['data_unit'] = ['counts']*len(fitted)
-    for k in ['baseline_height_I','baseline_height_I_std','baseline_height_HH','baseline_height_VV','refined_I','refined_HH','refined_VV','flux']:
-        record[k] = [0]*len(fitted)
     record['beam_height_HH'] = record['beam_height_I']
     record['beam_height_VV'] = record['beam_height_I']
-    for k in ['delta_azimuth_std','delta_elevation_std','beam_width_I_std',]:
+    record['beam_width_I'] = ( record['beam_width_HH']*record['beam_width_VV'] )**.5
+    for k in ['baseline_height_I','baseline_height_I_std','baseline_height_HH','baseline_height_VV',
+              'refined_I','refined_HH','refined_VV','flux','delta_azimuth_std',
+              'delta_elevation_std','beam_width_I_std']:
         record[k] = [0]*len(fitted)
     
-    # Sun angle relative to the antenna (not critical which antenna)
-    sun = katpoint.Target('Sun, special')
-    sun_az, sun_el = katpoint.rad2deg(np.array(sun.azel(record['timestamp'], antenna=ds.ants[0])))
-    record['sun_az'] = sun_az
-    record['sun_el'] = sun_el
-    
-    enviro = np.asarray(enviro)
-    record['temperature'] = enviro[:,0]
-    record['pressure'] = enviro[:,1]
-    record['humidity'] = enviro[:,2]
-    record['wind_speed'] = enviro[:,3]
-    record['wind_direction'] = enviro[:,4]
+    for c,f in enumerate(fields_enviro):
+        record[f] = enviro[:,c]
     
     save_apss_data(output_filename, record, ant)
 
