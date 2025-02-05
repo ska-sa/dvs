@@ -5,7 +5,7 @@
     -------------------------------------------
     Either this way:
     
-        from dvs_obslib import start_hacked_session as start_session
+        from dvs_obslib import standard_script_options, start_hacked_session as start_session
         
         with verify_and_connect(...) as kat:
             ...
@@ -38,7 +38,7 @@
     @author: aph@sarao.ac.za
 """
 try:
-    from katcorelib import user_logger, start_session as _kcl_start_session_
+    from katcorelib import user_logger, standard_script_options as _kcl_std_opts_, start_session as _kcl_start_session_
 except:
     kcl_start_session = None
     import logging
@@ -47,6 +47,15 @@ except:
 import time, os, telnetlib
 import numpy as np
 import katpoint
+
+
+def standard_script_options(usage, description):
+    """ Add additional options that are used by `start_hacked_session()`. """
+    parser = _kcl_std_opts_(usage, description)
+    parser.add_option('--reset-gain', type='int', default=None,
+                      help='Value for the reset of the correlator F-engine gain '
+                           '(default=%default)')
+    return parser
 
 
 class start_nocapture_session(object):
@@ -223,13 +232,17 @@ def start_hacked_session(cam, **kwargs):
     session._cam_ = cam
     def hacked_setup(*a, **k):
         result = session._standard_setup_(*a, **k)
+        # Set the gain to a single non complex number if requested
+        eq_gain = kwargs.get("reset_gain", None)
+        if eq_gain:
+            session.set_fengine_gains(eq_gain)
         if (not session._cam_.dry_run):
+            # Ensure the Ku-band signal generator matches the center frequency of the subarray
             match_ku_siggen_freq(session._cam_)
             # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
             # during which the ACU resets some things which we are trying to hack around.
             temp_hack_DisableAllPointingCorrections(session._cam_)
             
-            # TODO: for holog-scans set attenuation from a table, for satellites
         return result
     session.standard_setup = hacked_setup
     
