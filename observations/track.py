@@ -6,7 +6,7 @@ import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
-from dvs_obslib import plan_targets, collect_targets, start_hacked_session as start_session # Override previous import
+from dvs_obslib import plan_targets, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
 
 
 class NoTargetsUpError(Exception):
@@ -32,11 +32,6 @@ parser.add_option('-m', '--max-duration', type='float', default=None,
 parser.add_option('--repeat', action="store_true", default=False,
                   help='Repeatedly loop through the targets until maximum '
                        'duration (which must be set for this)')
-parser.add_option('--reset-gain', type='int', default=None,
-                  help='Value for the reset of the correlator F-engine gain '
-                       '(default=%default)')
-parser.add_option('--fft-shift', type='int',
-                  help='Set correlator F-engine FFT shift (default=leave as is)')
 parser.add_option('--nd-switching', type='string', default=None,
                   help='Enable synchronous switching of noise diode in multiples of accumulation interval '
                        'e.g. "3,27" to be ON for three, off for 27 dumps (default=%default)')
@@ -63,10 +58,6 @@ with verify_and_connect(opts) as kat:
         if len(targets.filter(el_limit_deg=opts.horizon)) == 0:
             raise NoTargetsUpError("No targets are currently visible - "
                                    "please re-run the script later")
-        # Set the gain to a single non complex number if needed
-        if opts.reset_gain is not None:
-            session.set_fengine_gains(opts.reset_gain)
-
         try:
             nd_switching = list(map(int, opts.nd_switching.split(",")))
             #opts.nd_params = None
@@ -74,8 +65,6 @@ with verify_and_connect(opts) as kat:
             nd_switching = None
 
         session.standard_setup(**vars(opts))
-        if opts.fft_shift is not None:
-            session.set_fengine_fft_shift(opts.fft_shift)
         session.capture_start()
 
         start_time = time.time()
