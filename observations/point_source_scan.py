@@ -37,17 +37,20 @@ styles = {
     'ku': dict(num_scans=11, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/10),
     'ku-slow': dict(num_scans=11, scan_duration=40, scan_extent=0.5, scan_spacing=0.5/10),
     # Ku-band initial pointing, either MeerKAT or SKA Dish
-    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 2sec per 0.06deg
-    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 1sec per 0.09deg
+    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 0.029deg per sec (~HPBWmin/4)
+    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 0.086deg per sec
     # Standard for SKA Dish
     'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8),
     'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
-    'skab3': dict(num_scans=9, scan_duration=16, scan_extent=1.8, scan_spacing=1.8/8),
-    'skab5a': dict(num_scans=9, scan_duration=16, scan_extent=0.6, scan_spacing=0.6/8),
+    'skab3': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8), # 0.09deg per sec (~HPBWmin/4)
+    'skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8), # 0.06deg per sec (~HPBWmin/4)
+    'skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8), # 0.025deg per sec (~HPBWmin/4)
 }
 parser.add_option('--style', type='choice', choices=styles.keys(),
                   help="Raster scan style determining number of scans, scan duration, scan extent "
                        "and scan spacing. The available styles are: %s" % (styles,))
+parser.add_option('--alternate-style', type='choice', choices=styles.keys(), default=None,
+                  help="If given, will repeat the measurement on each target with this style (default=%default)")
 
 
 # Parse the command line
@@ -63,8 +66,10 @@ with verify_and_connect(opts) as kat:
     # Remove sources that crowd too closely
     pointing_sources = filter_separation(pointing_sources, time.time(), kat.sources.antenna,
                                          separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
-    raster_params = styles[opts.style]
-
+    raster_params = [styles[opts.style]]
+    if opts.alternate_style:
+        raster_params.append(styles[opts.alternate_style])
+    
     # Quit early if there are no sources to observe
     if (len(pointing_sources) == 0):
         user_logger.warning("Empty point source catalogue or all targets are skipped")
@@ -82,15 +87,16 @@ with verify_and_connect(opts) as kat:
             while keep_going:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
-                raster_duration = raster_params["num_scans"] * (raster_params["scan_duration"]+5) # Incl. buffer between scans. TODO: Ignoring ND
+                raster_duration = raster_params[0]["num_scans"] * (raster_params[0]["scan_duration"]+5) # Incl. buffer between scans. TODO: Ignoring ND
                 for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
-                    session.label('raster')
-                    az, el = target.azel()
-                    user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
-                    if session.raster_scan(target, scan_in_azimuth=not opts.scan_in_elevation,
-                                           projection=opts.projection, **raster_params):
-                        targets_observed.append(target.name)
+                    for i, style_params in enumerate(raster_params):
+                        session.label('raster.%d'%i)
+                        az, el = target.azel()
+                        user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
+                        if session.raster_scan(target, scan_in_azimuth=not opts.scan_in_elevation,
+                                               projection=opts.projection, **style_params):
+                            targets_observed.append(target.name)
                     # The default is to do only one iteration through source list; or if the time is up, stop immediately
                     keep_going = (opts.min_time <= 0) or (time.time() - start_time < opts.min_time)
                     if not keep_going:
