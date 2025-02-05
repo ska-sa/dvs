@@ -42,8 +42,8 @@ styles = {
     # Standard for SKA Dish
     'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8, scan_in_az=[True]),
     'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8, scan_in_az=[True]),
-    'skab3': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True]),
-    'skab3_AzEl': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True,False]),
+    'skab3': dict(num_scans=9, scan_duration=24, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True]),
+    'skab3_AzEl': dict(num_scans=9, scan_duration=12, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True,False]),
     'skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8, scan_in_az=[True]),
     'skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8, scan_in_az=[True]),
     # Proposed for SKA Dish: extent = 2.3*HPBWmax; speed = HPBW/3/1sec - to be done with 1sec dumps!
