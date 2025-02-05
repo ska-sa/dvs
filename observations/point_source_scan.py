@@ -31,20 +31,27 @@ parser.add_option('-e', '--scan-in-elevation', action="store_true", default=Fals
 # Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/2
 styles = { 
     # Standard for MeerKAT
-    'uhf': dict(num_scans=9, scan_duration=60, scan_extent=5.5, scan_spacing=5.5/8),
-    'l': dict(num_scans=9, scan_duration=40, scan_extent=3.5, scan_spacing=3.5/8),
-    's': dict(num_scans=9, scan_duration=30, scan_extent=2.0, scan_spacing=2.0/8),
-    'ku': dict(num_scans=11, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/10),
-    'ku-slow': dict(num_scans=11, scan_duration=40, scan_extent=0.5, scan_spacing=0.5/10),
+    'uhf': dict(num_scans=9, scan_duration=60, scan_extent=5.5, scan_spacing=5.5/8, scan_in_az=[True]),
+    'l': dict(num_scans=9, scan_duration=40, scan_extent=3.5, scan_spacing=3.5/8, scan_in_az=[True]),
+    's': dict(num_scans=9, scan_duration=30, scan_extent=2.0, scan_spacing=2.0/8, scan_in_az=[True]),
+    'ku': dict(num_scans=11, scan_duration=20, scan_extent=0.5, scan_spacing=0.5/10, scan_in_az=[True]),
+    'ku-slow': dict(num_scans=11, scan_duration=40, scan_extent=0.5, scan_spacing=0.5/10, scan_in_az=[True]),
     # Ku-band initial pointing, either MeerKAT or SKA Dish
-    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06), # Az 1.0 x El 1.0deg, 0.029deg per sec (~HPBWmin/4)
-    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09), # Az 3.0 x El 1.5deg, 0.086deg per sec
+    'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06, scan_in_az=[True]), # Az 1.0 x El 1.0deg, 0.029deg per sec (~HPBWmin/4)
+    'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09, scan_in_az=[True]), # Az 3.0 x El 1.5deg, 0.086deg per sec
     # Standard for SKA Dish
-    'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8),
-    'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8),
-    'skab3': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8), # 0.09deg per sec (~HPBWmin/4)
-    'skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8), # 0.06deg per sec (~HPBWmin/4)
-    'skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8), # 0.025deg per sec (~HPBWmin/4)
+    'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8, scan_in_az=[True]),
+    'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8, scan_in_az=[True]),
+    'skab3': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True]),
+    'skab3_AzEl': dict(num_scans=9, scan_duration=20, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True,False]),
+    'skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8, scan_in_az=[True]),
+    'skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8, scan_in_az=[True]),
+    # Proposed for SKA Dish: extent = 2.3*HPBWmax; speed = HPBW/3/1sec - to be done with 1sec dumps!
+    '_skab1': dict(num_scans=21, scan_duration=21, scan_extent=9.0, scan_spacing=9.0/20, scan_in_az=[True]),
+    '_skab2': dict(num_scans=13, scan_duration=13, scan_extent=3.3, scan_spacing=3.3/12, scan_in_az=[True]),
+    '_skab3': dict(num_scans=13, scan_duration=13, scan_extent=1.8, scan_spacing=1.8/12, scan_in_az=[True]),
+    '_skab4': dict(num_scans=13, scan_duration=13, scan_extent=1.0, scan_spacing=1.0/12, scan_in_az=[True]),
+    '_skab5a': dict(num_scans=13, scan_duration=13, scan_extent=0.63, scan_spacing=0.63/12, scan_in_az=[True]),
 }
 parser.add_option('--style', type='choice', choices=styles.keys(),
                   help="Raster scan style determining number of scans, scan duration, scan extent "
@@ -88,14 +95,20 @@ with verify_and_connect(opts) as kat:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
                 raster_duration = raster_params[0]["num_scans"] * (raster_params[0]["scan_duration"]+5) # Incl. buffer between scans. TODO: Ignoring ND
+                raster_duration *= max([len(_["scan_in_az"]) for _ in raster_params])
                 for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
-                    for i, style_params in enumerate(raster_params):
-                        session.label('raster.%d'%i)
-                        az, el = target.azel()
-                        user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
-                        if session.raster_scan(target, scan_in_azimuth=not opts.scan_in_elevation,
-                                               projection=opts.projection, **style_params):
+                    for style_params in raster_params:
+                        session.label('raster')
+                        completed = 0
+                        style_params = dict(style_params) # Make a copy since we need to remove 'scan_in_az'
+                        for scan_in_az in style_params.pop("scan_in_az"):
+                            az, el = target.azel()
+                            user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
+                            if session.raster_scan(target, scan_in_azimuth=not scan_in_az if opts.scan_in_elevation else scan_in_az,
+                                                   projection=opts.projection, **style_params):
+                                completed += 1
+                        if (completed > 0):
                             targets_observed.append(target.name)
                     # The default is to do only one iteration through source list; or if the time is up, stop immediately
                     keep_going = (opts.min_time <= 0) or (time.time() - start_time < opts.min_time)
