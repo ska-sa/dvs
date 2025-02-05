@@ -168,20 +168,25 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     return (beamcube, apmapH, apmapV)
 
 
-def e_bn(pol, tilt_deg, pos_clockwise=False):
+def e_bn(pol, tilt_deg, northern_observer=False):
     """ Generates the E-field components for a linear polarised signal radiated from a satellite,
         according to the convention that the satellite's +V points towards the NCP, and the observed
         tilt angle from the surface of the Earth in the northerh hemisphere is positive in a
         clockwise sense. Tilt angles from e.g. https://www.satbeams.com/footprints?beam=8511.
         
         @param tit_deg: the angle by which the satellite's V plane is tilted away from the observer's meridian.
-        @param pos_clockwise: True if tilt_deg angle > 0 means the tilt is clockwise i.e. norhtern hemisphere observer (default False).
-        @return: [eH, eV] components for the specified satellite beacon """
-    if not pos_clockwise: # Correct for Southern Hemisphere angle (+V towards NCP is observed as -V)
+        @param northern_observer: True if the observer is in the northern hemisphere (default False).
+        @return: [eH, eV] components for the specified satellite beacon, with H & V matching the correlator products HH & VV """
+    if (pol == "RCP"): return [1,-1j]
+    
+    if (pol == "LCP"): return [1, 1j]
+    
+    if (pol=="H"): tilt_deg -= 90 # 0deg = +V; +tilt angle rotates H to V
+    if northern_observer: # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
+        pass
+    else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H towards East))
         tilt_deg = 180 - tilt_deg
-    # tilt_deg=0 is V-pol, with tilt_deg>0 towards (-H)-pol
-    if (pol=="H"): tilt_deg -= 90
-    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
+    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)] [::-1] # flip necessary to make correlator output signals match published results
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
@@ -854,7 +859,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     pp = katselib.PDFReport("%s_hologreport_%s_%d.pdf"%(pdfprefix,key[1],key[0]), header="%d: %s referenced to %s"%key, pagesize=(11,17), save=makepdf)
     try:
         pp.capture_stdout(echo=True)
-        print("Target: %s"%b0.dataset.target.name)
+        print("Target: %s  [dataset %s]"%b0.dataset.target.name, measured.fid)
         print("Processing tags: %s"%measured.tags)
         
         for f_MHz, beacon_pol, beams, apmapsH, apmapsV in zip(measured.f_MHz, measured.beacon_pol, measured.beams, measured.apmapsH, measured.apmapsV):
@@ -877,6 +882,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 feedindexer_deg[-1].append(beam.feedindexer_deg)
                 enviro[-1].append(dict(sun_deg=beam.sun_deg, sun_rel_deg=beam.sun_rel_deg, temp_C=beam.temp_C, wind_mps=beam.wind_mps, wind_rel_deg=beam.wind_rel_deg))
                 print(">> %.1f degEl @ %.2f hrs [local time]; SNR~%s"%(el_deg[-1][-1], time_hod[-1][-1], np.array2string(snr[ci],precision=0).replace("\n",",")))
+                print(">> Sun proximity {sun_rel_deg}deg, wind {wind_mps}m/s from {wind_rel_deg}degXEl".format(**enviro[-1]))
                 
                 _apmapH, _apmapV = apmapH, apmapV # Un-modified copies, in case they get modified below
                 # If predicted maps provided, generate copies of measured maps that are corrected by predicted maps
