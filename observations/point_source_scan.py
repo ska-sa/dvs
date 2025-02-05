@@ -5,7 +5,7 @@
 import time
 
 from katcorelib import standard_script_options, verify_and_connect, start_session, user_logger
-from dvs_obslib import plan_targets, filter_separation, collect_targets, start_hacked_session as start_session # Override previous import
+from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
 
 
 # Script options

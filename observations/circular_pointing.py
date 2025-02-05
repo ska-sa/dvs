@@ -11,7 +11,7 @@ import numpy as np
 import katpoint
 try:
     from katcorelib import (standard_script_options, verify_and_connect, start_session, user_logger, ant_array)
-    from dvs_obslib import plan_targets, filter_separation, collect_targets, start_hacked_session as start_session # Override previous import
+    from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
     testmode=False
 except:
     testmode=True

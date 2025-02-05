@@ -5,7 +5,7 @@ import time
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
-from dvs_obslib import start_hacked_session as start_session # Override previous import
+from dvs_obslib import standard_script_options, start_hacked_session as start_session # Override previous import
 import katpoint
 from katpoint import wrap_angle
 import numpy as np
