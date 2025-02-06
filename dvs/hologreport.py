@@ -882,7 +882,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 feedindexer_deg[-1].append(beam.feedindexer_deg)
                 enviro[-1].append(dict(sun_deg=beam.sun_deg, sun_rel_deg=beam.sun_rel_deg, temp_C=beam.temp_C, wind_mps=beam.wind_mps, wind_rel_deg=beam.wind_rel_deg))
                 print(">> %.1f degEl @ %.2f hrs [local time]; SNR~%s"%(el_deg[-1][-1], time_hod[-1][-1], np.array2string(snr[ci],precision=0).replace("\n",",")))
-                print(">> Sun proximity {sun_rel_deg}deg, wind {wind_mps}m/s from {wind_rel_deg}degXEl".format(**enviro[-1]))
+                print(">> Sun proximity {sun_rel_deg}deg, wind {wind_mps}m/s from {wind_rel_deg}degXEl".format(**enviro[-1][-1]))
                 
                 _apmapH, _apmapV = apmapH, apmapV # Un-modified copies, in case they get modified below
                 # If predicted maps provided, generate copies of measured maps that are corrected by predicted maps
