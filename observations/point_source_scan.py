@@ -27,7 +27,7 @@ parser.add_option('--sunmoon-separation', type="float", default=10,
 parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
 parser.add_option('--switch-indexer-every', type="int", default=-1,
-                  help=" (default=never)")
+                  help="Switch the feed indexer out & back again after every few rasters, alternating directions if possible (default=never)")
 parser.add_option('-e', '--scan-in-elevation', action="store_true", default=False,
                   help="Scan in elevation rather than in azimuth (default=%default)")
 # Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/2
