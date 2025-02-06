@@ -171,12 +171,19 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
 def e_bn(pol, tilt_deg, northern_observer=False):
     """ Generates the E-field components for a linear polarised signal radiated from a satellite,
         according to the convention that the satellite's +V points towards the NCP, and the observed
-        tilt angle from the surface of the Earth in the northerh hemisphere is positive in a
+        tilt angle from the surface of the Earth in the northern hemisphere is positive in a
         clockwise sense. Tilt angles from e.g. https://www.satbeams.com/footprints?beam=8511.
+        
+        Test cases for northern observer:
+            V@0deg should be [0,1]; H@0deg should be [1,0]
+            H@90deg should equal V@0deg
+        Test cases for southern observer:
+            V@0deg should be [0,-1]; H@0deg should be [-1,0]
+            H@90deg should equal V@0deg
         
         @param tit_deg: the angle by which the satellite's V plane is tilted away from the observer's meridian.
         @param northern_observer: True if the observer is in the northern hemisphere (default False).
-        @return: [eH, eV] components for the specified satellite beacon, with H & V matching the correlator products HH & VV """
+        @return: [eH, eV] components for the specified satellite beacon """
     if (pol == "RCP"): return [1,-1j]
     
     if (pol == "LCP"): return [1, 1j]
@@ -184,9 +191,9 @@ def e_bn(pol, tilt_deg, northern_observer=False):
     if (pol=="H"): tilt_deg -= 90 # 0deg = +V; +tilt angle rotates H to V
     if northern_observer: # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
         pass
-    else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H towards East))
-        tilt_deg = 180 - tilt_deg
-    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)] [::-1] # flip necessary to make correlator output signals match published results
+    else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H is observed as -H))
+        tilt_deg = tilt_deg + 180
+    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
