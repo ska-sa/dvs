@@ -101,8 +101,9 @@ with verify_and_connect(opts) as kat:
                         pass
                 assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
                 indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
+                index0 = indices[index0]
                 try: # Remove "switch to self" end case
-                    indexer_sequence.remove(indices[index0])
+                    indexer_sequence.remove(index0)
                 except:
                     pass
             
