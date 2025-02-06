@@ -859,7 +859,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     pp = katselib.PDFReport("%s_hologreport_%s_%d.pdf"%(pdfprefix,key[1],key[0]), header="%d: %s referenced to %s"%key, pagesize=(11,17), save=makepdf)
     try:
         pp.capture_stdout(echo=True)
-        print("Target: %s  [dataset %s]"%b0.dataset.target.name, measured.fid)
+        print("Target: %s  [dataset %s]"%(b0.dataset.target.name, measured.fid))
         print("Processing tags: %s"%measured.tags)
         
         for f_MHz, beacon_pol, beams, apmapsH, apmapsV in zip(measured.f_MHz, measured.beacon_pol, measured.beams, measured.apmapsH, measured.apmapsV):
