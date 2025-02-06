@@ -142,11 +142,14 @@ with verify_and_connect(opts) as kat:
                         try:
                             index = indexer_sequence[0]
                             user_logger.info("Switching Feed Indexer to index %s"%index)
-                            kat.ants.req.dsh_SetIndexerPosition(index)
+                            if not kat.dry_run:
+                                kat.ants.req.dsh_SetIndexerPosition(index)
                             time.sleep(30)
                             indexer_sequence = indexer_sequence[::-1] # Ensure that we alternate, next time around
                         finally: # Switch back to the nominal position. This also ensures that we "clean up"
-                            kat.ants.req.dsh_SetIndexerPosition(index0)
+                            user_logger.info("Switching Feed Indexer back to index %s"%index0)
+                            if not kat.dry_run:
+                                kat.ants.req.dsh_SetIndexerPosition(index0)
                             time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible erros if indexer is slow
                 # Terminate if nothing currently visible
                 if keep_going and (len(targets_observed) == targets_before_loop):
