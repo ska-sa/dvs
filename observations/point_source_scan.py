@@ -26,6 +26,8 @@ parser.add_option('--sunmoon-separation', type="float", default=10,
                   help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
 parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
+parser.add_option('--switch-indexer-every', type="int", default=-1,
+                  help=" (default=never)")
 parser.add_option('-e', '--scan-in-elevation', action="store_true", default=False,
                   help="Scan in elevation rather than in azimuth (default=%default)")
 # Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/2
@@ -86,12 +88,31 @@ with verify_and_connect(opts) as kat:
     else:
         with start_session(kat, **vars(opts)) as session:
             session.standard_setup(**vars(opts))
+            
+            # Set up parameters to use to switch the indexer between rasters, if requested
+            index0, indexer_sequence = None, []
+            if (opts.switch_indexer_every > 0): # Currently only for SKA Dish!
+                indexer_positions = ["B1","B5c","B2"] # Arranged in angle sequence, only the positions relevant to DVS listed
+                indices = [1,7,2] # dsh_SetIndexerPosition(?) arguments for the positions above
+                for ant in kat.ants:
+                    try:
+                        index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value()); break
+                    except:
+                        pass
+                assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
+                indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
+                try: # Remove "switch to self" end case
+                    indexer_sequence.remove(indices[index0])
+                except:
+                    pass
+            
             session.capture_start()
 
             start_time = time.time()
             targets_observed = []
             # Keep going until the time is up
             keep_going = True
+            count = 0
             while keep_going:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
@@ -99,7 +120,7 @@ with verify_and_connect(opts) as kat:
                 raster_duration *= max([len(_["scan_in_az"]) for _ in raster_params])
                 for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
-                    for style_params in raster_params:
+                    for style_params in raster_params: # Two rasters, if 'alternate_style' is defined
                         session.label('raster')
                         completed = 0
                         style_params = dict(style_params) # Make a copy since we need to remove 'scan_in_az'
@@ -111,10 +132,22 @@ with verify_and_connect(opts) as kat:
                                 completed += 1
                         if (completed > 0):
                             targets_observed.append(target.name)
+                    count += 1
                     # The default is to do only one iteration through source list; or if the time is up, stop immediately
                     keep_going = (opts.min_time <= 0) or (time.time() - start_time < opts.min_time)
                     if not keep_going:
                         break
+                    # Switch the indexer out & back, if requested
+                    if (len(indexer_sequence) > 0) and (count%opts.switch_indexer_every == 0):
+                        try:
+                            index = indexer_sequence[0]
+                            user_logger.info("Switching Feed Indexer to index %s"%index)
+                            kat.ants.req.dsh_SetIndexerPosition(index)
+                            time.sleep(30)
+                            indexer_sequence = indexer_sequence[::-1] # Ensure that we alternate, next time around
+                        finally: # Switch back to the nominal position. This also ensures that we "clean up"
+                            kat.ants.req.dsh_SetIndexerPosition(index0)
+                            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible erros if indexer is slow
                 # Terminate if nothing currently visible
                 if keep_going and (len(targets_observed) == targets_before_loop):
                     user_logger.warning("No targets are currently visible - stopping script instead of hanging around")
