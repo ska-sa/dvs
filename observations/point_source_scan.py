@@ -42,19 +42,19 @@ styles = {
     'ku-wide': dict(num_scans=17, scan_duration=35, scan_extent=1.0, scan_spacing=0.06, scan_in_az=[True]), # Az 1.0 x El 1.0deg, 0.029deg per sec (~HPBWmin/4)
     'ku-search': dict(num_scans=17, scan_duration=35, scan_extent=3.0, scan_spacing=0.09, scan_in_az=[True]), # Az 3.0 x El 1.5deg, 0.086deg per sec
     # Standard for SKA Dish
-    'skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8, scan_in_az=[True]),
-    'skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8, scan_in_az=[True]),
-    'skab3': dict(num_scans=9, scan_duration=24, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True]),
+    '_skab1': dict(num_scans=9, scan_duration=60, scan_extent=6.6, scan_spacing=6.6/8, scan_in_az=[True]),
+    '_skab2': dict(num_scans=9, scan_duration=30, scan_extent=3.0, scan_spacing=3.0/8, scan_in_az=[True]),
+    '_skab3': dict(num_scans=9, scan_duration=24, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True]),
     'skab3_AzEl': dict(num_scans=9, scan_duration=12, scan_extent=1.8, scan_spacing=1.8/8, scan_in_az=[True,False]), # Experimental "basket weave"
-    'skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8, scan_in_az=[True]),
-    'skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8, scan_in_az=[True]),
+    '_skab4': dict(num_scans=9, scan_duration=24, scan_extent=1.0, scan_spacing=1.0/8, scan_in_az=[True]),
+    '_skab5a': dict(num_scans=9, scan_duration=24, scan_extent=0.6, scan_spacing=0.6/8, scan_in_az=[True]),
     'skaku': dict(num_scans=13, scan_duration=15, scan_extent=0.5, scan_spacing=0.5/12, scan_in_az=[True]),
     # Proposed for SKA Dish: extent = 2.3*HPBWmax; speed = HPBW/3/1sec - to be done with 1sec dumps!
-    '_skab1': dict(num_scans=21, scan_duration=21, scan_extent=9.0, scan_spacing=9.0/20, scan_in_az=[True]),
-    '_skab2': dict(num_scans=13, scan_duration=13, scan_extent=3.3, scan_spacing=3.3/12, scan_in_az=[True]),
-    '_skab3': dict(num_scans=13, scan_duration=13, scan_extent=1.8, scan_spacing=1.8/12, scan_in_az=[True]),
-    '_skab4': dict(num_scans=13, scan_duration=13, scan_extent=1.0, scan_spacing=1.0/12, scan_in_az=[True]),
-    '_skab5a': dict(num_scans=13, scan_duration=13, scan_extent=0.63, scan_spacing=0.63/12, scan_in_az=[True]),
+    'skab1': dict(num_scans=21, scan_duration=21, scan_extent=9.0, scan_spacing=9.0/20, scan_in_az=[True]),
+    'skab2': dict(num_scans=13, scan_duration=13, scan_extent=3.3, scan_spacing=3.3/12, scan_in_az=[True]),
+    'skab3': dict(num_scans=13, scan_duration=13, scan_extent=1.8, scan_spacing=1.8/12, scan_in_az=[True]),
+    'skab4': dict(num_scans=13, scan_duration=13, scan_extent=1.0, scan_spacing=1.0/12, scan_in_az=[True]),
+    'skab5a': dict(num_scans=13, scan_duration=13, scan_extent=0.63, scan_spacing=0.63/12, scan_in_az=[True]),
 }
 parser.add_option('--style', type='choice', choices=styles.keys(),
                   help="Raster scan style determining number of scans, scan duration, scan extent "
