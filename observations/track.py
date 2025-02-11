@@ -6,7 +6,7 @@ import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
-from dvs_obslib import plan_targets, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
+from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
 
 
 class NoTargetsUpError(Exception):
@@ -35,9 +35,10 @@ parser.add_option('--repeat', action="store_true", default=False,
 parser.add_option('--nd-switching', type='string', default=None,
                   help='Enable synchronous switching of noise diode in multiples of accumulation interval '
                        'e.g. "3,27" to be ON for three, off for 27 dumps (default=%default)')
-parser.add_option('--hold-delays', action='store_true', default=False,
-                  help='Apply the delay tracking solutions calculated at the start of the track, for the duration. '
-                       'This differs from "--no-delays" which applies constant but arbitrary delays.')
+parser.add_option('--min-separation', type="float", default=1.0,
+                  help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
+parser.add_option('--sunmoon-separation', type="float", default=10,
+                  help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
 
 # Set default value for any option (both standard and experiment-specific options)
 parser.set_defaults(description='Target track', nd_params='off')
@@ -52,12 +53,15 @@ if (not os.path.isfile(opts.catalogue)) and (len(args) == 0):
 # Check options and build KAT configuration, connecting to proxies and devices
 with verify_and_connect(opts) as kat:
     targets = collect_targets(kat, args, opts)
+    # Remove sources that crowd too closely
+    targets = filter_separation(targets, time.time(), kat.sources.antenna,
+                                separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
+    # Quit early if there are no sources to observe
+    if len(targets.filter(el_limit_deg=opts.horizon)) == 0:
+        raise NoTargetsUpError("No targets are currently visible - "
+                               "please re-run the script later")
     # Start capture session, which creates HDF5 file
     with start_session(kat, **vars(opts)) as session:
-        # Quit early if there are no sources to observe
-        if len(targets.filter(el_limit_deg=opts.horizon)) == 0:
-            raise NoTargetsUpError("No targets are currently visible - "
-                                   "please re-run the script later")
         try:
             nd_switching = list(map(int, opts.nd_switching.split(",")))
             #opts.nd_params = None
@@ -97,11 +101,6 @@ with verify_and_connect(opts) as kat:
                         keep_going = False
                         break
                     duration = min(duration, time_left)
-                if opts.hold_delays:
-                    session.label('delaytrack')
-                    session.cbf.req.auto_delay('on')
-                    session.track(target, duration=0, announce=False)
-                    session.cbf.req.auto_delay('off')
                 session.label('track')
                 if session.track(target, duration=duration):
                     targets_observed.append(target.description)
