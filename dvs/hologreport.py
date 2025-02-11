@@ -182,7 +182,7 @@ def e_bn(pol, tilt_deg, northern_observer=False):
             H@90deg should equal V@0deg
         
         @param tit_deg: the angle by which the satellite's V plane is tilted away from the observer's meridian.
-        @param northern_observer: True if the observer is in the northern hemisphere (default False).
+        @param northern_observer: True if the tilt angle is for an observer in the northern hemisphere (default False).
         @return: [eH, eV] components for the specified satellite beacon """
     if (pol == "RCP"): return [1,-1j]
     
@@ -191,7 +191,7 @@ def e_bn(pol, tilt_deg, northern_observer=False):
     if (pol=="H"): tilt_deg -= 90 # 0deg = +V; +tilt angle rotates H to V
     if northern_observer: # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
         pass
-    else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H is observed as -H))
+    else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H is observed as -H)
         tilt_deg = tilt_deg + 180
     return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
 
@@ -736,6 +736,9 @@ def plot_signalpathstats(rec, figsize=(14,16)):
     dataset = np.atleast_1d(rec.beams[0])[0].dataset
     T = dataset.rawtime
     band = dataset.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
+    # Mapping of ant,pol to F-engine labels - to get dBFS for all bands
+    input_labels = katselib.getsensorvalues("cbf_1_input_labels", T, interpolate=None)[1][0].split(",")
+    feng_labels = ["cbfmon_1_wide_fhost%02d_dig_p%d"%(i,p) for p in range(2) for i in range(len(input_labels)//2)]
     for ant in dataset.radialscan_allantenna:
         for i,P in enumerate(["H","V"]):
             if (band != 's'):
@@ -743,12 +746,9 @@ def plot_signalpathstats(rec, figsize=(14,16)):
                 axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
                 axes[0].legend()
             axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
-            if (band != 's'):
-                v = katselib.getsensorvalues("%s_dig_%s_band_adc_%spol_rf_power_in"%(ant,band,P.lower()), T)[1]
-            else:
-                v = T*0 # TODO: add S-band sensor, once it is exposed to CAM
+            v = katselib.getsensorvalues(feng_labels[input_labels.index(ant+P.lower())]+"_rms_dbfs", T)[1]
             axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
-            axes[1].set_ylabel("ADC RF input power [dBm]"); axes[1].grid(True); axes[1].legend()
+            axes[1].set_ylabel("ADC RF input power [dBFS]"); axes[1].grid(True); axes[1].legend()
     
     # Plot boresight visibilities
     labels = [] # Collect labels to avoid repetition if there's more than one cycle
