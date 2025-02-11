@@ -28,6 +28,8 @@ parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
 parser.add_option('--switch-indexer-every', type="int", default=-1,
                   help="Switch the feed indexer out & back again after every few rasters, alternating directions if possible (default=never)")
+parser.add_option('--track-ants', type='string', default="",
+                  help="Name of comma-separated list of names of antennas that should remain tracking on bore sight, not scanning (default=none")
 parser.add_option('-e', '--scan-in-elevation', action="store_true", default=False,
                   help="Scan in elevation rather than in azimuth (default=%default)")
 # Raster scan styles need to cover null-to-null at centre frequency (+-1.3*HPBW), resolution ~HPBW/2
@@ -114,6 +116,8 @@ with verify_and_connect(opts) as kat:
             # Keep going until the time is up
             keep_going = True
             count = 0
+            all_ants = list(session.ants) # Make a copy, since we're going to modify the active list over time
+            scan_ants = [a for a in all_ants if (a.name not in opts.track_ants)] 
             while keep_going:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
@@ -121,18 +125,24 @@ with verify_and_connect(opts) as kat:
                 raster_duration *= max([len(_["scan_in_az"]) for _ in raster_params])
                 for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
-                    for style_params in raster_params: # Two rasters, if 'alternate_style' is defined
-                        session.label('raster')
-                        completed = 0
-                        style_params = dict(style_params) # Make a copy since we need to remove 'scan_in_az'
-                        for scan_in_az in style_params.pop("scan_in_az"):
-                            az, el = target.azel()
-                            user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
-                            if session.raster_scan(target, scan_in_azimuth=not scan_in_az if opts.scan_in_elevation else scan_in_az,
-                                                   projection=opts.projection, **style_params):
-                                completed += 1
-                        if (completed > 0):
-                            targets_observed.append(target.name)
+                    try:
+                        if (len(scan_ants) < len(all_ants)): # All ants initially track the target, but only scan_ants will perform the raster
+                            session.track(target, duration=0, announce=False)
+                            session.ants = scan_ants
+                        for style_params in raster_params: # Two rasters, if 'alternate_style' is defined
+                            session.label('raster')
+                            completed = 0
+                            style_params = dict(style_params) # Make a copy since we need to remove 'scan_in_az'
+                            for scan_in_az in style_params.pop("scan_in_az"):
+                                az, el = target.azel()
+                                user_logger.info("Scanning target %r with current azel (%s, %s)" % (target.description, az, el))
+                                if session.raster_scan(target, scan_in_azimuth=not scan_in_az if opts.scan_in_elevation else scan_in_az,
+                                                       projection=opts.projection, **style_params):
+                                    completed += 1
+                            if (completed > 0):
+                                targets_observed.append(target.name)
+                    finally:
+                        session.ants = all_ants
                     count += 1
                     # The default is to do only one iteration through source list; or if the time is up, stop immediately
                     keep_going = (opts.min_time <= 0) or (time.time() - start_time < opts.min_time)
