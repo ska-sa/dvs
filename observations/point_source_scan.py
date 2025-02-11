@@ -4,7 +4,7 @@
 
 import time
 
-from katcorelib import standard_script_options, verify_and_connect, start_session, user_logger
+from katcorelib import standard_script_options, verify_and_connect, start_session, ant_array, user_logger
 from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
 
 
@@ -116,8 +116,8 @@ with verify_and_connect(opts) as kat:
             # Keep going until the time is up
             keep_going = True
             count = 0
-            all_ants = list(session.ants) # Make a copy, since we're going to modify the active list over time
-            scan_ants = [a for a in all_ants if (a.name not in opts.track_ants)] 
+            all_ants = ant_array(kat, list(session.ants), 'all_ants') # Make a copy, since we're going to modify the active list over time
+            scan_ants = ant_array(kat, [a for a in all_ants if (a.name not in opts.track_ants)], 'scan_ants')
             while keep_going:
                 targets_before_loop = len(targets_observed)
                 # Iterate through source list, picking the next one from the nearest neighbour plan
