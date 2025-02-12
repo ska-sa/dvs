@@ -10,3 +10,14 @@
 1418.5, 1421.0
 1518.1, 1609.0
 1616.5, 1626.5
+# METEOSAT
+1675.0, 1697.0
+# S-band Wifi & satellite downlink
+2220, 2250
+2400, 2485
+3400, 3700
+# Ku-band (GEOS, Starlink, OneWeb) satellite downlink
+10700, 12253 # End at beacon for INTELSAT 25 (IS-25)
+12255, 12498 # End at beacon for EUTELSAT & INTELSAT
+12503, 12742 # End at beacon for AZERSPACE 2
+12749, 12800 # End of Ku-band downlink
