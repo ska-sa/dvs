@@ -148,7 +148,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', scans="track", strict=True, verbose=True, debug=False, kind=None):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -169,7 +169,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
     enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
     
-    ds.select(scans="track", compscans="~slew")
+    ds.select(scans=scans, compscans="~slew")
     if (track_ant):
         ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
     else:
@@ -393,18 +393,4 @@ if __name__ == "__main__":
         from analysis import katsepnt
         katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
                                         metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
-    else:
-        from dvs import util
-        cachedfn = lambda cbid: f"/Work/saraoProjects/dvs/notebooks/demo_data/{cbid}/{cbid}_sdp_l0.full.rdb"
-        # Target channel maps for GEOS beacons
-        CHANS = {11.696:{"INTELSAT NEW DAWN":[881,882],
-                         "BADR-7 (ARABSAT-6B)":[2083,2085]},
-                 12.4995:{"INTELSAT 22":[2063]} # Should be 12.499GHz->2047; but in some datasets it jumps to 2063 (12.502GHz = IS-17 & IS-18)!?? Seems like 3arcmin position difference too, so maybe an adjacent satellite?
-            }
-        chans = lambda target_name, fGHz: CHANS[fGHz].get(target_name, slice(10,-10)) # If not in CHANS, then continuum: drop edge channels
-        if False: # Interferometric on IS-22
-            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, track_ant="m028", output_filepattern="track%s.csv", debug=True)
-            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, debug=True) # Same dataset, as total power
-        else: # Single Dish on alternating GEOS; two significant outliers
-            analyse_beam_scans(util.open_dataset(cachedfn(1636691857),"s0000"), ["m028","s0000"], chans, debug=True)
-    plt.show()
+       plt.show()
