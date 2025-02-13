@@ -183,7 +183,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
     wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
-    for (_, _, target) in ds.scans():
+    for (cs_no, cs_label, target) in ds.compscans():
         # Fit offsets to circular scan total power
         if chanmapping:
             ds.select(channels=chanmapping(target.name, fGHz))
@@ -209,16 +209,24 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
         if debug: # Prepare figure for debugging
-            axs = plt.subplots(1,3, figsize=(14,3))[1]
+            fig, axs = plt.subplots(1,3, figsize=(14,3))
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
+            axs[0].set_xlabel("Frequency [channels]")
             axs[1].plot(ds.timestamps[mask], ds.target_x[mask,...], '.', ds.timestamps[mask], ds.target_y[mask,...]) # Also plots track antenna if present
-            axs[2].plot(height, '.')
+            axs[1].set_xlabel("Time [sec]")
+            axs[1].twinx().plot(height, '.')
+            # 2D plot, with height scaled to [0, 1]
+            delta_n = height - np.nanmin(height)
+            delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
+            axs[2].scatter(ds.target_x[mask,...], ds.target_y[mask,...], s=1+100*delta_n, c=delta_n, alpha=0.5)
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix], height[mask],
-                                                                        powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
+                                                                        powerbeam=(track_ant is None), debug=axs[1] if debug else None, **constr)
+        if debug:
+            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} [Fit: {valid}]")
         
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
@@ -237,10 +245,9 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         dAz, dEl = (mAz - rAz)*R2D, (mEl - rEl)*R2D
         dAz, dEl = wrap_angle(dAz), wrap_angle(dEl)
         
-        if debug: # Report
-            plt.suptitle("%s %s [Fit: %s]"%(ds.compscan_indices, target, valid))
         if debug or verbose:
-            print("%s Fit: %s\t xy offsets %g, %g, AzEl offsets %g, %g [arcsec]"%(ds.compscan_indices, valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
+            print(f"Scan #{cs_no}: {cs_label}, on {target.name}")
+            print("    Fit: %s\t xy offsets %g, %g, AzEl offsets %g, %g [arcsec]"%(valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
         
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
@@ -289,7 +296,7 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
             """
             self.__testopts__ = [kind, scanrad, ampl, SEFD, BW, ox, oy]
                     
-        def scans(self):
+        def compscans(self):
             """ Generate the test data for a single cycle at a time (yields) """
             for i,tgt in enumerate(self.__targets_scanned__):
                 self.compscan_indices = [i]
