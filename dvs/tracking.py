@@ -17,6 +17,24 @@ _c_ = 299792458
 R2D = 180/np.pi
 
 
+def fit_background(x, y, intensity_map, along_edges=True):
+    """ Fit a linear background to the intensity map
+        @param x, y, intensity_map: 1D vectors
+        @param along_edges: True to fit only using data along the edges (default True)
+        @return: the background map """
+    mask = np.full(len(intensity_map), 1.0)
+    if along_edges:
+        mask[(x**2+y**2)**.5 < 0.4] = np.nan
+    
+    model = lambda x0, y0, mx, my: mx*(x-x0) + my*(y-y0)
+    p0 = [0, 0, 0,0]
+    
+    p = sop.minimize(lambda p: np.nansum(mask*(intensity_map-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
+    model_bg = model(*p.x)
+    
+    return model_bg
+
+
 def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
         NB: this does not currently fit the background, so only works reliably if the background is "flat".
@@ -26,6 +44,9 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
+    bkg = fit_background(x,y,height, along_edges=True)
+    height -= bkg
+    
     h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise. TODO: doesn't work for raster
     
     # Starting estimates
@@ -229,7 +250,8 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             # 2D plot, with height scaled to [0, 1]
             delta_n = height - np.nanmin(height)
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
-            axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
+            # axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
+            axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
