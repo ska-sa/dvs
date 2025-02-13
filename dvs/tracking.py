@@ -209,6 +209,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
         
         # Fit the beam
+        target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
@@ -216,19 +217,19 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             fig, axs = plt.subplots(1,3, figsize=(14,3))
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
             axs[0].set_xlabel("Frequency [channels]")
-            axs[1].plot(ds.target_x[mask,...], '.', ds.target_y[mask,...], '.') # Also plots track antenna if present
+            axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
             axs[1].set_xlabel("Time [#]")
-            axs[1].twinx().plot(height, 'k>')
+            axs[1] = axs[1].twinx(); axs[1].plot(height, 'k>')
             # 2D plot, with height scaled to [0, 1]
             delta_n = height - np.nanmin(height)
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
-            axs[2].scatter(ds.target_x[mask,...], ds.target_y[mask,...], s=1+100*delta_n, c=delta_n, alpha=0.5)
+            axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
-        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix], height[mask],
-                                                                        powerbeam=(track_ant is None), debug=axs[1] if debug else None, **constr)
+        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
+                                                                        debug=axs[1] if debug else None, **constr)
         if debug:
             fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} [Fit: {valid}]")
         
