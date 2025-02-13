@@ -26,7 +26,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
-    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
+    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise. TODO: doesn't work for raster
     
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
@@ -59,23 +59,24 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     resid = np.std(height - model_height)
     valid = p.success and (ampl/h_sigma > 6) and (resid < h_sigma)
     
-    if debug is not None: # 'debug' is expected to be a plot axis
-        debug.plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
-        debug.legend()
+    if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
+        debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
+        debug[0].legend()
+        debug[1].plot([xoffset], [yoffset], 'r+'); debug[1].text(xoffset, yoffset, "%.1f, %.1f"%(xoffset,yoffset), fontsize='x-small')
     return (xoffset, yoffset, valid, fwhmx, fwhmy, ampl, resid)
 
 
 def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
-    """ @param kind: "circle"|"cartioid"|"epicycles"
+    """ @param kind: "circle"|"cartioid"|"epicycles"|"raster"
         @param ampl, SEFD: powers per polarisation channel [Jy]
         @param Nsamples_per_dump: BW*tau
         @param scanrad: radius for the scan pattern, either "hpbw" or a number in same units as `hpbw`.
         @return: (timestamps, target_x, target_y, magnitudes) """
     scanrad = hpbw if (scanrad == 'hpbw') else scanrad
     
-    timestamps = np.arange(133) # Should just be > 20?
-    th = np.linspace(0, 2*np.pi, len(timestamps)) # One full cycle (should exclude the last one which overlaps)
+    timestamps = np.arange(12*12) # Should be a square to make "raster" simple
     
+    th = np.linspace(0, 2*np.pi, len(timestamps)) # One full cycle (should exclude the last one which overlaps)
     if (kind in ["circle","cardioid"]): # "circle" is a trivial case of "cardioid"
         a, b = (1, 0) if (kind == "circle") else (0.4, 1.5)
         a, b = a*scanrad, b*scanrad
@@ -88,6 +89,10 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
         n = 4 # 2 looks like a cardioid, 3 is too "sparse"
         target_x = r2*np.cos(th) + r2*np.cos(th*n)
         target_y = r2*np.sin(th) + r2*np.sin(th*n)
+    elif (kind == "raster"):
+        N = int(len(timestamps)**.5) # We ensure timestamp is square!
+        target_x, target_y = np.meshgrid(np.linspace(-hpbw,hpbw,N), np.linspace(-hpbw,hpbw,N))
+        target_x, target_y = target_x.ravel(), target_y.ravel()
     actual_x = target_x - ox
     actual_y = target_y - oy
     
@@ -113,22 +118,23 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
     if (cycles == 1): # Debug plots for a specific offset, all different kinds
         ox,oy = (hpbw/6, 0)
         for powerbeam in [True, False]: # Power & voltage beams
-            axs = plt.subplots(3, 3)[1]
-            for i,kind in enumerate(['circle','cardioid','epicycles']):
+            axs = plt.subplots(3, 4)[1]
+            for i,kind in enumerate(['circle','cardioid','epicycles','raster']):
                 timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
                                                                       Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
                 axs[0][i].set_title(kind)
                 axs[0][i].plot(target_x, target_y, '.')
                 axs[1][i].plot(timestamps, target_x, '.', timestamps, target_y)
-                axs[2][i].plot(m, '.')
-                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=axs[-1][i])
+                axs[1][i] = axs[1][i].twinx(); axs[1][i].plot(m, '.')
+                axs[2][i].scatter(target_x, target_y, m)
+                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=[axs[1][i],axs[2][i]])
                 # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
     
     else: # Statistical
         axes = plt.subplots(2,3)[1]
         for powerbeam,axs in zip([True, False], axes): # Power & voltage beams
             axs[0].set_ylabel(" SD" if powerbeam else " INTF")
-            for kind in ['circle','cardioid','epicycles']:
+            for kind in ['circle','cardioid','epicycles','raster']:
                 # Same pointing offsets for each 'kind'
                 np.random.seed(1)
                 offsets = hpbw * np.c_[np.random.rand(cycles) - 0.5, np.random.rand(cycles) - 0.5]
@@ -148,7 +154,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', scans="track", strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', scans="~slew", strict=True, verbose=True, debug=False, kind=None):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -169,7 +175,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
     enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
     
-    ds.select(scans=scans, compscans="~slew")
+    ds.select(scans=scans)
     if (track_ant):
         ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
     else:
@@ -189,7 +195,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             ds.select(channels=chanmapping(target.name, fGHz))
         
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
-        # Also ommit data points that are far from the majority - to avoid stray points from skewing the fit
+        # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x**2+ds.target_y**2)**.5)
         mask &= scan_r < (np.median(scan_r) + 2*np.std(scan_r))
         
@@ -229,7 +235,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
-                                                                        debug=axs[1] if debug else None, **constr)
+                                                                        debug=axs[1:] if debug else None, **constr)
         if debug:
             fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} [Fit: {valid}]")
         
@@ -264,7 +270,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     return (fitted, enviro)
 
 
-def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", cycles=7):
+def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", cycles=7, debug=False):
     """ Demonstrate a simulated "single dish" dataset similar to what's expected with DVS Ku-band """
     np.random.seed(1)
     
@@ -320,14 +326,14 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
                     self.humidity = 20 + 10*np.random.rand(len(self.timestamps))
                     self.wind_speed = 1 + np.random.rand(len(self.timestamps))
                     self.wind_direction = 123 + 10*np.random.rand(len(self.timestamps))
-                    yield (s, "scan", target)
+                    yield (s, "compscan", target)
 
     ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
     hpbw = ds.__hpbw__ # deg
     for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
         print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
         ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
-        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
+        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=debug)
         save_apss_file("./_demo_reduce_pointing_scans_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
 
 
@@ -402,6 +408,7 @@ if __name__ == "__main__":
         _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
         _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
         _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
+        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
         from analysis import katsepnt
         katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
                                         metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
