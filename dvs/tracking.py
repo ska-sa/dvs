@@ -1,5 +1,7 @@
 '''
-    Analyse "RF Tracking Stability" measured by using circular_pointing.py
+    Lightweight centroid fitting for "intensity mapped" beam measurements,
+    specifically for use with `circular_pointing.py`.
+    
     
     @author: aph@sarao.ac.za
 '''
@@ -16,11 +18,11 @@ R2D = 180/np.pi
 
 
 def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, debug=None):
-    """ Fit a Gaussian to the magnitude measured along a trajectory (x,y).
-        NB: Circular scan provides very little information to fit all of the Gaussian's free variables reliably, so use constrain_ampl.
+    """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
+        NB: this does not currently fit the background, so only works reliably if the background is "flat".
         
-        @param x, y: position coordinates around the circular scan trajectory
-        @param height: height above the baseline, measured along the trajectory
+        @param x, y: position coordinates in the tangent plane.
+        @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
@@ -34,9 +36,9 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     p0 = [ampl0,0,0,width0,width0, np.min(height)]
     
     if powerbeam:
-        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))**2
+        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x-xoffset)**2/wx**2+(y-yoffset)**2/wy**2))**2
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
-        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl**.5*np.exp(-np.log(2)*((x+xoffset)**2/wx**2+(y+yoffset)**2/wy**2))
+        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl**.5*np.exp(-np.log(2)*((x-xoffset)**2/wx**2+(y-yoffset)**2/wy**2))
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
@@ -86,8 +88,8 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
         n = 4 # 2 looks like a cardioid, 3 is too "sparse"
         target_x = r2*np.cos(th) + r2*np.cos(th*n)
         target_y = r2*np.sin(th) + r2*np.sin(th*n)
-    actual_x = target_x + ox
-    actual_y = target_y + oy
+    actual_x = target_x - ox
+    actual_y = target_y - oy
     
     if powerbeam: # TOTAL power integrated over frequency
         hv = ampl*np.exp(-np.log(2)*(actual_x**2+actual_y**2)/hpbw**2)**2 + SEFD*(1 + 1/Nsamples_per_dump**.5*np.random.randn(len(target_x))**2)
@@ -144,12 +146,11 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 axs[2].hist(fits[:,4], bins=20, range=(0,2), alpha=0.5, label=kind)
             for ax,unit in zip(axs,["$\Delta$pointing", "fit_hpw/hpbw", "fit_ampl/ampl"]):
                 ax.legend(); ax.set_xlabel(unit)
-            
 
 
-def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_lost', strict=True, verbose=True, debug=False, kind=None):
-    """ Generates pointing offsets for a dataset created with circular_pointing.py, exactly equivalent to how
-        `analyse_point_source_scans.py` calculates it.
+def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', strict=True, verbose=True, debug=False, kind=None):
+    """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
+        exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
         @param ds: the dataset (selection is reset!)
         @param ant: the identifier of the scanning antenna in the dataset
@@ -157,6 +158,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
+        @param kind: specifically used with 'circle' from "circular_pointing.py"
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
@@ -176,10 +178,11 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
         ds.select(flags=flags)
     fGHz = np.round(ds.spectral_windows[0].centre_freq/1e9, 4)
     
-    ant_ix = [a.name for a in ds.ants].index(ant)
-    ant = ds.ants[ant_ix]
+    scan_ant_ix = [a.name for a in ds.ants].index(ant)
+    scan_ant = ds.ants[scan_ant_ix]
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
+    wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
     for (_, _, target) in ds.scans():
         # Fit offsets to circular scan total power
         if chanmapping:
@@ -190,7 +193,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
         t_ref = np.median(ds.timestamps[mask])
         
         # Environmental parameters
-        sun_azel = katpoint.rad2deg(np.array(sun.azel(t_ref, antenna=ant)))
+        sun_azel = katpoint.rad2deg(np.array(sun.azel(t_ref, antenna=scan_ant)))
         temperature, pressure, humidity = np.mean(ds.temperature[mask]), np.mean(ds.pressure[mask]), np.mean(ds.humidity[mask])
         # Do a 2-D vector average of wind speed + direction
         raw_wind_speed = ds.wind_speed[mask]
@@ -200,11 +203,6 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
-        
-        # Start with requested (az, el) coordinates, as they apply at the middle time for a moving target
-        rAz, rEl = target.azel(t_ref, antenna=ant) # [rad]
-        # Correct for refraction, which becomes the requested value at input of pointing model
-        rEl = rc.apply(rEl, temperature, pressure, humidity)
         
         # Fit the beam
         hv = np.abs(ds.vis[mask])
@@ -217,20 +215,27 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
             axs[2].plot(height, '.')
         constr = {}
         if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
-            constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/ant.diameter * R2D
+            constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
-        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,ant_ix], ds.target_y[mask,ant_ix], height[mask],
+        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix], height[mask],
                                                                         powerbeam=(track_ant is None), debug=axs[2] if debug else None, **constr)
+        
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
-            aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=ant, coord_system='azel') # [rad]
-        
+            aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=scan_ant, coord_system='azel') # [rad]
         # Now correct the measured (az, el) for refraction and then apply the old pointing model
         aEl = rc.apply(aEl, temperature, pressure, humidity)
-        mAz, mEl = ant.pointing_model.apply(aAz, aEl)
         # Get a "raw" measured (az, el) at the output of the pointing model
+        mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl)
+        
+        # The requested (az, el) coordinates, as they apply at the middle time for a moving target
+        rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
+        # Correct for refraction, which becomes the requested value at input of pointing model
+        rEl = rc.apply(rEl, temperature, pressure, humidity)
+
+        # The difference between requested & measured, as a small angle around 0 degrees
         dAz, dEl = (mAz - rAz)*R2D, (mEl - rEl)*R2D
-        # Make sure the offset is a small angle around 0 degrees - TODO?
+        dAz, dEl = wrap_angle(dAz), wrap_angle(dEl)
         
         if debug: # Report
             plt.suptitle("%s %s [Fit: %s]"%(ds.compscan_indices, target, valid))
@@ -247,7 +252,7 @@ def reduce_circular_pointing(ds, ant, chanmapping, track_ant=None, flags='data_l
     return (fitted, enviro)
 
 
-def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", cycles=7):
+def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", cycles=7):
     """ Demonstrate a simulated "single dish" dataset similar to what's expected with DVS Ku-band """
     np.random.seed(1)
     
@@ -273,7 +278,7 @@ def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid"
             self.__hpbw__ = 1.22*(_c_/f_c)/Dant * R2D # [deg]
             self.__set_testopts__() # Defaults
 
-        def select(self, *a, **k): # For test purposes we may ignore the "select()" in reduce_circular_pointing()
+        def select(self, *a, **k): # For test purposes we may ignore the "select()" in reduce_pointing_scans()
             pass
         
         def __set_testopts__(self, kind="cardioid", scanrad='hpbw', ampl=1, SEFD=300, BW=1e6, ox=0,oy=0):
@@ -310,23 +315,23 @@ def _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid"
     for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
         print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
         ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
-        fitted, enviro = reduce_circular_pointing(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
-        save_apss_file("./_demo_reduce_circular_pointing_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
+        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=False)
+        save_apss_file("./_demo_reduce_pointing_scans_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
 
 
-def analyse_circ_scans(ds, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
-    """ Generates pointing offsets for a dataset created with circular_pointing.py
+def analyse_beam_scans(ds, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
+    """ Generates pointing offsets for a dataset created with point_source_scan.py or circular_pointing.py or similar
     
         @param ds: the katdal dataset
         @param ants: the identifiers of the scanning antennas in the dataset
         @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
         @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
-        @param kwargs: extra arguments for reduce_circular_pointing()
+        @param kwargs: extra arguments for reduce_pointing_scans()
         @return: { antID:[(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)] }
     """
     results = {}
     for ant in ants:
-        fitted, enviro = reduce_circular_pointing(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
+        fitted, enviro = reduce_pointing_scans(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
         results[ant] = fitted
         if (output_filepattern):
             save_apss_file(output_filepattern%ant, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
@@ -348,12 +353,12 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
         
         @param ds: the dataset with selection applied
         @param ant: the katpoint.Antenna (with pointing model in use at the time)
-        @param fitted, enviro: as returned by `reduce_circular_pointing()`
+        @param fitted, enviro: as returned by `reduce_pointing_scans()`
     """
     fitted = np.asarray(fitted) # Mixed types!
     enviro = np.asarray(enviro)
     
-    # Field names as used by 'analyse_point_source_scans.py' in the order out of reduce_circular_pointing()
+    # Field names as used by 'analyse_point_source_scans.py' in the order out of reduce_pointing_scans()
     fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
               'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std']
     # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
@@ -381,7 +386,25 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
 
 
 if __name__ == "__main__":
-    _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
-    _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
-    _demo_reduce_circular_pointing_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
+    if True:
+        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
+        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
+        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
+        from analysis import katsepnt
+        katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
+                                        metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
+    else:
+        from dvs import util
+        cachedfn = lambda cbid: f"/Work/saraoProjects/dvs/notebooks/demo_data/{cbid}/{cbid}_sdp_l0.full.rdb"
+        # Target channel maps for GEOS beacons
+        CHANS = {11.696:{"INTELSAT NEW DAWN":[881,882],
+                         "BADR-7 (ARABSAT-6B)":[2083,2085]},
+                 12.4995:{"INTELSAT 22":[2063]} # Should be 12.499GHz->2047; but in some datasets it jumps to 2063 (12.502GHz = IS-17 & IS-18)!?? Seems like 3arcmin position difference too, so maybe an adjacent satellite?
+            }
+        chans = lambda target_name, fGHz: CHANS[fGHz].get(target_name, slice(10,-10)) # If not in CHANS, then continuum: drop edge channels
+        if False: # Interferometric on IS-22
+            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, track_ant="m028", output_filepattern="track%s.csv", debug=True)
+            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, debug=True) # Same dataset, as total power
+        else: # Single Dish on alternating GEOS; two significant outliers
+            analyse_beam_scans(util.open_dataset(cachedfn(1636691857),"s0000"), ["m028","s0000"], chans, debug=True)
     plt.show()
