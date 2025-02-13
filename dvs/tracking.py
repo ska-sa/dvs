@@ -184,10 +184,14 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     rc = katpoint.RefractionCorrection()
     wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
     for (cs_no, cs_label, target) in ds.compscans():
-        # Fit offsets to circular scan total power
+        # Fit offsets to an "intensity map"
         if chanmapping:
             ds.select(channels=chanmapping(target.name, fGHz))
-        mask = np.any(~ds.flags[:],axis=(1,2)) if flags else slice(None)
+        
+        mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
+        # Also ommit data points that are far from the majority - to avoid stray points from skewing the fit
+        scan_r = (ds.target_x**2+ds.target_y**2)**.5
+        mask &= scan_r < (np.median(scan_r) + 2*np.std(scan_r))
         
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
         t_ref = np.median(ds.timestamps[mask])
@@ -212,9 +216,9 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             fig, axs = plt.subplots(1,3, figsize=(14,3))
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
             axs[0].set_xlabel("Frequency [channels]")
-            axs[1].plot(ds.timestamps[mask], ds.target_x[mask,...], '.', ds.timestamps[mask], ds.target_y[mask,...]) # Also plots track antenna if present
-            axs[1].set_xlabel("Time [sec]")
-            axs[1].twinx().plot(height, '.')
+            axs[1].plot(ds.target_x[mask,...], '.', ds.target_y[mask,...], '.') # Also plots track antenna if present
+            axs[1].set_xlabel("Time [#]")
+            axs[1].twinx().plot(height, 'k>')
             # 2D plot, with height scaled to [0, 1]
             delta_n = height - np.nanmin(height)
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
