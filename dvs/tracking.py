@@ -252,9 +252,8 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
             # axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
             axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
-        constr = {}
-        if (kind == "circle"): # Extra constraints only for circle patterns: either amplitude or hpbw
-            constr["constrain_width"] = 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D
+        # Extra constraints - especially for circle patterns: hpbw and/or amplitude?
+        constr = {"constrain_width": 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D}
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                         debug=axs[1:] if debug else None, **constr)
