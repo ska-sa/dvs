@@ -31,7 +31,8 @@ def fit_background(x, y, intensity_map, along_edges=True):
     
     p = sop.minimize(lambda p: np.nansum(mask*(intensity_map-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     model_bg = model(*p.x)
-    
+    model_bg += np.nanmin(intensity_map - model_bg) - 0.1 # Ensure the background is always lower than the map
+
     return model_bg
 
 
