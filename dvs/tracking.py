@@ -427,25 +427,11 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
 
 if __name__ == "__main__":
     if True:
-        # _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
-        # _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
-        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
-        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
-        # from analysis import katsepnt
-        # katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
-        #                                 metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
-    else:
-        from dvs import util
-        cachedfn = lambda cbid: f"/Work/saraoProjects/dvs/notebooks/demo_data/{cbid}/{cbid}_sdp_l0.full.rdb"
-        # Target channel maps for GEOS beacons
-        CHANS = {11.696:{"INTELSAT NEW DAWN":[881,882],
-                         "BADR-7 (ARABSAT-6B)":[2083,2085]},
-                 12.4995:{"INTELSAT 22":[2063]} # Should be 12.499GHz->2047; but in some datasets it jumps to 2063 (12.502GHz = IS-17 & IS-18)!?? Seems like 3arcmin position difference too, so maybe an adjacent satellite?
-            }
-        chans = lambda target_name, fGHz: CHANS[fGHz].get(target_name, slice(10,-10)) # If not in CHANS, then continuum: drop edge channels
-        if False: # Interferometric on IS-22
-            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, track_ant="m028", output_filepattern="track%s.csv", debug=True)
-            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, debug=True) # Same dataset, as total power
-        else: # Single Dish on alternating GEOS; two significant outliers
-            analyse_beam_scans(util.open_dataset(cachedfn(1636691857),"s0000"), ["m028","s0000"], chans, debug=True)
+        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
+        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
+        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
+        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
+        from analysis import katsepnt
+        katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
+                                        metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
     plt.show()
