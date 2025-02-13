@@ -24,7 +24,8 @@ def fit_background(x, y, intensity_map, along_edges=True):
         @return: the background map """
     mask = np.full(len(intensity_map), 1.0)
     if along_edges:
-        mask[(x**2+y**2)**.5 < 0.4] = np.nan
+        r = np.squeeze((x**2+y**2)**.5)
+        mask[r < np.percentile(r,66)] = np.nan
     
     model = lambda x0, y0, mx, my: mx*(x-x0) + my*(y-y0)
     p0 = [0, 0, 0,0]
@@ -45,9 +46,6 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
-    bkg = fit_background(x,y,height, along_edges=True)
-    height -= bkg
-    
     h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise. TODO: doesn't work for raster
     
     # Starting estimates
@@ -219,7 +217,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x**2+ds.target_y**2)**.5)
-        mask &= scan_r < (np.median(scan_r) + 2*np.std(scan_r))
+        mask &= scan_r < (np.median(scan_r) + 1*np.std(scan_r))
         
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
         t_ref = np.median(ds.timestamps[mask])
@@ -241,6 +239,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
+        height -= fit_background(target_x, target_y, height, along_edges=True)
         if debug: # Prepare figure for debugging
             fig, axs = plt.subplots(1,3, figsize=(14,3))
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
@@ -428,11 +427,25 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
 
 if __name__ == "__main__":
     if True:
-        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
-        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
-        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
-        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
-        from analysis import katsepnt
-        katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
-                                        metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
+        # _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
+        # _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
+        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
+        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
+        # from analysis import katsepnt
+        # katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
+        #                                 metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
+    else:
+        from dvs import util
+        cachedfn = lambda cbid: f"/Work/saraoProjects/dvs/notebooks/demo_data/{cbid}/{cbid}_sdp_l0.full.rdb"
+        # Target channel maps for GEOS beacons
+        CHANS = {11.696:{"INTELSAT NEW DAWN":[881,882],
+                         "BADR-7 (ARABSAT-6B)":[2083,2085]},
+                 12.4995:{"INTELSAT 22":[2063]} # Should be 12.499GHz->2047; but in some datasets it jumps to 2063 (12.502GHz = IS-17 & IS-18)!?? Seems like 3arcmin position difference too, so maybe an adjacent satellite?
+            }
+        chans = lambda target_name, fGHz: CHANS[fGHz].get(target_name, slice(10,-10)) # If not in CHANS, then continuum: drop edge channels
+        if False: # Interferometric on IS-22
+            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, track_ant="m028", output_filepattern="track%s.csv", debug=True)
+            analyse_beam_scans(util.open_dataset(cachedfn(1636386312),"s0000"), ["s0000"], chans, debug=True) # Same dataset, as total power
+        else: # Single Dish on alternating GEOS; two significant outliers
+            analyse_beam_scans(util.open_dataset(cachedfn(1636691857),"s0000"), ["m028","s0000"], chans, debug=True)
     plt.show()
