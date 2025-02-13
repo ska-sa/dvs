@@ -53,7 +53,8 @@ styles = {
     'skaku': dict(num_scans=13, scan_duration=15, scan_extent=0.5, scan_spacing=0.5/12, scan_in_az=[True]),
     # Proposed for SKA Dish: extent = 2.3*HPBWmax; speed = HPBW/3/1sec - to be done with 1sec dumps!
     'skab1': dict(num_scans=21, scan_duration=21, scan_extent=9.0, scan_spacing=9.0/20, scan_in_az=[True]),
-    'skab2': dict(num_scans=15, scan_duration=19, scan_extent=3.8, scan_spacing=3.8/14, scan_in_az=[True]), # TBC: 2.6*HPBWmax instead of 2.3, and 25% undersampled in elevation to save time
+    'skab2': dict(num_scans=13, scan_duration=13, scan_extent=3.3, scan_spacing=3.3/12, scan_in_az=[True]),
+    'skab2x': dict(num_scans=15, scan_duration=20, scan_extent=4.0, scan_spacing=4.0/14, scan_in_az=[True]), # TBC: 2.75*HPBWmax instead of 2.3, and 25% undersampled in elevation to save time
     'skab3': dict(num_scans=13, scan_duration=13, scan_extent=1.8, scan_spacing=1.8/12, scan_in_az=[True]),
     'skab4': dict(num_scans=13, scan_duration=13, scan_extent=1.0, scan_spacing=1.0/12, scan_in_az=[True]),
     'skab5a': dict(num_scans=13, scan_duration=13, scan_extent=0.63, scan_spacing=0.63/12, scan_in_az=[True]),
