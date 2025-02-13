@@ -393,4 +393,4 @@ if __name__ == "__main__":
         from analysis import katsepnt
         katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
                                         metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
-       plt.show()
+    plt.show()
