@@ -28,7 +28,7 @@ def fit_background(x, y, intensity_map, along_edges=True):
         mask[r < np.percentile(r,66)] = np.nan
     
     model = lambda x0,y0, mx,my, nx=0,ny=0: mx*(x-x0)+nx*(x-x0)**2 + my*(y-y0)+ny*(y-y0)**2
-    p0 = [0,0, 0,0] + [0,0] # + [0,0] to make it quadratic
+    p0 = [0,0, 0,0] # + [0,0] # to make it quadratic
     
     p = sop.minimize(lambda p: np.nansum(mask*(intensity_map-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     model_bg = model(*p.x)
@@ -44,7 +44,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param x, y: position coordinates in the tangent plane.
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
-        @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
+        @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 15% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
     
@@ -66,9 +66,9 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     else: # Constrained fits should be robust, and not very sensitive to bounds
         bounds = [(h_sigma/2,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
-            bounds[0] = (0.9*ampl0, 1.1*ampl0)
+            bounds[0] = (0.85*ampl0, 1.15*ampl0)
         if (constrain_width):
-            bounds[3] = bounds[4] = (0.9*width0,1.1*width0)
+            bounds[3] = bounds[4] = (0.85*width0,1.15*width0)
         p = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
     # It seems that the fit fails to converge if we fit for h0 too!??
     ampl, xoffset, yoffset, fwhmx, fwhmy, h0 = p.x
@@ -82,7 +82,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
         debug[0].legend()
-        debug[1].plot([xoffset], [yoffset], 'r+'); debug[1].text(xoffset, yoffset, "%.1f, %.1f"%(xoffset,yoffset), fontsize='x-small')
+        debug[1].plot([xoffset], [yoffset], 'r+'); debug[1].text(xoffset, yoffset, "%.2f, %.2f"%(xoffset,yoffset), fontsize='x-small')
     return (xoffset, yoffset, valid, fwhmx, fwhmy, ampl, resid)
 
 
@@ -144,8 +144,8 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                                                                       Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
                 axs[0][i].set_title(kind)
                 axs[0][i].plot(target_x, target_y, '.')
-                axs[1][i].plot(timestamps, target_x, '.', timestamps, target_y)
-                axs[1][i] = axs[1][i].twinx(); axs[1][i].plot(m, '.')
+                axs[1][i].plot(timestamps, target_x, '.', timestamps, target_y, '.')
+                axs[1][i] = axs[1][i].twinx(); axs[1][i].plot(m, 'k.-')
                 axs[2][i].scatter(target_x, target_y, m)
                 xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=[axs[1][i],axs[2][i]])
                 # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
@@ -246,7 +246,7 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
             axs[0].set_xlabel("Frequency [channels]")
             axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
             axs[1].set_xlabel("Time [#]")
-            axs[1] = axs[1].twinx(); axs[1].plot(height, 'k>')
+            axs[1] = axs[1].twinx(); axs[1].plot(height, 'k.-')
             # 2D plot, with height scaled to [0, 1]
             delta_n = height - np.nanmin(height)
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
