@@ -26,7 +26,7 @@ parser.add_option( '--tip-both-directions', action="store_true" , default=False,
                   help='Do tipping curve from low to high elevation and then from high to low elevation')
 
 # Set default value for any option (both standard and experiment-specific options)
-parser.set_defaults(description='Tipping Curve', nd_params='off')
+parser.set_defaults(description='Tipping Curve', nd_params='off', horizon=15)
 
 # Parse the command line
 opts, args = parser.parse_args()
