@@ -77,7 +77,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
     resid = np.std(height - model_height)
-    valid = p.success #and (ampl/h_sigma > 6) and (resid < h_sigma)  # TODO: h_sigma not correct for raster
+    valid = p.success and (ampl/resid > 3.9) # 3sigma is the absolute minimum for reliable fits! 
     
     if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
@@ -174,13 +174,13 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost', scans="~slew", strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost', scans="~slew", strict=True, verbose=True, debug=False, kind=None):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
         @param ds: the dataset (selection is reset!)
         @param ant: the identifier of the scanning antenna in the dataset
-        @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
+        @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
@@ -188,9 +188,9 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
-    if (not callable(chanmapping)) and (chanmapping is not None):
-        _chans_ = chanmapping
-        chanmapping = lambda *a: _chans_
+    if (not callable(chans)) and (chans is not None):
+        _chans_ = chans
+        chans = lambda *a: _chans_
     
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
     enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
@@ -209,10 +209,10 @@ def reduce_pointing_scans(ds, ant, chanmapping, track_ant=None, flags='data_lost
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
     wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
+    # Fit offsets to an "intensity map"
     for (cs_no, cs_label, target) in ds.compscans():
-        # Fit offsets to an "intensity map"
-        if chanmapping:
-            ds.select(channels=chanmapping(target.name, fGHz))
+        if chans:
+            ds.select(channels=chans(target.name, fGHz))
         
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
@@ -354,23 +354,23 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
     for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
         print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
         ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
-        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, None, track_ant=None, strict=True, verbose=True, debug=debug)
+        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, track_ant=None, strict=True, verbose=True, debug=debug)
         save_apss_file("./_demo_reduce_pointing_scans_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
 
 
-def analyse_beam_scans(ds, ants, chanmapping, output_filepattern=None, debug=False, verbose=True, **kwargs):
+def analyse_beam_scans(ds, ants, chans=None, output_filepattern=None, debug=False, verbose=True, **kwargs):
     """ Generates pointing offsets for a dataset created with point_source_scan.py or circular_pointing.py or similar
     
         @param ds: the katdal dataset
         @param ants: the identifiers of the scanning antennas in the dataset
-        @param chanmapping: channel indices to use or a function like `lambda target_name,fGHz: channel_indices`, or None to use all channels
+        @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
         @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
         @param kwargs: extra arguments for reduce_pointing_scans()
         @return: { antID:[(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)] }
     """
     results = {}
     for ant in ants:
-        fitted, enviro = reduce_pointing_scans(ds, ant, chanmapping, debug=debug, verbose=verbose, **kwargs)
+        fitted, enviro = reduce_pointing_scans(ds, ant, chans=chans, debug=debug, verbose=verbose, **kwargs)
         results[ant] = fitted
         if (output_filepattern):
             save_apss_file(output_filepattern%ant, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
