@@ -27,8 +27,8 @@ def fit_background(x, y, intensity_map, along_edges=True):
         r = np.squeeze((x**2+y**2)**.5)
         mask[r < np.percentile(r,66)] = np.nan
     
-    model = lambda x0,y0, mx,my, nx=0,ny=0: mx*(x-x0)+nx*(x-x0)**2 + my*(y-y0)+nx*(y-y0)**2
-    p0 = [0,0, 0,0] # Add terms to make it quadratic
+    model = lambda x0,y0, mx,my, nx=0,ny=0: mx*(x-x0)+nx*(x-x0)**2 + my*(y-y0)+ny*(y-y0)**2
+    p0 = [0,0, 0,0] + [0,0] # + [0,0] to make it quadratic
     
     p = sop.minimize(lambda p: np.nansum(mask*(intensity_map-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     model_bg = model(*p.x)
@@ -46,7 +46,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 10% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
-    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise. TODO: doesn't work for raster
+    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
     
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
@@ -77,7 +77,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
     resid = np.std(height - model_height)
-    valid = p.success and (ampl/h_sigma > 6) and (resid < h_sigma)
+    valid = p.success #and (ampl/h_sigma > 6) and (resid < h_sigma)  # TODO: h_sigma not correct for raster
     
     if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
