@@ -37,6 +37,18 @@ def fit_background(x, y, intensity_map, along_edges=True):
     return model_bg
 
 
+def gaussian2D(x, y, x0, y0, wx, wy, theta=0):
+    """ @param theta: rotation angle [rad]
+        @return: Un-normalized Gaussian that's been rotated around its center. """
+    # Rotate the x,y coordinates by theta
+    cos_theta, sin_theta = np.cos(theta), np.sin(theta)
+    a = cos_theta*x - sin_theta*y
+    b = sin_theta*x + cos_theta*y
+    a0 = cos_theta*x0 - sin_theta*y0
+    b0 = sin_theta*x0 + cos_theta*y0
+    # Evaluate the Gaussian
+    return np.exp( -np.log(2) * ( (a-a0)**2/wx**2 + (b-b0)**2/wy**2) )
+
 def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
         NB: this does not currently fit the background, so only works reliably if the background is "flat".
@@ -45,7 +57,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 15% of this
-        @return: (xoffset, yoffset, valid, xfwhm, yfwhm, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
+        @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
     
     # Starting estimates
@@ -53,25 +65,25 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     scanext = 2*np.median(x**2 + y**2)**.5
     width0 = constrain_width if (constrain_width) else scanext
     ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
-    p0 = [ampl0,0,0,width0,width0, np.min(height)]
+    p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
     
     if powerbeam:
-        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl*np.exp(-np.log(2)*((x-xoffset)**2/wx**2+(y-yoffset)**2/wy**2))**2
+        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)**2
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
-        model = lambda ampl,xoffset,yoffset,wx,wy, h0=0: h0 + ampl**.5*np.exp(-np.log(2)*((x-xoffset)**2/wx**2+(y-yoffset)**2/wy**2))
+        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl**.5*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
         p = sop.minimize(lambda p: np.nansum((height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     else: # Constrained fits should be robust, and not very sensitive to bounds
-        bounds = [(h_sigma/2,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(0,np.min(height))]
+        bounds = [(h_sigma/2,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.85*ampl0, 1.15*ampl0)
         if (constrain_width):
             bounds[3] = bounds[4] = (0.85*width0,1.15*width0)
         p = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
     # It seems that the fit fails to converge if we fit for h0 too!??
-    ampl, xoffset, yoffset, fwhmx, fwhmy, h0 = p.x
+    ampl, xoffset, yoffset, fwhmx, fwhmy, rot, h0 = p.x
     model_height = model(*p.x)
     
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
@@ -83,7 +95,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
         debug[0].legend()
         debug[1].plot([xoffset], [yoffset], 'r+'); debug[1].text(xoffset, yoffset, "%.2f, %.2f"%(xoffset,yoffset), fontsize='x-small')
-    return (xoffset, yoffset, valid, fwhmx, fwhmy, ampl, resid)
+    return (xoffset, yoffset, valid, fwhmx, fwhmy, rot, ampl, resid)
 
 
 def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
@@ -147,7 +159,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 axs[1][i].plot(timestamps, target_x, '.', timestamps, target_y, '.')
                 axs[1][i] = axs[1][i].twinx(); axs[1][i].plot(m, 'k.-')
                 axs[2][i].scatter(target_x, target_y, m)
-                xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=[axs[1][i],axs[2][i]])
+                xoff, yoff, valid, hpwx, hpwy, rot, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=[axs[1][i],axs[2][i]])
                 # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
     
     else: # Statistical
@@ -162,7 +174,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 for ox,oy in offsets:
                     timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
                                                                           Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
-                    xoff, yoff, valid, hpwx, hpwy, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=None)
+                    xoff, yoff, valid, hpwx, hpwy, rot, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=None)
                     fits.append([ox-xoff, oy-yoff, hpwx/hpbw, hpwy/hpbw, a0/ampl])
                 fits = np.asarray(fits)
                 axs[0].hist(fits[:,0], bins=20, range=(-hpbw,hpbw), alpha=0.5, label=kind+" X")
@@ -256,8 +268,8 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         # Extra constraints - especially for circle patterns: hpbw and/or amplitude?
         constr = {"constrain_width": 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D}
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
-        xoff, yoff, valid, hpwx, hpwy, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
-                                                                        debug=axs[1:] if debug else None, **constr)
+        xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
+                                                                             debug=axs[1:] if debug else None, **constr)
         if debug:
             fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} [Fit: {valid}]")
         
