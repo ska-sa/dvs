@@ -185,7 +185,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
         @param kind: specifically used with 'circle' from "circular_pointing.py"
-        @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)]
+        @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
     if (not callable(chans)) and (chans is not None):
@@ -239,7 +239,8 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        height -= fit_background(target_x, target_y, height, along_edges=True)
+        bkg = fit_background(target_x, target_y, height, along_edges=True)
+        height -= bkg
         if debug: # Prepare figure for debugging
             fig, axs = plt.subplots(1,3, figsize=(14,3))
             axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
@@ -279,11 +280,11 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         
         if debug or verbose:
             print(f"Scan #{cs_no}: {cs_label}, on {target.name}")
-            print("    Fit: %s\t xy offsets %g, %g, AzEl offsets %g, %g [arcsec]"%(valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
+            print("    Fit: %s\t xy offsets %g, %g, AzEl errors %g, %g [arcsec]"%(valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
         
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
-        fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid))
+        fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
@@ -307,7 +308,7 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
             self.spectral_windows = [typing.NamedTuple('SpectralWindow', centre_freq=float)(f_c)]
             self.channels = np.arange(16) # Not important, this keeps it easy
             self.freqs = f_c + np.linspace(-10e6,10e6,len(self.channels)) 
-            self.ants = [katpoint.Antenna(a, -np.pi/3+0.1*np.random.rand(), np.pi/3.3+0.1*np.random.rand(), 1050, Dant) for a in ant_names] # Roughly in the Karoo
+            self.ants = [katpoint.Antenna(a, -np.pi/6+0.01*np.random.rand(), np.pi/9+0.1*np.random.rand(), 1050, Dant) for a in ant_names] # Roughly in the Karoo
             self.catalogue = katpoint.Catalogue(antenna=self.ants[0], add_specials=True)
             for t in set(targets_scanned):
                 if (t not in self.catalogue):
@@ -399,7 +400,7 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
     
     # Field names as used by 'analyse_point_source_scans.py' in the order out of reduce_pointing_scans()
     fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
-              'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std']
+              'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std', 'baseline_height_I']
     # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
     fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el']
     string_fields = ['target']
