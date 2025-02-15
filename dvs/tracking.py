@@ -51,21 +51,24 @@ def gaussian2D(x, y, x0, y0, wx, wy, theta=0):
 
 def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
-        NB: this does not currently fit the background, so only works reliably if the background is "flat".
+        NB: this does not fit the background, so only works reliably if the background is "flat".
         
         @param x, y: position coordinates in the tangent plane.
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 15% of this
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
-    h_sigma = np.mean([np.std(height[i*10:(i+1)*10]) for i in range(len(height)//10)]) # Estimate of radiometer noise
-    
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
-    scanext = 2*np.median(x**2 + y**2)**.5
+    r = np.squeeze((x**2+y**2)**.5)
+    scanext = 2*np.median(r)
     width0 = constrain_width if (constrain_width) else scanext
     ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
     p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
+    
+    # Fit will apply a circular mask around the origin, to ignore things on the periphery
+    mask = np.full(len(height), 1.0)
+    mask[r > np.percentile(r,80)] = 0
     
     if powerbeam:
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)**2
@@ -74,14 +77,14 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
-        p = sop.minimize(lambda p: np.nansum((height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
+        p = sop.minimize(lambda p: np.nansum(mask*(height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     else: # Constrained fits should be robust, and not very sensitive to bounds
-        bounds = [(h_sigma/2,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
+        bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.85*ampl0, 1.15*ampl0)
         if (constrain_width):
             bounds[3] = bounds[4] = (0.85*width0,1.15*width0)
-        p = sop.least_squares(lambda p: height-model(*p), p0, bounds=np.transpose(bounds), verbose=0)
+        p = sop.least_squares(lambda p: mask*(height-model(*p)), p0, bounds=np.transpose(bounds), verbose=0)
     # It seems that the fit fails to converge if we fit for h0 too!??
     ampl, xoffset, yoffset, fwhmx, fwhmy, rot, h0 = p.x
     model_height = model(*p.x)
