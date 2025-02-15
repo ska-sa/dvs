@@ -68,7 +68,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     
     # Fit will apply a circular mask around the origin, to ignore things on the periphery
     mask = np.full(len(height), 1.0)
-    mask[r > np.percentile(r,80)] = 0
+    mask[r > np.percentile(r,66)] = 0
     
     if powerbeam:
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)**2
