@@ -38,7 +38,7 @@
     @author: aph@sarao.ac.za
 """
 try:
-    from katcorelib import user_logger, standard_script_options as _kcl_std_opts_, start_session as _kcl_start_session_, collect_targets as _kcl_collect_targets_
+    from katcorelib import user_logger, standard_script_options as _kcl_std_opts_, start_session as _kcl_start_session_
 except:
     import logging
     user_logger = logging.getLogger("user")
@@ -249,29 +249,51 @@ def start_hacked_session(cam, **kwargs):
 
 
 def collect_targets(cam, args, opts=None):
-    """ Identical to katcorelib.collect_targets(), but this can take TLE files!
+    """ Alternative to katcorelib.collect_targets():
+            a) this can take a catalogue in either radec or TLE text formats
+            b) if a catalogue is specified plus target names then only that SUBSET of targets are used (katcorelib.collect_targets() uses the catalogue PLUS targets)
+        If a catalogue is specified it must either be the first argument, or opts/catalogue.
+        
         @param args: either empty list, or the first string should contain a target name or comma-separated list of names
         @param opts: parsed options may contain `.catalogue`, the filename of the catalogue to load.
         @return: katpoint.Catalogue
     """
-    # Try to "consume" the non-specific opts & args, before calling the original kcl.collect_targets()
-    catfn = None
+    # Get the catalogue to draw from
+    cat, catfn = None, None
     try: # Optionally specify --catalogue
         catfn = opts.catalogue
-    except: # Possibly first argument is the catalogue
+    except:  # Possibly first argument is the catalogue
         if (len(args) > 0) and os.path.isfile(args[0]):
             catfn = args[0]
             args = args[1:]
     if catfn and os.path.isfile(catfn):
         cat = katpoint.Catalogue(antenna=cam.sources.antenna)
-        try:
-            cat.add_tle(open(catfn, 'rt'))
-            cam.sources.add(cat.targets)
-        except: # Not a TLE file, so add it back to args to be passed on again
-            args = [catfn] + args
+        try: # Maybe a standard catalogue file
+            cat.add(open(catfn, 'rt'))
+        except ValueError: # Possibly a TLE formatted file
+            try:
+                cat.add_tle(open(catfn, 'rt'))
+            except:
+                raise ValueError("%s is not a valid target catalogue file!" % catfn)
     
-    # Now let the original kcl.collect_targets() to it's standard thing
-    return _kcl_collect_targets_(cam, args)
+    # Just a catalogue specified - so return that as the targets to use
+    if (len(args) == 0) and (cat is not None):
+        return cat
+    elif (cat is None): # No catalogue file specified, use the standard one
+        cat = cam.sources
+    
+    # Subset / specified targets from the catalogue
+    selected_tgts = []
+    for arg in args:
+        tgts = [cat[tgt] for tgt in arg.split(",")] 
+        named_tgts = [tgt for tgt in tgts if (tgt is not None)]
+        if (len(named_tgts) > 0): # Targets by name
+            selected_tgts.extend(named_tgts)
+        else: # Else may only be a full target description
+            selected_tgts.append(katpoint.Target(arg))
+    assert (len(selected_tgts) > 0), "No target retrieved from argument list!"
+    cat = katpoint.Catalogue(selected_tgts, antenna=cam.sources.antenna)
+    return cat
 
 
 def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sunmoon_separation_deg=10):
