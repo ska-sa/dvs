@@ -49,7 +49,7 @@ def gaussian2D(x, y, x0, y0, wx, wy, theta=0):
     # Evaluate the Gaussian
     return np.exp( -np.log(2) * ( (a-a0)**2/wx**2 + (b-b0)**2/wy**2) )
 
-def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, debug=None):
+def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, constrain_center=True, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
         NB: this does not fit the background, so only works reliably if the background is "flat".
         
@@ -57,6 +57,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 15% of this
+        @param constrain_center: True to mask out signal beyond 1.15*constrain_width/2 from the center of the plane.
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
@@ -68,7 +69,8 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     
     # Fit will apply a circular mask around the origin, to ignore things on the periphery
     mask = np.full(len(height), 1.0)
-    mask[r > np.percentile(r,66)] = 0
+    if constrain_center:
+        mask[r > 1.15*width0/2] = 0
     
     if powerbeam:
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)**2
