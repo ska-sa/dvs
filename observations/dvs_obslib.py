@@ -54,6 +54,13 @@ def standard_script_options(usage, description):
     parser.add_option('--reset-gain', type='int', default=None,
                       help='Value for the reset of the correlator F-engine gain '
                            '(default=%default)')
+    ## HACK this legacy option:
+    # parser.add_option('-n', '--nd-params', default='coupler,10,10,180',
+    #                   help="Noise diode parameters as "
+    #                        "'<diode>,<on>,<off>,<period>', in seconds or 'off' "
+    #                        "for no noise diode firing (default='%default')")
+    nd_params = parser.get_option('--nd-params')
+    nd_params.help += ". Use 'switching,3,7' to activate digitiser-level switching, in integer multiples of SDP visibilities dump intervals."
     return parser
 
 
@@ -216,6 +223,28 @@ def temp_hack_DisableAllPointingCorrections(cam):
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
 
 
+def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
+    """ Start Digitiser-level synchronous Noise Diode cycling. S-band not supported of course.
+        @param n_on, n_off: describe integer number of SDP dump intervals
+        @param T0: time when the digitisers should trigger the start of the switching cycles.
+    """
+    nd_switching = [n_on, n_off]
+    on_fraction = float(nd_switching[0])/np.sum(nd_switching)
+    T0 = time.time() if (T0 == 'now') else T0
+    T0 = int(max(T0, time.time()+ND_LEAD_TIME) + 0.5) # On a PPS boundary
+    
+    try: # 'sub' is an active session
+        cbf, sdp, ants = sub.cbf, sub.sdp, sub.ants
+    except: # 'sub' is a cam control environment. TODO: we assume subarray 1!
+        cbf, sdp, ants = sub.cbf_1, sub.sdp_1, sub.ants
+    
+    cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
+    sdp_dt = cbf_dt * np.round(sdp.sensors.dump_rate.get_value() * cbf_dt) # SDP dump rate is not accurate
+    ants.req.dig_noise_source(T0, on_fraction, sdp_dt*np.sum(nd_switching)) # TODO: noise_source() vs noise_diode()?
+    
+    user_logger.info("Started digitiser-level noise diode switching.")
+
+
 def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
         1. `standard_setup()` checks & updates Ku-band siggen frequency
@@ -230,20 +259,52 @@ def start_hacked_session(cam, **kwargs):
     session._standard_setup_ = session.standard_setup
     session._cam_ = cam
     def hacked_setup(*a, **k):
+        # Hack the legacy noise diode behaviour if requested
+        nd_params = kwargs.get("nd_params", "")
+        if nd_params.startswith("switching"): # Prevent session.fire_noise_diode() from interfering at all
+            kwargs["nd_params"] = nd_params + ",-1"
+            
         result = session._standard_setup_(*a, **k)
+        
         # Set the gain to a single non complex number if requested
         eq_gain = kwargs.get("reset_gain", None)
         if eq_gain:
             session.set_fengine_gains(eq_gain)
+        
         if (not session._cam_.dry_run):
             # Ensure the Ku-band signal generator matches the center frequency of the subarray
             match_ku_siggen_freq(session._cam_)
             # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
             # during which the ACU resets some things which we are trying to hack around.
             temp_hack_DisableAllPointingCorrections(session._cam_)
-            
+        
         return result
     session.standard_setup = hacked_setup
+    
+    # Hack the "standard capture start" function
+    session._capture_start_ = session.capture_start
+    def hacked_capture_start(*a, **k):
+        result = session._capture_start_(*a, **k)
+        if (not session._cam_.dry_run):
+            # Start noise diode switching, if requested
+            nd_params = kwargs.get("nd_params", "")
+            if nd_params.startswith("switching"):
+                n_on, n_off = list(map(int, nd_params.split(',')[1:3])) # Expect 'switching,n_on,n_off,-1'
+                start_nd_switching(session, n_on, n_off, T0=session.capture_block_id) # TODO: confirm that X-engine accumulation always starts on a PPS edge
+        return result
+    session.capture_start = hacked_capture_start
+    
+    # Hack the "standard end" function
+    session._end_ = session.end
+    def hacked_end(*a, **k):
+        if (not session._cam_.dry_run):
+            # Stop noise diode switching, if requested
+            nd_params = kwargs.get("nd_params","")
+            if nd_params.startswith("switching"):
+                session.ants.req.dig_noise_source('now', 'off')
+                user_logger.info("Stopped digitiser-level noise diode switching.")
+        return session._end_(*a, **k)
+    session.end = hacked_end
     
     return session
 
