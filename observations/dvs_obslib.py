@@ -260,12 +260,15 @@ def collect_targets(cam, args, opts=None):
     """
     # Get the catalogue to draw from
     cat, catfn = None, None
-    try: # Optionally specify --catalogue
-        catfn = opts.catalogue
-    except:  # Possibly first argument is the catalogue
-        if (len(args) > 0) and os.path.isfile(args[0]):
-            catfn = args[0]
-            args = args[1:]
+    # Possibly first argument is the catalogue
+    if (len(args) > 0) and os.path.isfile(args[0]):
+        catfn = args[0]
+        args = args[1:]
+    else: # Optionally specify --catalogue
+        try: 
+            catfn = opts.catalogue
+        except:
+            pass  
     if catfn and os.path.isfile(catfn):
         cat = katpoint.Catalogue(antenna=cam.sources.antenna)
         try: # Maybe a standard catalogue file
