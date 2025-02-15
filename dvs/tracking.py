@@ -86,7 +86,6 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         if (constrain_width):
             bounds[3] = bounds[4] = (0.85*width0,1.15*width0)
         p = sop.least_squares(lambda p: mask*(height-model(*p)), p0, bounds=np.transpose(bounds), verbose=0)
-    # It seems that the fit fails to converge if we fit for h0 too!??
     ampl, xoffset, yoffset, fwhmx, fwhmy, rot, h0 = p.x
     model_height = model(*p.x)
     
@@ -250,6 +249,11 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
         
+        # The requested (az, el) coordinates, as they apply at the middle time for a moving target
+        rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
+        # Correct for refraction, which becomes the requested value at input of pointing model
+        rEl = rc.apply(rEl, temperature, pressure, humidity)
+
         # Fit the beam
         target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
         hv = np.abs(ds.vis[mask])
@@ -275,7 +279,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                              debug=axs[1:] if debug else None, **constr)
         if debug:
-            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} [Fit: {valid}]")
+            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.f}degEl [Fit: {valid}]")
         
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
@@ -285,18 +289,13 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         # Get a "raw" measured (az, el) at the output of the pointing model
         mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl)
         
-        # The requested (az, el) coordinates, as they apply at the middle time for a moving target
-        rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
-        # Correct for refraction, which becomes the requested value at input of pointing model
-        rEl = rc.apply(rEl, temperature, pressure, humidity)
-
         # The difference between requested & measured, as a small angle around 0 degrees
         dAz, dEl = (mAz - rAz)*R2D, (mEl - rEl)*R2D
         dAz, dEl = wrap_angle(dAz), wrap_angle(dEl)
         
         if debug or verbose:
             print(f"Scan #{cs_no}: {cs_label}, on {target.name}")
-            print("    Fit: %s\t xy offsets %g, %g, AzEl errors %g, %g [arcsec]"%(valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
+            print("    SNR %.1f: fit=%s\t xy offsets %g, %g, AzEl errors %g, %g [arcsec]"%(ampl/resid, valid, xoff*3600, yoff*3600, dAz*3600, dEl*3600))
         
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
