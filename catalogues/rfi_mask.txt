@@ -1,23 +1,30 @@
 # Range of frequencies to flag in MHz
 # start_freq, stop_freq
 #
-933.0, 960.5
-1086.5, 1092.5
-1100.0, 1113.5
-1122.5, 1126.0
-1134.0, 1138.0
-1142.5, 1303.5
-1418.5, 1421.0
-1518.1, 1609.0
-1616.5, 1626.5
-# METEOSAT
-1675.0, 1697.0
-# S-band Wifi & satellite downlink
-2220, 2250
+933.0, 960.5 # GSM900
+1086.5, 1092.5 # SSR
+1100.0, 1113.5 # DME?
+1125, 1227 # GPS L5 4th nulls, GALILEO E5 & Beidou B2
+1176, 1309.5 # GLONASS L2 & GPS L2 4th nulls, GALILEO B6 & Beidou B3
+1374, 1386 # GPS L3 & L4
+1418, 1422 # Galactic HI
+#1457, 1518 # Seen in 1739441015 scan#16
+1519, 1610 # GLONASS L1 & GPS L1 4th nulls, GALILEO L1,E1,E2 & Beidou B1 4th nulls
+1525, 1560 # INMARSAT
+1615.5, 1626.5 # IRIDIUM
+1674.5, 1698.5 # METEOSAT & NOAA
+1701.5, 1703.5 # NOAA HRPT & ARGOS
+1706.5, 1708.5 # NOAA HRPT
+2025, 2110 # S-band downlink
+2200, 2290 # S-band downlink
+2220, 2250 # WiFi & Bluetooth
 2400, 2485
+3130, 3170 # Aircraft RNAV?
 3400, 3700
 # Ku-band (GEOS, Starlink, OneWeb) satellite downlink
 10700, 12253 # End at beacon for INTELSAT 25 (IS-25)
 12255, 12498 # End at beacon for EUTELSAT & INTELSAT
 12503, 12742 # End at beacon for AZERSPACE 2
 12749, 12800 # End of Ku-band downlink
+13400, 14050 # TDRS
+13500, 13900 # Altimeters e.g. ERS-2, SSO, INVSAT
