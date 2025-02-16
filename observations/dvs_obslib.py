@@ -241,8 +241,6 @@ def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
     cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
     sdp_dt = cbf_dt * np.round(sdp.sensors.dump_rate.get_value() * cbf_dt) # SDP dump rate is not accurate
     ants.req.dig_noise_source(T0, on_fraction, sdp_dt*np.sum(nd_switching)) # TODO: noise_source() vs noise_diode()?
-    
-    user_logger.info("Started digitiser-level noise diode switching.")
 
 
 def start_hacked_session(cam, **kwargs):
@@ -280,24 +278,25 @@ def start_hacked_session(cam, **kwargs):
     session._capture_start_ = session.capture_start
     def hacked_capture_start(*a, **k):
         result = session._capture_start_(*a, **k)
-        if (not session._cam_.dry_run):
-            # Start noise diode switching, if requested
-            nd_params = kwargs.get("nd_params", dict(diode=None))
-            if (nd_params['diode'] == "switching"):
-                n_on, n_off = int(nd_params['on']), int(nd_params['off'])
+        # Start noise diode switching, if requested
+        nd_params = kwargs.get("nd_params", dict(diode=None))
+        if (nd_params['diode'] == "switching"):
+            n_on, n_off = int(nd_params['on']), int(nd_params['off'])
+            if (not session._cam_.dry_run):
                 start_nd_switching(session, n_on, n_off, T0=int(session.capture_block_ids[0])) # TODO: confirm that X-engine accumulation always starts on a PPS edge
+            user_logger.info("Started digitiser-level noise diode switching.")
         return result
     session.capture_start = hacked_capture_start
     
     # Hack the "standard end" function
     session._end_ = session.end
     def hacked_end(*a, **k):
-        if (not session._cam_.dry_run):
-            # Stop noise diode switching, if requested
-            nd_params = kwargs.get("nd_params", dict(diode=None))
-            if (nd_params['diode'] == "switching"):
+        # Stop noise diode switching, if requested
+        nd_params = kwargs.get("nd_params", dict(diode=None))
+        if (nd_params['diode'] == "switching"):
+            if (not session._cam_.dry_run):
                 session.ants.req.dig_noise_source('now', 'off')
-                user_logger.info("Stopped digitiser-level noise diode switching.")
+            user_logger.info("Stopped digitiser-level noise diode switching.")
         return session._end_(*a, **k)
     session.end = hacked_end
     
