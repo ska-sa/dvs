@@ -284,7 +284,7 @@ def start_hacked_session(cam, **kwargs):
             # Start noise diode switching, if requested
             nd_params = kwargs.get("nd_params", dict(diode=None))
             if (nd_params['diode'] == "switching"):
-                n_on, n_off = list(map(int, nd_params.split(',')[1:3])) # Expect 'switching,n_on,n_off,-1'
+                n_on, n_off = int(nd_params['on']), int(nd_params['off'])
                 start_nd_switching(session, n_on, n_off, T0=session.capture_block_id) # TODO: confirm that X-engine accumulation always starts on a PPS edge
         return result
     session.capture_start = hacked_capture_start
