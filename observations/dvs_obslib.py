@@ -228,10 +228,9 @@ def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
         @param n_on, n_off: describe integer number of SDP dump intervals
         @param T0: time when the digitisers should trigger the start of the switching cycles.
     """
-    nd_switching = [n_on, n_off]
-    on_fraction = float(nd_switching[0])/np.sum(nd_switching)
+    on_fraction = float(n_on)/(n_on+n_off)
     T0 = time.time() if (T0 == 'now') else T0
-    T0 = int(max(T0, time.time()+ND_LEAD_TIME) + 0.5) # On a PPS boundary
+    T0 = np.round(max(T0, time.time()+ND_LEAD_TIME) + 0.5) # On a PPS boundary
     
     try: # 'sub' is an active session
         cbf, sdp, ants = sub.cbf, sub.sdp, sub.ants
@@ -239,8 +238,8 @@ def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
         cbf, sdp, ants = sub.cbf_1, sub.sdp_1, sub.ants
     
     cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
-    sdp_dt = cbf_dt * np.round(sdp.sensors.dump_rate.get_value() * cbf_dt) # SDP dump rate is not accurate
-    ants.req.dig_noise_source(T0, on_fraction, sdp_dt*np.sum(nd_switching)) # TODO: noise_source() vs noise_diode()?
+    sdp_dt = cbf_dt * np.round(sdp.sensors.dump_rate.get_value() * cbf_dt + 0.5) # SDP dump rate is not accurate
+    ants.req.dig_noise_source(T0, on_fraction, sdp_dt*(n_on+n_off)) # TODO: noise_source() vs noise_diode()?
 
 
 def start_hacked_session(cam, **kwargs):
