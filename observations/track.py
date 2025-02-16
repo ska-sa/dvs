@@ -32,9 +32,6 @@ parser.add_option('-m', '--max-duration', type='float', default=None,
 parser.add_option('--repeat', action="store_true", default=False,
                   help='Repeatedly loop through the targets until maximum '
                        'duration (which must be set for this)')
-parser.add_option('--nd-switching', type='string', default=None,
-                  help='Enable synchronous switching of noise diode in multiples of accumulation interval '
-                       'e.g. "3,27" to be ON for three, off for 27 dumps (default=%default)')
 parser.add_option('--min-separation', type="float", default=1.0,
                   help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
 parser.add_option('--sunmoon-separation', type="float", default=10,
@@ -62,21 +59,10 @@ with verify_and_connect(opts) as kat:
                                "please re-run the script later")
     # Start capture session, which creates HDF5 file
     with start_session(kat, **vars(opts)) as session:
-        try:
-            nd_switching = list(map(int, opts.nd_switching.split(",")))
-            #opts.nd_params = None
-        except:
-            nd_switching = None
-
         session.standard_setup(**vars(opts))
         session.capture_start()
 
         start_time = time.time()
-        if nd_switching is not None:
-            dt = session.cbf.sensor.wide_baseline_correlation_products_int_time.get_value()
-            T0 = int(int(start_time+0.5) + 1*dt) # TODO: I am assuming actual capture starts on integer second boundary
-            session.ants.req.dig_noise_source(T0, nd_switching[0]/float(nd_switching[0]+nd_switching[1]), dt*(nd_switching[0]+nd_switching[1]))
-
         targets_observed = []
         # Keep going until the time is up
         target_total_duration = [0.0] * len(targets)
