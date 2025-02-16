@@ -238,8 +238,9 @@ def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
         cbf, sdp, ants = sub.cbf_1, sub.sdp_1, sub.ants
     
     cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
-    sdp_dt = cbf_dt * np.round(sdp.sensors.dump_rate.get_value() * cbf_dt + 0.5) # SDP dump rate is not accurate
+    sdp_dt = cbf_dt * np.round(1/sdp.sensors.dump_rate.get_value() / cbf_dt + 0.5) # SDP dump rate is not accurate
     ants.req.dig_noise_source(T0, on_fraction, sdp_dt*(n_on+n_off)) # TODO: noise_source() vs noise_diode()?
+    return on_fraction, sdp_dt*(n_on+n_off)
 
 
 def start_hacked_session(cam, **kwargs):
