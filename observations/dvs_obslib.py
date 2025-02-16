@@ -60,7 +60,7 @@ def standard_script_options(usage, description):
     #                        "'<diode>,<on>,<off>,<period>', in seconds or 'off' "
     #                        "for no noise diode firing (default='%default')")
     nd_params = parser.get_option('--nd-params')
-    nd_params.help += ". Use 'switching,3,7' to activate digitiser-level switching, in integer multiples of SDP visibilities dump intervals."
+    nd_params.help += ". Use 'switching,3,7,-1' to activate digitiser-level switching, in integer multiples of SDP visibilities dump intervals."
     return parser
 
 
@@ -259,11 +259,6 @@ def start_hacked_session(cam, **kwargs):
     session._standard_setup_ = session.standard_setup
     session._cam_ = cam
     def hacked_setup(*a, **k):
-        # Hack the legacy noise diode behaviour if requested
-        nd_params = kwargs.get("nd_params", "")
-        if nd_params.startswith("switching"): # Prevent session.fire_noise_diode() from interfering at all
-            kwargs["nd_params"] = nd_params + ",-1"
-            
         result = session._standard_setup_(*a, **k)
         
         # Set the gain to a single non complex number if requested
@@ -287,8 +282,8 @@ def start_hacked_session(cam, **kwargs):
         result = session._capture_start_(*a, **k)
         if (not session._cam_.dry_run):
             # Start noise diode switching, if requested
-            nd_params = kwargs.get("nd_params", "")
-            if nd_params.startswith("switching"):
+            nd_params = kwargs.get("nd_params", dict(diode=None))
+            if (nd_params['diode'] == "switching"):
                 n_on, n_off = list(map(int, nd_params.split(',')[1:3])) # Expect 'switching,n_on,n_off,-1'
                 start_nd_switching(session, n_on, n_off, T0=session.capture_block_id) # TODO: confirm that X-engine accumulation always starts on a PPS edge
         return result
@@ -299,8 +294,8 @@ def start_hacked_session(cam, **kwargs):
     def hacked_end(*a, **k):
         if (not session._cam_.dry_run):
             # Stop noise diode switching, if requested
-            nd_params = kwargs.get("nd_params","")
-            if nd_params.startswith("switching"):
+            nd_params = kwargs.get("nd_params", dict(diode=None))
+            if (nd_params['diode'] == "switching"):
                 session.ants.req.dig_noise_source('now', 'off')
                 user_logger.info("Stopped digitiser-level noise diode switching.")
         return session._end_(*a, **k)
