@@ -56,7 +56,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param x, y: position coordinates in the tangent plane.
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
-        @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 15% of this
+        @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 20% of this
         @param constrain_center: True to mask out signal beyond 1.15*constrain_width/2 from the center of the plane.
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     # Starting estimates
@@ -82,9 +82,9 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     else: # Constrained fits should be robust, and not very sensitive to bounds
         bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
-            bounds[0] = (0.85*ampl0, 1.15*ampl0)
+            bounds[0] = (0.20*ampl0, 1.20*ampl0)
         if (constrain_width):
-            bounds[3] = bounds[4] = (0.85*width0,1.15*width0)
+            bounds[3] = bounds[4] = (0.80*width0,1.20*width0)
         p = sop.least_squares(lambda p: mask*(height-model(*p)), p0, bounds=np.transpose(bounds), verbose=0)
     ampl, xoffset, yoffset, fwhmx, fwhmy, rot, h0 = p.x
     model_height = model(*p.x)
