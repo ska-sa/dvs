@@ -279,7 +279,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                              debug=axs[1:] if debug else None, **constr)
         if debug:
-            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.f}degEl [Fit: {valid}]")
+            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.0f}degEl [Fit: {valid}]")
         
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
