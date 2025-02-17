@@ -199,7 +199,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
-        @param kind: specifically used with 'circle' from "circular_pointing.py"
+        @param kind: specifically used with 'circle','cardioid','epicycles' from "circular_pointing.py"
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
@@ -259,7 +259,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        bkg = fit_background(target_x, target_y, height, along_edges=True)
+        bkg = np.array([0]) if (kind in ['circle','cardioid','epicycles']) else fit_background(target_x, target_y, height, along_edges=True)
         height -= bkg
         if debug: # Prepare figure for debugging
             fig, axs = plt.subplots(1,3, figsize=(14,3))
@@ -271,8 +271,10 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
             # 2D plot, with height scaled to [0, 1]
             delta_n = height - np.nanmin(height)
             delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
-            # axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
-            axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
+            if (kind in ['circle','cardioid','epicycles']):
+                axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
+            else:
+                axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
         # Extra constraints - especially for circle patterns: hpbw and/or amplitude?
         constr = {"constrain_width": 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D}
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
