@@ -57,16 +57,13 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
         @param constrain_ampl, constrain_hpbw: > 0 to constrain the fitted parameters to within 20% of this.
-        @param constrain_center: True to mask out signal beyond 1.15*constrain_width/2 from the center of the plane.
+        @param constrain_center: True to suppress signal beyond constrain_hpbw/2 from the center of the plane.
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
     r = np.squeeze((x**2+y**2)**.5)
     scanext = 2*np.median(r)
-    constrain_width = constrain_hpbw
-    if constrain_hpbw and powerbeam:
-        constrain_width = constrain_hpbw/2**.5
-    width0 = constrain_width if (constrain_width) else scanext
+    width0 = constrain_hpbw if (constrain_hpbw) else scanext
     ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
     p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
     
@@ -75,9 +72,10 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         mask = 2./(1+r/width0); mask[r < width0] = 1
     
     if powerbeam:
-        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)**2
+        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
-        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl**.5*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)
+        SQRT2 = 2**.5
+        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl/SQRT2**.5*gaussian2D(x,y,xoffset,yoffset,wx*SQRT2,wy*SQRT2,rot)
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
@@ -86,7 +84,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.20*ampl0, 1.20*ampl0)
-        if (constrain_width):
+        if (constrain_hpbw):
             bounds[3] = bounds[4] = (0.80*width0,1.20*width0)
         p = sop.least_squares(lambda p: mask*(height-model(*p)), p0, bounds=np.transpose(bounds), verbose=0)
     ampl, xoffset, yoffset, fwhmx, fwhmy, rot, h0 = p.x
@@ -262,7 +260,10 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        bkg = np.array([0]) if (kind in ['circle','cardioid','epicycles']) else fit_background(target_x, target_y, height, along_edges=True)
+        if (kind == 'circle') or ((kind in ['cardioid','epicycles']) and track_ant):
+            bkg = np.array([0])
+        else:
+            bkg = fit_background(target_x, target_y, height, along_edges=True)
         height -= bkg
         if debug: # Prepare figure for debugging
             fig, axs = plt.subplots(1,3, figsize=(14,3))
@@ -278,8 +279,9 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
                 axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
             else:
                 axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
-        # Extra constraints - especially for circle patterns: hpbw and/or amplitude?
-        constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
+        constr = {}
+        if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycles
+            constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                              debug=axs[1:] if debug else None, **constr)
