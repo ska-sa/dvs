@@ -282,7 +282,7 @@ if __name__=="__main__":
                 session.nd_params = {'diode': 'coupler', 'off': 0, 'on': 0, 'period': -1}
                 # This also does capture_init, which adds capture_block_id view to telstate and saves obs_params
                 session.capture_start()
-                session.telstate.add('obs_label',"cycle.group.scan") # Compscan label
+                session.label("cycle.group.scan") # Compscan label - same as holography_scan.py, for possible future use
 
                 user_logger.info("Initiating %s scan cycles (%s %g-second "
                                  "cycles extending %g degrees) using targets %s",
@@ -347,14 +347,14 @@ if __name__=="__main__":
                         user_logger.info("Performing azimuth unwrap")
                         targetazel=gen_track([time.time()],target)[0][1:]
                         azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
-                        session.telstate.add('obs_label',"unwrap") # Compscan label
+                        session.label("unwrap") # Compscan label
                         session.track(azeltarget, duration=0, announce=False)#azel target
                     
                     # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
                         session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
-                        session.telstate.add('obs_label',"track") # Compscan label
+                        session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                     
                     if (target_rising):#target is rising - scan top half of pattern first
@@ -368,6 +368,7 @@ if __name__=="__main__":
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
+                    session.activity("scan") # Scan labels for all below
                     for iarm in range(len(cx)):# arm index
                         user_logger.info("Performing scan arm %d of %d.", iarm + 1, len(cx))
                         user_logger.info("Using Scan antennas: %s %s",
@@ -397,17 +398,11 @@ if __name__=="__main__":
                         for it in range(len(cx[iarm])):
                             if cs[iarm][it]!=lastisslew:
                                 lastisslew=cs[iarm][it]
-                                if lastisslew:
-                                    session.activity("slew") # Scan label
-                                    session.telstate.add('obs_label',"slew") # Compscan label
-                                else:
-                                    session.activity("scan") # Scan label
-                                    session.telstate.add('obs_label',"%d.0.%d"%(cycle,iarm),ts=scan_data[it,0]) # Compscan label
+                                session.telstate.add('obs_label',"slew" if lastisslew else "%d.0.%d"%(cycle,iarm),ts=scan_data[it,0]) # Compscan label
                         
                         time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
                         lasttime = scan_data[-1,0]
 
-                    session.activity("slew") # Scan label
                     session.telstate.add('obs_label',"slew",ts=lasttime) # Compscan label
                     time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
                     prev_target = target
