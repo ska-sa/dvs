@@ -189,7 +189,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost', scans="~slew", strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -210,7 +210,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
     enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
     
-    ds.select(scans=scans)
+    ds.select(scans=scans, compscans=compscans)
     if (track_ant):
         ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
     else:
