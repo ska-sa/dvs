@@ -231,7 +231,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
-        scan_r = np.squeeze((ds.target_x**2+ds.target_y**2)**.5)
+        scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
         mask &= scan_r < (np.median(scan_r) + 1*np.std(scan_r))
         
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
