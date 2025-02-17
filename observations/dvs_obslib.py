@@ -223,14 +223,15 @@ def temp_hack_DisableAllPointingCorrections(cam):
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
 
 
-def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
-    """ Start Digitiser-level synchronous Noise Diode cycling. S-band not supported of course.
+def start_nd_switching(sub, n_on, n_off, T_start='now'):
+    """ Start Digitiser-level synchronous Noise Diode cycling.
+        
         @param n_on, n_off: describe integer number of SDP dump intervals
-        @param T0: time when the digitisers should trigger the start of the switching cycles.
+        @param T_start: time when the digitisers should trigger the start of the switching cycles.
+        @return: (T_start[sec], on_fraction, period[sec])
     """
     on_fraction = float(n_on)/(n_on+n_off)
-    T0 = time.time() if (T0 == 'now') else T0
-    T0 = np.round(max(T0, time.time()+ND_LEAD_TIME) + 0.5) # On a PPS boundary
+    T_start = time.time() if (T_start == 'now') else T_start
     
     try: # 'sub' is an active session
         cbf, sdp, ants = sub.cbf, sub.sdp, sub.ants
@@ -239,8 +240,11 @@ def start_nd_switching(sub, n_on, n_off, T0='now', ND_LEAD_TIME=5):
     
     cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
     sdp_dt = cbf_dt * np.round(1/sdp.sensors.dump_rate.get_value() / cbf_dt + 0.5) # SDP dump rate is not accurate
-    ants.req.dig_noise_source(T0, on_fraction, sdp_dt*(n_on+n_off)) # TODO: noise_source() vs noise_diode()?
-    return on_fraction, sdp_dt*(n_on+n_off)
+    T0 = sdp.sensors.spmc_array_1_wide_0_ingest_sdp_l0_1_last_dump_timestamp.get_value()
+    ND_LEAD_TIME = np.round(10/sdp_dt+0.5) * sdp_dt # At least 10 seconds - needed because of sensor update rates etc
+    T_start = max(T_start, T0 + ND_LEAD_TIME) # Specified time or on the next(+1) dump boundary
+    ants.req.dig_noise_source(T_start, on_fraction, sdp_dt*(n_on+n_off))
+    return T_start, on_fraction, sdp_dt*(n_on+n_off)
 
 
 def start_hacked_session(cam, **kwargs):
@@ -283,7 +287,7 @@ def start_hacked_session(cam, **kwargs):
         if (nd_params['diode'] == "switching"):
             n_on, n_off = int(nd_params['on']), int(nd_params['off'])
             if (not session._cam_.dry_run):
-                start_nd_switching(session, n_on, n_off, T0=int(session.capture_block_ids[0])) # TODO: confirm that X-engine accumulation always starts on a PPS edge
+                start_nd_switching(session, n_on, n_off)
             user_logger.info("Started digitiser-level noise diode switching.")
         return result
     session.capture_start = hacked_capture_start
