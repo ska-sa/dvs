@@ -75,7 +75,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
         SQRT2 = 2**.5
-        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl/SQRT2**.5*gaussian2D(x,y,xoffset,yoffset,wx*SQRT2,wy*SQRT2,rot)
+        model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl/SQRT2*gaussian2D(x,y,xoffset,yoffset,wx*SQRT2,wy*SQRT2,rot)
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
