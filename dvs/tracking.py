@@ -49,20 +49,23 @@ def gaussian2D(x, y, x0, y0, wx, wy, theta=0):
     # Evaluate the Gaussian
     return np.exp( -np.log(2) * ( (a-a0)**2/wx**2 + (b-b0)**2/wy**2) )
 
-def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_width=None, constrain_center=True, debug=None):
+def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_hpbw=None, constrain_center=True, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
         NB: this does not fit the background, so only works reliably if the background is "flat".
         
         @param x, y: position coordinates in the tangent plane.
         @param height: height above the baseline, measured along the trajectory defined by the coordinates.
         @param powerbeam: True if scanned in total power, False if scanned in complex amplitude
-        @param constrain_ampl, constrain_width: > 0 to constrain the fitted parameters to within 20% of this
+        @param constrain_ampl, constrain_hpbw: > 0 to constrain the fitted parameters to within 20% of this.
         @param constrain_center: True to mask out signal beyond 1.15*constrain_width/2 from the center of the plane.
         @return: (xoffset, yoffset, valid, xfwhm, yfwhm, rot, ampl, resid) - positions on tangent plane centred on target in same units as `x` & `y` """
     # Starting estimates
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
     r = np.squeeze((x**2+y**2)**.5)
     scanext = 2*np.median(r)
+    constrain_width = constrain_hpbw
+    if constrain_hpbw and powerbeam:
+        constrain_width = constrain_hpbw/2**.5
     width0 = constrain_width if (constrain_width) else scanext
     ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
     p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
@@ -276,7 +279,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
             else:
                 axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
         # Extra constraints - especially for circle patterns: hpbw and/or amplitude?
-        constr = {"constrain_width": 1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D}
+        constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
         # Fitted beam center is in (x, y) coordinates, in projection centered on target
         xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                              debug=axs[1:] if debug else None, **constr)
