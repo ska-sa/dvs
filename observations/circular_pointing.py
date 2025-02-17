@@ -282,7 +282,7 @@ if __name__=="__main__":
                 session.nd_params = {'diode': 'coupler', 'off': 0, 'on': 0, 'period': -1}
                 # This also does capture_init, which adds capture_block_id view to telstate and saves obs_params
                 session.capture_start()
-                session.telstate.add('obs_label','cycle.group.scan')
+                session.telstate.add('obs_label',"cycle.group.scan") # Compscan label
 
                 user_logger.info("Initiating %s scan cycles (%s %g-second "
                                  "cycles extending %g degrees) using targets %s",
@@ -342,16 +342,19 @@ if __name__=="__main__":
                         user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
                         user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
                     session.set_target(target)
-                    if (target != prev_target):#ensures wrap of session.track is same as being used in load_scan
+                    # Ensure wrap of session.track is same as being used in load_scan
+                    if (target != prev_target):
                         user_logger.info("Performing azimuth unwrap")
                         targetazel=gen_track([time.time()],target)[0][1:]
                         azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
+                        session.telstate.add('obs_label',"unwrap") # Compscan label
                         session.track(azeltarget, duration=0, announce=False)#azel target
                     
+                    # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
                         session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
-                        session.telstate.add('obs_label','track')
+                        session.telstate.add('obs_label',"track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                     
                     if (target_rising):#target is rising - scan top half of pattern first
@@ -389,17 +392,23 @@ if __name__=="__main__":
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
                         session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
-                        
+                        # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
                         for it in range(len(cx[iarm])):
                             if cs[iarm][it]!=lastisslew:
                                 lastisslew=cs[iarm][it]
-                                session.telstate.add('obs_label','slew' if lastisslew else '%d.0.%d'%(cycle,iarm),ts=scan_data[it,0])
+                                if lastisslew:
+                                    session.activity("slew") # Scan label
+                                    session.telstate.add('obs_label',"slew") # Compscan label
+                                else:
+                                    session.activity("scan") # Scan label
+                                    session.telstate.add('obs_label',"%d.0.%d"%(cycle,iarm),ts=scan_data[it,0]) # Compscan label
                         
                         time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
                         lasttime = scan_data[-1,0]
 
-                    session.telstate.add('obs_label','slew',ts=lasttime)
+                    session.activity("slew") # Scan label
+                    session.telstate.add('obs_label',"slew",ts=lasttime) # Compscan label
                     time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
                     prev_target = target
                     
