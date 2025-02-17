@@ -368,7 +368,7 @@ if __name__=="__main__":
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
-                    session.activity("scan") # Scan labels for all below
+                    session.activity("track") # Scan labels for all below - 'track' is counter-intuitive but is also used by holography_scan.py
                     for iarm in range(len(cx)):# arm index
                         user_logger.info("Performing scan arm %d of %d.", iarm + 1, len(cx))
                         user_logger.info("Using Scan antennas: %s %s",
