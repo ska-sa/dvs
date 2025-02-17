@@ -260,7 +260,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         hv = np.abs(ds.vis[mask])
         hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        if (kind == 'circle') or ((kind in ['cardioid','epicycles']) and track_ant):
+        if (kind in ['circle','cardioid','epicycles']): # These don't have enough sampling to fit background reliably
             bkg = np.array([0])
         else:
             bkg = fit_background(target_x, target_y, height, along_edges=True)
