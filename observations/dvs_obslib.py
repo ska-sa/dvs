@@ -290,8 +290,8 @@ def start_hacked_session(cam, **kwargs):
             if (not session._cam_.dry_run):
                 params = start_nd_switching(session, n_on, n_off)
             else:
-                params = "'now', %g, %g"%(n_on, n_off)
-            user_logger.info("Started digitiser-level noise diode switching: " + params)
+                params = ('now', n_on, n_off)
+            user_logger.info("Started digitiser-level noise diode switching: " + str(params))
         return result
     session.capture_start = hacked_capture_start
     
