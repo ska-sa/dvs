@@ -403,6 +403,7 @@ if __name__=="__main__":
                         time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
                         lasttime = scan_data[-1,0]
 
+                    session.activity("slew")
                     session.telstate.add('obs_label',"slew",ts=lasttime) # Compscan label
                     time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
                     prev_target = target
