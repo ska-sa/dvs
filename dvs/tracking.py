@@ -81,7 +81,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
         p = sop.minimize(lambda p: np.nansum(mask*(height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     else: # Constrained fits should be robust, and not very sensitive to bounds
-        bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.5*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
+        bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.1*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.20*ampl0, 1.20*ampl0)
         if (constrain_hpbw):
@@ -258,7 +258,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         # Fit the beam
         target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
         hv = np.abs(ds.vis[mask])
-        hv /= np.median(hv, axis=0) # Normalise for H-V gains & bandpass
+        hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
         height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
         if (kind in ['circle','cardioid','epicycles']): # These don't have enough sampling to fit background reliably
             bkg = np.array([0])
