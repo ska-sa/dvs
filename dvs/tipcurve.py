@@ -240,6 +240,10 @@ def load_cal(filename_or_file, baseline, nd_models=None, freq_channel=None,chann
         @param filename_or_file: either the filename for, or an already open katdal dataset 
         @param nd_models : None, or a string to override the noise diode models in the dataset using the ones in this directory.
                 Model filenames are like 'rx.%(band).%(serialno).%(pol).csv' (e.g. 'rx.l.4.h.csv').
+        @param freq_channel: a list containing groups of channel numbers, which defines the 'chunks' of data to process as 'output channels'
+        @param channel_range: a string "start,stop" to provide a very coarse mask on top of 'freq_mask'.
+        @param freq_mask: either a pickle file of boolean flags for the freq_channels,
+                              or a text file with each line frequency start,stop to indicate omitted range.
     """
     print('Loading noise diode models')
     
@@ -411,10 +415,13 @@ def receptor_band_limit(freqsMHz, elev_deg):
 
 
 #### APH 02/2017 factored the code into process_b(*process_a()) which is IDENTICAL to the original process(), just re-factored slightly
-def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=None, sky_radius=30, freq_mask='', debug=False): # APH added freq_min & freq_max [MHz] to only load subset of interest
-    """ @param freq_min, freq_max: [MHz] (default 0, 20000)
+def process_a(h5, ant, freq_min=0, freq_max=20e9, channel_bw=10e6, sky_radius=30, freq_mask='', debug=False):
+    """ @param freq_min, freq_max: range of frequencies to process [Hz] (default 0, 20e9)
+        @param channel_bw: bandwidth of each individual 'chunk' that's processed [Hz] (default 10e6)
         @param sky_radius: radius to truncate the all sky integral for T_sky model [multiple of HPBW] (default 30)
-        @param freq_mask: full name of file with RFI mask for this band """
+        @param freq_mask: either a pickle file of boolean flags for the dataset's frequency channels,
+                              or a text file with each line frequency start,stop to indicate omitted range.
+        @return: the input expected by process_b() """
     global nd_models_folder
     h5.select(reset="TB", flags="data_lost,ingest_rfi")
     h5.select(scans='track')
@@ -426,16 +433,16 @@ def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=No
     rec = h5.receivers[ant]
     nice_title = " %s  Ant=%s"%(filename.split('/')[-1], ant)
     
-    num_channels = int(channel_bw/(h5.channel_width/1e6)) #number of channels per band
+    num_channels = int(channel_bw/h5.channel_width) #number of channels per band
     chunks=[h5.channels[x:x+num_channels] for x in range(0, len(h5.channels), num_channels) # APH 032017 added following range selection
-                                                if (h5.channel_freqs[x]>=freq_min*1e6 and h5.channel_freqs[x]<=freq_max*1e6)]
+                                                if (h5.channel_freqs[x]>=freq_min and h5.channel_freqs[x]<=freq_max)]
     
     freq_list = np.zeros((len(chunks)))
     for j,chunk in enumerate(chunks):freq_list[j] = h5.channel_freqs[chunk].mean()/1e6
-    print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw, freq_list.min(),freq_list.max()) )
+    print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw/1e6, freq_list.min(),freq_list.max()) )
     band_input = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
     # APH use h5 below instead of filename -- permits overriding of h5 attributes
-    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,channel_range=freq_chans,band_input=band_input, freq_mask=freq_mask, debug=debug)
+    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,band_input=band_input, freq_mask=freq_mask, debug=debug)
     # Update after loading has possibly discarded masked-out chunks
     freq_list = np.asarray([d.freqs[j] for j in range(len(d.freqs))]) # APH re-phrased this to fix bug 082018
     
@@ -735,8 +742,23 @@ def report_e(ant, filename, nice_title, freq_list, T_SysTemp, aperture_efficienc
     plt.close(fig)
 
     
-def process(h5, ant, f_minMHz, f_maxMHz, freq_mask='', apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True):
-    return process_b(*process_a(h5, ant, f_minMHz, f_maxMHz, freq_mask=freq_mask), apscale=apscale,PLANE=PLANE,spec_sky=spec_sky,MeerKAT=MeerKAT)
+def process(dataset, ant, f_min, f_max, freq_mask='', apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True):
+    """ Load and process the tipping curve data file, to generate the information from which a report can be compiled.
+        Note that the noise diode models are stored either in the dataset itself, or in the global::nd_models_folder,
+        where model filenames are like 'rx.%(band).%(serialno).%(pol).csv' (e.g. 'rx.l.4.h.csv').
+
+        @param dataset: an open katdal.Dataset
+        @param freq_min, freq_max: range of frequencies to process [Hz] (default 0, 20e9)
+        @param channel_bw: bandwidth of each individual 'chunk' that's processed [Hz] (default 10e6)
+        @param sky_radius: radius to truncate the all sky integral for T_sky model [multiple of HPBW] (default 30)
+        @param freq_mask: either a pickle file of boolean flags for the dataset's frequency channels,
+                              or a text file with each line frequency start,stop to indicate omitted range.
+        @param PLANE: Either "antenna" (to translate Tsys_at_waveguide to Tsys_at_waveguide/ant_eff) | "feed" (to keep raw measured Tsys_at_waveguide as is)
+        @param spec_sky: True to subtract the model sky and add the sy noise from the model prescribed in the MeerKAT requirements.
+        @param MeerKAT: True if the predicted spillover includes CMB, otherwise False (default True - for MeerKAT 2015)
+        @return: (nice_title, freq_list, T_SysTemp, aperture_efficiency, tsys, tant, PLANE) """
+    return process_b(*process_a(dataset, ant, f_min, f_max, freq_mask=freq_mask), apscale=apscale,PLANE=PLANE,spec_sky=spec_sky,MeerKAT=MeerKAT)
+
 
 cache = {} # "files":[filenames], ant.name: [ *[filename, process():return]* ], ant.name+"/bb": {filename:intermediate results}
 
