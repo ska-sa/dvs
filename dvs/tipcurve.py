@@ -377,13 +377,13 @@ def receptor_UHFLband_CDR_limit(freqsMHz): # MHz, at 15deg elevation, at apertur
 
 def receptor_Lband_limit(freqsMHz): # Tsys at zenith, at feed plane
     """275-410 m^2/K at Receivers CDR"""
-    Tsys = np.zeros_like(freqsMHz,dtype=np.float) # APH changed division below to "/float()"
+    Tsys = np.zeros_like(freqsMHz,dtype=float) # APH changed division below to "/float()"
     Tsys[np.array(freqsMHz < 1280)] = np.array(12 + 6+(5.5-6)/float(1280-900)*(freqsMHz-900))[np.array(freqsMHz < 1280)]
     Tsys[np.array(~(freqsMHz < 1280))] = np.array(12 + 5.5+(4-5.5)/float(1670-1280)*(freqsMHz-1280))[np.array(~(freqsMHz < 1280))]
     return Tsys
 
 def receptor_UHFband_limit(freqsMHz): # Tsys at zenith, at feed plane
-    Tsys = np.zeros_like(freqsMHz,dtype=np.float) # APH changed division below to "/float()"
+    Tsys = np.zeros_like(freqsMHz,dtype=float) # APH changed division below to "/float()"
     Tsys[np.array(freqsMHz < 900)] = np.array(8 + (12-8)/float(1015-580)*(freqsMHz-580) + 8+(7-8)/float(900-580)*(freqsMHz-580))[np.array(freqsMHz < 900)]
     Tsys[np.array(~(freqsMHz < 900))] = np.array (8 + (12-8)/float(1015-580)*(freqsMHz-580) + 7+(4-7)/float(1015-900)*(freqsMHz-900))[np.array(~(freqsMHz < 900))]
     Tsys = (8 + (12-8)/float(1015-580)*(freqsMHz-580)) + (10+(4-10)/float(1015-580)*(freqsMHz-580)) # Acceptance RS + Predicted spill+atm above 40degEl
@@ -426,7 +426,7 @@ def process_a(h5, ant, freq_min=0, freq_max=20000, channel_bw=10., freq_chans=No
     rec = h5.receivers[ant]
     nice_title = " %s  Ant=%s"%(filename.split('/')[-1], ant)
     
-    num_channels = np.int(channel_bw/(h5.channel_width/1e6)) #number of channels per band
+    num_channels = int(channel_bw/(h5.channel_width/1e6)) #number of channels per band
     chunks=[h5.channels[x:x+num_channels] for x in range(0, len(h5.channels), num_channels) # APH 032017 added following range selection
                                                 if (h5.channel_freqs[x]>=freq_min*1e6 and h5.channel_freqs[x]<=freq_max*1e6)]
     
