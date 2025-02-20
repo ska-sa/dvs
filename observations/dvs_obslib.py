@@ -51,9 +51,14 @@ import katpoint
 def standard_script_options(usage, description):
     """ Add additional options that are used by `start_hacked_session()`. """
     parser = _kcl_std_opts_(usage, description)
+    
+    # The default was changed from 15 to 20 in Dec. 2018, but was not intended to be changed for RTS (https://skaafrica.atlassian.net/browse/MKAIV-1378)
+    parser.set_default('horizon', 15)
+    
     parser.add_option('--reset-gain', type='int', default=None,
                       help='Value for the reset of the correlator F-engine gain '
                            '(default=%default)')
+    
     ## HACK this legacy option:
     # parser.add_option('-n', '--nd-params', default='coupler,10,10,180',
     #                   help="Noise diode parameters as "
@@ -61,6 +66,7 @@ def standard_script_options(usage, description):
     #                        "for no noise diode firing (default='%default')")
     nd_params = parser.get_option('--nd-params')
     nd_params.help += ". Use 'switching,3,7,-1' to activate digitiser-level switching, in integer multiples of SDP visibilities dump intervals."
+    
     return parser
 
 
