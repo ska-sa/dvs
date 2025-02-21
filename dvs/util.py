@@ -3,8 +3,9 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, subprocess, shutil
+import katdal, os, subprocess, shutil, pickle
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
+import numpy as np
 from analysis.katselib import GSheet
 from analysis import __res__
 
@@ -121,6 +122,45 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     return dataset
 
 
+def load_rfi_static_mask(filename, freqs, debug_chunks=0):
+    """ Construct a mask either from a pickle file, or a text file with frequency ranges.
+        
+        @param filename: pickle or text file.
+        @param freqs: list of frequencies [Hz] for which a mask must be created.
+        @param debug_chunks: for debugging purposes, print out how much bandwidth is removed by the mask if 'freqs' is split into this many chunks.
+        @return: boolean mask to match 'freqs' """
+    nchans = len(freqs)
+    channel_width = abs(freqs[1]-freqs[0])
+    try:
+        with open(filename, "rb") as pickle_file:
+            channel_flags = pickle.load(pickle_file)
+        nflags = len(channel_flags)
+        if (nchans != nflags):
+            print("Warning channel mask (%d) is stretched to fit dataset (%d)!"%(nflags,nchans))
+            N = nchans/float(nflags)
+            channel_flags = np.repeat(channel_flags, int(N+0.5)) if (N > 1) else channel_flags[::int(1/N)]
+        channel_flags = channel_flags[:nchans] # Clip, just in case
+    except pickle.UnpicklingError: # Not a pickle file, perhaps a plain text file with frequency ranges in MHz?
+        mask_ranges = np.loadtxt(filename, comments='#', delimiter=',')
+        channel_flags = np.full((nchans,), False)
+        low = freqs - 0.5 * channel_width
+        high = freqs + 0.5 * channel_width
+        for r in mask_ranges:
+            in_range = (low <= r[1]*1e6) & (r[0]*1e6 <= high)
+            idx = np.where(in_range)[0]
+            channel_flags[idx] = True
+    if debug_chunks > 0:
+        for chunk in range(debug_chunks):
+            freq = slice(chunk*(nchans//debug_chunks),(chunk+1)*(nchans//debug_chunks))
+            masked_f = freqs[freq][channel_flags[freq]]
+            if (len(masked_f) > 0):
+                mBW = len(masked_f)*(freqs[1]-freqs[0])
+                print("\tFreq. chunk %d: mask omits %.1fMHz between (%.1f - %.1f)MHz"%(chunk,mBW/1e6,np.min(masked_f)/1e6,np.max(masked_f)/1e6))
+            else:
+                print("\tFreq. chunk %d: mask omits nothing"%chunk)
+    return channel_flags
+
+
 def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditions, test_procedures=[],
                       replace_all=False):
     """ Update the log messages against a dataset as used for a specific antenna.
@@ -163,4 +203,5 @@ def get_datalog_entries(ant, dataset="*"):
         values = selected
     
     return headings, values
+
 
