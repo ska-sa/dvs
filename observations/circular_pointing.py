@@ -350,13 +350,6 @@ if __name__=="__main__":
                         session.label("unwrap") # Compscan label
                         session.track(azeltarget, duration=0, announce=False)#azel target
                     
-                    # Perform the cycle_track if requested 
-                    if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
-                        user_logger.info("Performing initial track")
-                        session.label("track") # Compscan label
-                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
-                    
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
                         cy=compositey
@@ -365,6 +358,19 @@ if __name__=="__main__":
                         cx=[com[::-1] for com in compositex[::-1]]
                         cy=[com[::-1] for com in compositey[::-1]]
                         cs=[com[::-1] for com in compositeslew[::-1]]
+                    
+                    # Perform the cycle_track if requested 
+                    if (target != prev_target) or (opts.cycle_tracktime > 0):
+                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        user_logger.info("Performing initial track")
+                        session.label("track") # Compscan label
+                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
+                        # Add a trajectory from bore sight to start of track
+                        tx, ty, ts = np.linspace(0,cx[0],5), np.linspace(0,cy[0],5), np.zeros((5,)) # Duration = 5*opts.sampletime
+                        scan_data, _ = gen_scan(time.time(),target,tx,ty,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
+                        session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
+                        session.telstate('obs_label', "slew", ts=scan_data[0,0])
+                        time.sleep(scan_data[-1,0]-time.time()) # Wait until last coordinate's time value elapsed
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
@@ -404,7 +410,7 @@ if __name__=="__main__":
                         lasttime = scan_data[-1,0]
 
                     session.telstate.add('obs_label',"slew",ts=lasttime) # Compscan label
-                    time.sleep(lasttime-time.time())#wait until last coordinate's time value elapsed
+                    time.sleep(lasttime-time.time()) #wait until last coordinate's time value elapsed
                     prev_target = target
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
