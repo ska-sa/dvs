@@ -367,11 +367,9 @@ if __name__=="__main__":
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                         # Add a trajectory from bore sight to start of track
                         tx, ty, ts = np.linspace(0,cx[0][0],5), np.linspace(0,cy[0][0],5), np.zeros((5,)) # Duration = 5*opts.sampletime
-                        scan_data, _ = gen_scan(time.time(),target,tx,ty,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
-                        if not kat.dry_run:
-                            session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        session.telstate.add('obs_label', "slew", ts=scan_data[0,0])
-                        time.sleep(scan_data[-1,0]-time.time()) # Wait until last coordinate's time value elapsed
+                        cx[0] = np.r_[tx,cx[0]]
+                        cy[0] = np.r_[ty,cy[0]]
+                        cs[0] = np.r_[ts,cs[0]]
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
