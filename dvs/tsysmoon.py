@@ -140,9 +140,9 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
     
     pols = ['v','h']
     for ant in ants:
+        band = models.band(freq/1e6, ant=ant.name)
+        ap_eff = models.Ap_Eff(band=band, D_fallback=ant.diameter)
         ant = ant.name
-        band = models.band(freq/1e6, ant=ant)
-        ap_eff = models.Ap_Eff(band=band)
         try:
             rx_sn = h5.receivers[ant]
         except KeyError:
