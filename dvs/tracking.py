@@ -212,6 +212,7 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
     enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
     
     ds.select(reset="", scans=scans, compscans=compscans)
+    ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
     if (track_ant):
         ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
     else:
