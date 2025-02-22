@@ -351,10 +351,12 @@ if __name__=="__main__":
                     # Ensure wrap of session.track is same as being used in load_scan
                     if (target != prev_target):
                         user_logger.info("Performing azimuth unwrap")
-                        targetazel=gen_track([time.time()],target)[0][1:]
-                        azeltarget=katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
+                        targetazel=gen_track([time.time()],target)[0][1:] # deg
+                        # Make this an RA,DEC target, so that each antenna gets topocentric az,el!
+                        targetradec=target.antenna.observer.radec_of(*(targetazel*np.pi/180))
+                        radectarget=katpoint.Target('azimuthunwrap,radec,%s,%s'%targetradec)
                         session.label("unwrap") # Compscan label
-                        session.track(azeltarget, duration=0, announce=False)#azel target
+                        session.track(radectarget, duration=0, announce=False)
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
