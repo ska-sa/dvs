@@ -153,7 +153,7 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
             pdf_filename = pdf_output_dir+'/'+nice_filename+'.'+rx_sn+'.'+ant+'.pdf'
             pp = PdfPages(pdf_filename)
             
-        h5.select(reset="T", ants=ant, targets=['Moon',target])
+        h5.select(reset="T", ants=ant, targets=['Moon']+list(target))
         fig0 = plot_ts(h5)
         
         air_temp = h5.temperature.mean()
