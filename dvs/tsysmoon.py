@@ -365,7 +365,7 @@ def process_multisubbands(datasets, ant, rfi_mask=None, freq_range=None, edge_ch
     if (len(_Tnd) > 0): Tnd = Tnd[:,i]
     
     plt.figure(figsize=(12,5))
-    plt.plot(f/1e6, np.transpose(Tsys), '.', label=["s0002v", "s0002h"])
+    plt.plot(f/1e6, np.transpose(Tsys), '.', label=[ant+"v", ant+"h"])
     plt.xlabel("f [MHz]"); plt.ylabel("Tsys [K]"); plt.legend(); plt.grid(True);
     plt.ylim(0, np.percentile(Tsys, 95))
 
