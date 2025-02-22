@@ -195,10 +195,16 @@ if __name__=="__main__":
         y=[]
         sl=[]
         for iarm in range(len(compositex)):
-            plt.plot(compositex[iarm],compositey[iarm],'.')
-            x.extend(compositex[iarm])
-            y.extend(compositey[iarm])
-            sl.extend(compositeslew[iarm])
+            cx, cy, cs = compositex[iarm], compositey[iarm], compositeslew[iarm]
+            if (iarm == 0) and (opts.cycle_tracktime > 0): # Add a trajectory from cycle_track on bore sight to start of arm
+                tx, ty, ts = np.linspace(0,cx[0],8), np.linspace(0,cy[0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
+                cx = list(tx[:-1]) + list(cx)
+                cy = list(ty[:-1]) + list(cy)
+                cs = list(ts[:-1]) + list(cs)
+            plt.plot(cx,cy,'.')
+            x.extend(cx)
+            y.extend(cy)
+            sl.extend(cs)
         x=np.array(x)
         y=np.array(y)
         sl=np.array(sl)
@@ -365,11 +371,11 @@ if __name__=="__main__":
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
-                        # Add a trajectory from bore sight to start of track
-                        tx, ty, ts = np.linspace(0,cx[0][0],5), np.linspace(0,cy[0][0],5), np.zeros((5,)) # Duration = 5*opts.sampletime
-                        cx[0] = np.r_[tx,cx[0]]
-                        cy[0] = np.r_[ty,cy[0]]
-                        cs[0] = np.r_[ts,cs[0]]
+                        # Add a trajectory from bore sight to start of arm
+                        tx, ty, ts = np.linspace(0,cx[0][0],8), np.linspace(0,cy[0][0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
+                        cx[0] = np.r_[tx[:-1], cx[0]]
+                        cy[0] = np.r_[ty[:-1], cy[0]]
+                        cs[0] = np.r_[ts[:-1], cs[0]]
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
