@@ -345,6 +345,31 @@ def process(dataset, ants, rfi_mask='../catalogues/rfi_mask.txt', freq_range=Non
     return (freq_m, Tsys_m, Tsys_eta_m, Tnd_m)
 
 
+def process_multisubbands(datasets, ant, rfi_mask=None, freq_range=None, edge_chans=10, debug=False):
+    """ Process and combine results collected in different subbands. See `process()`
+        @return: (freq [Hz], Tsys [K], Tsys_eta [K], Tnd [K]) -- 
+    """
+    f, Tsys, T_e, Tnd = [], [], [], []
+    for ds in datasets:
+        _f, _Tsys, _T_e, _Tnd = process(ds, [ant], rfi_mask=rfi_mask, freq_range=freq_range)
+        if not debug: plt.close('all')
+        f.append(_f[edge_chans:-edge_chans])
+        Tsys.append([_[edge_chans:-edge_chans] for _ in _Tsys])
+        T_e.append([_[edge_chans:-edge_chans] for _ in _T_e])
+        Tnd.append([_[edge_chans:-edge_chans] for _ in _Tnd])
+    f = np.concatenate(f); Tsys = np.concatenate(Tsys,axis=1); T_e = np.concatenate(T_e,axis=1); Tnd = np.concatenate(Tnd,axis=1)
+    # TODO: interpolate, rather than this crude approach, which leaves overlap unresolved.
+    i = np.argsort(f)
+    f, Tsys, T_e, Tnd = f[i], Tsys[:,i], T_e[:,i], Tnd[:,i]
+    
+    plt.figure(figsize=(12,5))
+    plt.plot(f/1e6, np.transpose(Tsys), '.', label=["s0002v", "s0002h"])
+    plt.xlabel("f [MHz]"); plt.ylabel("Tsys [K]"); plt.legend(); plt.grid(True);
+    plt.ylim(0, np.percentile(Tsys, 95))
+
+    return f, Tsys, T_e, Tnd
+
+
 def write_Tnd(dataset, freq, TndVH, ants=None, output_dir=None, smooth=5, fignum=-1, style='m-'):
     """ Create a standard calibration file for the noise diode temperature data given.
         @param freq: [Hz]
