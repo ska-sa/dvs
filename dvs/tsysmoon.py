@@ -129,7 +129,7 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
     nice_filename =  file_base + '_T_sys_T_nd'
 
     h5.select(reset="F")
-    if (rfi_mask):
+    if (rfi_mask is not None):
         h5.select(channels=~rfi_mask)
     freq = h5.channel_freqs
     
