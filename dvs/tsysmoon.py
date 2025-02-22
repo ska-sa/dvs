@@ -357,10 +357,12 @@ def process_multisubbands(datasets, ant, rfi_mask=None, freq_range=None, edge_ch
         Tsys.append([_[edge_chans:-edge_chans] for _ in _Tsys])
         T_e.append([_[edge_chans:-edge_chans] for _ in _T_e])
         Tnd.append([_[edge_chans:-edge_chans] for _ in _Tnd])
-    f = np.concatenate(f); Tsys = np.concatenate(Tsys,axis=1); T_e = np.concatenate(T_e,axis=1); Tnd = np.concatenate(Tnd,axis=1)
+    f = np.concatenate(f); Tsys = np.concatenate(Tsys,axis=1); T_e = np.concatenate(T_e,axis=1)
+    if (len(_Tnd) > 0): Tnd = np.concatenate(Tnd,axis=1)
     # TODO: interpolate, rather than this crude approach, which leaves overlap unresolved.
     i = np.argsort(f)
-    f, Tsys, T_e, Tnd = f[i], Tsys[:,i], T_e[:,i], Tnd[:,i]
+    f, Tsys, T_e = f[i], Tsys[:,i], T_e[:,i]
+    if (len(_Tnd) > 0): Tnd = Tnd[:,i]
     
     plt.figure(figsize=(12,5))
     plt.plot(f/1e6, np.transpose(Tsys), '.', label=["s0002v", "s0002h"])
