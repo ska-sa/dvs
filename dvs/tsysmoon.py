@@ -320,28 +320,29 @@ def process(dataset, ants, rfi_mask='../catalogues/rfi_mask.txt', freq_range=Non
                                        radius_blank=0.5*models.Dmoon(time.gmtime(dataset.timestamps.mean())[:6]), debug=True)(freq_m)
     
     Toff1 = models.Tcmb + models.fit_gsm(*radec_2deg(dataset.catalogue['off1'].radec(dataset.timestamps.mean())), debug=True)(freq_m)
-    freq_m1, Tsys_m1, Tsys_eta_m1, Tnd_m1 = read_and_plot_data(dataset, ants=ants, pdf_output_dir=pdf_output_dir, rfi_mask=rfi_mask,
-                                                     target='off1',Tbg=Tbg,Toff=Toff1, freq_range=freq_range_MHz, fignum1=1)
+    freq_m1, Tsys_m1, Tsys_eta_m1, Tnd_m1 = read_and_plot_data(dataset, ants=ants, target='off1',Tbg=Tbg,Toff=Toff1, rfi_mask=rfi_mask)
     
     Toff2 = models.Tcmb + models.fit_gsm(*radec_2deg(dataset.catalogue['off2'].radec(dataset.timestamps.mean())), debug=True)(freq_m)
-    freq_m2, Tsys_m2, Tsys_eta_m2, Tnd_m2 = read_and_plot_data(dataset, ants=ants, pdf_output_dir=None,rfi_mask=rfi_mask,
-                                                     target='off2',Tbg=Tbg,Toff=Toff2, freq_range=freq_range_MHz, fignum1=1)
+    freq_m2, Tsys_m2, Tsys_eta_m2, Tnd_m2 = read_and_plot_data(dataset, ants=ants, target='off2',Tbg=Tbg,Toff=Toff2, rfi_mask=rfi_mask)
     
     # Average over both 'off' measurements
     Tsys_m = np.mean(np.stack([Tsys_m1,Tsys_m2],-1), axis=-1)
     Tsys_eta_m = np.mean(np.stack([Tsys_eta_m1,Tsys_eta_m2],-1), axis=-1)
     Tnd_m = np.mean(np.stack([Tnd_m1,Tnd_m2],-1), axis=-1)
     # # This gives equivalent results "to within the noise"
-    # freq_m, Tsys_m, Tsys_eta_m, Tnd_m = read_and_plot_data(dataset, ants=ants, output_dir=None, pdf_output_dir="./",rfi_mask=rfi_mask,
-    #                                              target=['off1','off2'],Tbg=Tbg,Toff=(Toff1+Toff2)/2.,freq_range=freq_range_MHz, fignum1=1)
+    # freq_m, Tsys_m, Tsys_eta_m, Tnd_m = read_and_plot_data(dataset, ants=ants, target=['off1','off2'],Tbg=Tbg,Toff=(Toff1+Toff2)/2.,
+    #                                              rfi_mask=rfi_mask, pdf_output_dir="./")
     
-    # Plot results
+    # Summarise the difference between ND calibration results
     if (len(Tnd_m1) > 0) and (len(Tnd_m2) > 0):
         plt.figure(figsize=(16,4))
+        plt.title(filename)
         plt.plot(freq_m/1e6, np.asarray(Tnd_m1[0])-np.asarray(Tnd_m2[0]), label="V")
         plt.plot(freq_m/1e6, np.asarray(Tnd_m1[1])-np.asarray(Tnd_m2[1]), label="H")
-        plt.xlabel("f [MHz]"); plt.ylabel("Tnd_1-Tnd_2 [K]"); plt.legend(); plt.title(filename)
-        plt.grid(True); plt.xlim(*freq_range_MHz); plt.ylim(-5,5)
+        plt.xlabel("f [MHz]"); plt.ylabel("Tnd_1-Tnd_2 [K]"); plt.legend()
+        plt.grid(True); plt.ylim(-5,5)
+        if freq_range:
+            plt.xlim(*[_/1e6 for _ in freq_range])
 
     return (freq_m, Tsys_m, Tsys_eta_m, Tnd_m)
 
