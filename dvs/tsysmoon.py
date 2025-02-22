@@ -91,10 +91,9 @@ def plot_nd(freq,Tdiode,nd_temp,ant = '', file_base=''):
         plt.legend()
     return fig  
 
-def plot_ts(h5):
+def plot_ts(h5, ant):
     ts = h5.timestamps - h5.timestamps[0]
     fig = plt.figure(figsize=(20,5))
-    ant = h5.ants[0].name
     
     amp = [h5.vis[:,:,i] for i,p in enumerate(h5.corr_products) if (p[0]==p[1]) and (ant in p[0])] # Autocorr
     amp = np.sum(np.abs(amp), axis=0) # Total power
@@ -154,7 +153,7 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
             pp = PdfPages(pdf_filename)
             
         h5.select(reset="T", ants=ant, targets=['Moon']+list(target))
-        fig0 = plot_ts(h5)
+        fig0 = plot_ts(h5, ant)
         
         air_temp = h5.temperature.mean()
         all_nd_temp, all_TAc, all_eta_A = [], [], []
