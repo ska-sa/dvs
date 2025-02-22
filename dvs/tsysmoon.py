@@ -46,16 +46,17 @@ def plot_Tsys_eta_A(freq,Tsys,eta_A,TAc,Ku=False,Tsys_std=None,ant = '', file_ba
     pols = ['v','h']
     for p,pol in enumerate(pols) : 
         fig.add_subplot(1,2,p+1)  
-        ax = plt.gca()
         plt.title('%s $T_{sys}/eta_{A}$: %s pol: %s'%(ant,str(pol).upper(),file_base))
         plt.ylabel("$T_{sys}/eta_{A}$ [K]")
         plt.xlabel('f [MHz]')
         #if p == ant_num * 2 -1: plt.ylabel(ant)
         if Tsys_std[pol] is not None :
             plt.errorbar(freq/1e6,Tsys[pol],Tsys_std[pol],color = 'b',linestyle = '.',label='Measurement')
-        plt.plot(freq/1e6,Tsys[pol]/eta_A[pol],'b.',label='Measurement: Y-method')
+        T_e = Tsys[pol]/eta_A[pol]
+        plt.plot(freq/1e6,T_e,'b.',label='Measurement: Y-method')
+        plt.axhline(np.mean(T_e),linewidth=2,color='k',label='Mean: Y-method')
         if not(Ku): plt.plot(freq/1e6,TAc[pol]/eta_A[pol],'c.',label='Measurement: ND calibration')
-        plt.axhline(np.mean(Tsys[pol]/eta_A[pol]),linewidth=2,color='k',label='Mean: Y-method')
+        plt.ylim(np.percentile(T_e, 1), np.percentile(T_e, 99))
         if plot_speclines and (freq.min() < 2090e6): # MeerKAT UHF & L-band specifications
             D = 13.5
             Ag = np.pi* (D/2)**2 # Antenna geometric area
@@ -77,7 +78,6 @@ def plot_nd(freq,Tdiode,nd_temp,ant = '', file_base=''):
     pols = ['v','h']
     for p,pol in enumerate(pols) : 
         fig.add_subplot(1,2,p+1) # 
-        ax = plt.gca()
         plt.title('%s Coupler Diode: %s pol: %s'%(ant,str(pol).upper(),file_base))
         plt.ylim(0,50)
         plt.ylabel('$T_{ND}$ [K]')
