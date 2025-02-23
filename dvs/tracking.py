@@ -63,7 +63,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
     r = np.squeeze((x**2+y**2)**.5)
     scanext = 2*np.median(r)
-    width0 = constrain_hpbw if (constrain_hpbw) else scanext
+    width0 = constrain_hpbw if (constrain_hpbw) else scanext/2
     ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
     p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
     
@@ -93,7 +93,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
     resid = np.std(height - model_height)
-    valid = p.success and (ampl/resid > 3.9) and (fwhmx/scanext < 1) and (fwhmy/scanext < 1) # 3sigma is the absolute minimum for reliable fits! 
+    valid = p.success and (ampl/resid > 3.9) and (fwhmx/scanext < 0.99) and (fwhmy/scanext < 0.99) # 3sigma is the absolute minimum for reliable fits! 
     
     if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
