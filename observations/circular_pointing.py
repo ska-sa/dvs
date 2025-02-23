@@ -197,10 +197,10 @@ if __name__=="__main__":
         for iarm in range(len(compositex)):
             cx, cy, cs = compositex[iarm], compositey[iarm], compositeslew[iarm]
             if (iarm == 0) and (opts.cycle_tracktime > 0): # Add a trajectory from cycle_track on bore sight to start of arm
-                tx, ty, ts = np.linspace(0,cx[0],8), np.linspace(0,cy[0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
-                cx = list(tx[:-1]) + list(cx)
-                cy = list(ty[:-1]) + list(cy)
-                cs = list(ts[:-1]) + list(cs)
+                nt = int((cx[0]**2 + cy[0]**2)**.5 / (opts.scanspeed*opts.sampletime) + 0.5) # Number of points for this trajectory
+                cx = list(np.linspace(0,cx[0],nt)[:-1]) + list(cx)
+                cy = list(np.linspace(0,cy[0],nt)[:-1]) + list(cy)
+                cs = list(np.zeros((nt,))[:-1]) + list(cs)
             plt.plot(cx,cy,'.')
             x.extend(cx)
             y.extend(cy)
@@ -373,11 +373,6 @@ if __name__=="__main__":
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
-                        if True: # WIP: Add a trajectory from bore sight to start of arm
-                            tx, ty, ts = np.linspace(0,cx[0][0],8), np.linspace(0,cy[0][0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
-                            cx[0] = np.r_[tx[:-1], cx[0]]
-                            cy[0] = np.r_[ty[:-1], cy[0]]
-                            cs[0] = np.r_[ts[:-1], cs[0]]
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
@@ -386,10 +381,18 @@ if __name__=="__main__":
                         user_logger.info("Performing scan arm %d of %d.", iarm + 1, len(cx))
                         user_logger.info("Using Scan antennas: %s %s",
                                          ' '.join(always_scan_ants_names),' '.join([ant.name for ant in scan_ants if ant.name not in always_scan_ants_names]))
+                        armx, army, arms = cx[iarm], cy[iarm], cs[iarm]
+                        if (iarm == 0) and ((target != prev_target) or (opts.cycle_tracktime > 0)): # WIP: Add a trajectory from bore sight to start of arm
+                            nt = int((armx[0]**2 + army[0]**2)**.5 / (opts.scanspeed*session.dump_period) + 0.5) # Number of points for this trajectory
+                            if (nt > 0):
+                                armx = np.r_[np.linspace(0,armx[0],nt)[:-1], armx]
+                                army = np.r_[np.linspace(0,army[0],nt)[:-1], army]
+                                arms = np.r_[np.zeros((nt,))[:-1], arms]
+                        
                         for iant,scan_ant in enumerate(scan_ants):
                             session.ants = scan_ants_array[iant]
                             target.antenna = scan_observers[iant]
-                            scan_data, clipping_occurred = gen_scan(lasttime,target,cx[iarm],cy[iarm],timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
+                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
                             if not kat.dry_run:
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
@@ -400,7 +403,7 @@ if __name__=="__main__":
                                 continue
                             session.ants = track_ants_array[iant]
                             target.antenna = track_observers[iant]
-                            scan_data, clipping_occurred = gen_scan(lasttime,target,cx[iarm],cy[iarm],timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
+                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
                             if not kat.dry_run:
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
@@ -408,9 +411,9 @@ if __name__=="__main__":
                         session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
-                        for it in range(len(cx[iarm])):
-                            if cs[iarm][it]!=lastisslew:
-                                lastisslew=cs[iarm][it]
+                        for it in range(len(armx)):
+                            if arms[it]!=lastisslew:
+                                lastisslew=arms[it]
                                 session.telstate.add('obs_label',"slew" if lastisslew else "%d.0.%d"%(cycle,iarm),ts=scan_data[it,0]) # Compscan label
                         
                         time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
