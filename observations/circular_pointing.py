@@ -52,7 +52,7 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     orbittime = 2*np.pi*radextent/scanspeed
     norbits = max(1, int(tottime/orbittime + 0.5)) # At least 1
     dt = np.linspace(0,1,int(orbittime/sampletime))[:-1] # First & last points must not be duplicates, to ensure rate continuity
-    th = 2.0*np.pi*dt
+    th = 2.0*np.pi*dt + np.pi # Trajectories start near 0,0
     if (kind in ['cardioid', 'circle', '_circle_']): # These are all generically the same pattern
         a *= radextent; b *= radextent
         radius = a + b*np.cos(th)
@@ -373,11 +373,11 @@ if __name__=="__main__":
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
-                        # Add a trajectory from bore sight to start of arm
-                        tx, ty, ts = np.linspace(0,cx[0][0],8), np.linspace(0,cy[0][0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
-                        cx[0] = np.r_[tx[:-1], cx[0]]
-                        cy[0] = np.r_[ty[:-1], cy[0]]
-                        cs[0] = np.r_[ts[:-1], cs[0]]
+                        if True: # WIP: Add a trajectory from bore sight to start of arm
+                            tx, ty, ts = np.linspace(0,cx[0][0],8), np.linspace(0,cy[0][0],8), np.zeros((8,)) # Duration = 8*opts.sampletime
+                            cx[0] = np.r_[tx[:-1], cx[0]]
+                            cy[0] = np.r_[ty[:-1], cy[0]]
+                            cs[0] = np.r_[ts[:-1], cs[0]]
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
