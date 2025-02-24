@@ -190,7 +190,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None, min_len=20):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -202,6 +202,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
         @param kind: specifically used with 'circle','cardioid','epicycles' from "circular_pointing.py"
+        @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
@@ -266,6 +267,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
 
         try: # Fit the beam
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
+            assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
             hv = np.abs(ds.vis[mask])
             hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
             height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
