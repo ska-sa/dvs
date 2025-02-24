@@ -352,8 +352,8 @@ def process_multisubbands(datasets, ant, rfi_mask=None, freq_range=None, edge_ch
     """
     f, Tsys, T_e, Tnd = [], [], [], []
     for ds in datasets:
-        _f, _Tsys, _T_e, _Tnd = process(ds, [ant], rfi_mask=rfi_mask, freq_range=freq_range)
-        if not debug: plt.close('all')
+        _f, _Tsys, _T_e, _Tnd = process(ds, [ant], rfi_mask=rfi_mask, freq_range=freq_range, doublecheck=False)
+        if not debug: [plt.close(_) for _ in plt.get_fignums()[-3:]] # process(doublecheck=False) generates 3 figures
         f.append(_f[edge_chans:-edge_chans])
         Tsys.append([_[edge_chans:-edge_chans] for _ in _Tsys])
         T_e.append([_[edge_chans:-edge_chans] for _ in _T_e])
