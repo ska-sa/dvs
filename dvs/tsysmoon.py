@@ -289,7 +289,7 @@ def process(dataset, ants, rfi_mask='../catalogues/rfi_mask.txt', freq_range=Non
         @param freq_range: select a subset to process, like (f_start, f_stop) [Hz] (default None).
         @return (freq [Hz], Tsys [K], Tsys_eta [K], Tnd [K])
     """
-    if isinstance(dataset, str):
+    if isinstance(dataset, str) or isinstance(dataset, int):
         dataset = util.open_dataset(dataset)
     filename = dataset.name.split()[0].split(" ")[0] # "rdb files are different
     
@@ -381,7 +381,7 @@ def write_Tnd(dataset, freq, TndVH, ants=None, output_dir=None, smooth=5, fignum
         @param smooth: in multiples of channels, must be odd.
         @param fignum: figure number for debug plots; a negative number suppresses this figure.
     """
-    if isinstance(dataset, str):
+    if isinstance(dataset, str) or isinstance(dataset, int):
         dataset = util.open_dataset(dataset)
     filename = dataset.name.split()[0].split(" ")[0] # "rdb files are different
     output_dir = output_dir if (output_dir) else nd_models_folder
