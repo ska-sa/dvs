@@ -264,38 +264,41 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         # Correct for refraction, which becomes the requested value at input of pointing model
         rEl = rc.apply(rEl, temperature, pressure, humidity)
 
-        # Fit the beam
-        target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
-        hv = np.abs(ds.vis[mask])
-        hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
-        height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-        if (kind in ['circle','cardioid','epicycles']): # These don't have enough sampling to fit background reliably
-            bkg = np.array([0])
-        else:
-            bkg = fit_background(target_x, target_y, height, along_edges=True)
-        height -= bkg
-        if debug: # Prepare figure for debugging
-            fig, axs = plt.subplots(1,3, figsize=(14,3))
-            axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
-            axs[0].set_xlabel("Frequency [channels]")
-            axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
-            axs[1].set_xlabel("Time [#]")
-            axs[1] = axs[1].twinx(); axs[1].plot(height, 'k.-')
-            # 2D plot, with height scaled to [0, 1]
-            delta_n = height - np.nanmin(height)
-            delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
-            if (kind in ['circle','cardioid','epicycles']):
-                axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
+        try: # Fit the beam
+            target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
+            hv = np.abs(ds.vis[mask])
+            hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
+            height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
+            if (kind in ['circle','cardioid','epicycles']): # These don't have enough sampling to fit background reliably
+                bkg = np.array([0])
             else:
-                axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
-        constr = {}
-        if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycles
-            constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
-        # Fitted beam center is in (x, y) coordinates, in projection centered on target
-        xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
-                                                                             debug=axs[1:] if debug else None, **constr)
-        if debug:
-            fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.0f}degEl [Fit: {valid}]")
+                bkg = fit_background(target_x, target_y, height, along_edges=True)
+            height -= bkg
+            if debug: # Prepare figure for debugging
+                fig, axs = plt.subplots(1,3, figsize=(14,3))
+                axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
+                axs[0].set_xlabel("Frequency [channels]")
+                axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
+                axs[1].set_xlabel("Time [#]")
+                axs[1] = axs[1].twinx(); axs[1].plot(height, 'k.-')
+                # 2D plot, with height scaled to [0, 1]
+                delta_n = height - np.nanmin(height)
+                delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
+                if (kind in ['circle','cardioid','epicycles']):
+                    axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
+                else:
+                    axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
+            constr = {}
+            if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycles
+                constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
+            # Fitted beam center is in (x, y) coordinates, in projection centered on target
+            xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
+                                                                                 debug=axs[1:] if debug else None, **constr)
+            if debug:
+                fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.0f}degEl [Fit: {valid}]")
+        except Exception as e:
+            print(f"INFO: Skipping scan #{cs_no}: {cs_label}, on {target.name} - {e}")
+            continue
         
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
