@@ -183,6 +183,9 @@ if __name__=="__main__":
     parser.add_option('--sunmoon-separation', type="float", default=10,
                       help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
     
+    parser.add_option('--switch-indexer-every', type="int", default=-1,
+                      help="Switch the feed indexer out & back again after every few scans, alternating directions if possible (default=never)")
+    
     # Set default value for any option (both standard and experiment-specific options)
     parser.set_defaults(description='Circular pointing scan', quorum=1.0, nd_params='off')
     # Parse the command line
@@ -283,9 +286,29 @@ if __name__=="__main__":
                 # Get observers
                 scan_observers = [katpoint.Antenna(scan_ant.sensor.observer.get_value()) for scan_ant in scan_ants]
                 track_observers = [katpoint.Antenna(track_ant.sensor.observer.get_value()) for track_ant in track_ants]
+                
                 # Disable noise diode by default (to prevent it firing on scan antennas only during scans)
                 nd_params = session.nd_params
                 session.nd_params = {'diode': 'coupler', 'off': 0, 'on': 0, 'period': -1}
+                
+                # Set up parameters to use to switch the indexer between rasters, if requested
+                index0, indexer_sequence = None, []
+                if (opts.switch_indexer_every > 0): # Currently only for SKA Dish!
+                    indexer_positions = ["B1","B5c","B2"] # Arranged in angle sequence, only the positions relevant to DVS listed
+                    indices = [1,7,2] # dsh_SetIndexerPosition(?) arguments for the positions above
+                    for ant in kat.ants:
+                        try:
+                            index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value()); break
+                        except:
+                            pass
+                    assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
+                    indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
+                    index0 = indices[index0]
+                    try: # Remove "switch to self" end case
+                        indexer_sequence.remove(index0)
+                    except:
+                        pass
+                
                 # This also does capture_init, which adds capture_block_id view to telstate and saves obs_params
                 session.capture_start()
                 session.label("cycle.group.scan") # Compscan label - same as holography_scan.py, for possible future use
@@ -427,3 +450,18 @@ if __name__=="__main__":
                     session.ants = all_ants
                     user_logger.info("Safe to interrupt script now if necessary")
                     cycle+=1
+
+                    # Switch the indexer out & back, if requested
+                    if (len(indexer_sequence) > 0) and (cycle%opts.switch_indexer_every == 0):
+                        try:
+                            index = indexer_sequence[0]
+                            user_logger.info("Switching Feed Indexer to index %s"%index)
+                            if not kat.dry_run:
+                                kat.ants.req.dsh_SetIndexerPosition(index)
+                            time.sleep(30)
+                            indexer_sequence = indexer_sequence[::-1] # Ensure that we alternate, next time around
+                        finally: # Switch back to the nominal position. This also ensures that we "clean up"
+                            user_logger.info("Switching Feed Indexer back to index %s"%index0)
+                            if not kat.dry_run:
+                                kat.ants.req.dsh_SetIndexerPosition(index0)
+                            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible erros if indexer is slow
