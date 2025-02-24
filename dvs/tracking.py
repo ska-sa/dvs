@@ -190,13 +190,14 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None):
+def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
         @param ds: the dataset (selection is reset!)
         @param ant: the identifier of the scanning antenna in the dataset
         @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
+        @param freq_MHz: (f_MHzstart,f_MHzstop) to use instead of chans (default None)
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param strict: True to set invalid fits to nan (default True)
@@ -204,6 +205,13 @@ def reduce_pointing_scans(ds, ant, chans=None, track_ant=None, flags='data_lost'
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
     """
+    if freq_MHz is not None:
+        ds.select(reset="F")
+        freqsMHz = ds.freqs/1e6
+        df = abs(freqsMHz[1]-freqsMHz[0])
+        f_start, f_stop, *_ = list(np.atleast_1d(freq_MHz))*2 # Allow a single value to be given
+        chans = (f_start-.75*df < freqsMHz) & (freqsMHz < f_stop+.75*df)
+    
     if (not callable(chans)) and (chans is not None):
         _chans_ = chans
         chans = lambda *a: _chans_
