@@ -258,7 +258,6 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
-        enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
@@ -321,6 +320,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
+        enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
