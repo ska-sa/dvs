@@ -301,6 +301,7 @@ def process(dataset, ants, rfi_mask='../catalogues/rfi_mask.txt', freq_range=Non
         rfi_mask = util.load_rfi_static_mask(rfi_mask, dataset.freqs)
         dataset.select(reset="", channels=~rfi_mask)
     freq_m = dataset.channel_freqs
+    assert (len(freq_m) > 0), "RFI Mask leaves no frequency channels to process!"
     
     # Print some diagnostics
     observer = dataset.ants[0].observer
