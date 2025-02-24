@@ -211,7 +211,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         freqsMHz = ds.freqs/1e6
         df = abs(freqsMHz[1]-freqsMHz[0])
         f_start, f_stop, *_ = list(np.atleast_1d(freq_MHz))*2 # Allow a single value to be given
-        chans = (f_start-.75*df < freqsMHz) & (freqsMHz < f_stop+.75*df)
+        chans = (f_start-.5*df <= freqsMHz) & (freqsMHz <= f_stop+.5*df)
     
     if (not callable(chans)) and (chans is not None):
         _chans_ = chans
