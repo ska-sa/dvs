@@ -155,8 +155,8 @@ if __name__=="__main__":
     # Add experiment-specific options
     parser.add_option('-b', '--scan-ants', default='*',
                       help='Subset of all antennas that will do raster scan, or "*" | "all" (default=%default). The rest will "track" only.')
-    parser.add_option('--max-duration', type='float', default=None,
-                      help='Maximum total measurement time, in seconds (will repeat the entire sequence, if suitable)  (default=%default)')
+    parser.add_option('--max-duration', type='float', default=43200,
+                      help='Maximum total measurement time, in seconds (default=%default)')
     parser.add_option('--num-cycles', type='int', default=-1,
                       help='Number of beam measurement cycles to complete (default=%default) use -1 for indefinite')
     parser.add_option('--cycle-duration', type='float', default=1800,
