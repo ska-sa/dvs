@@ -26,9 +26,8 @@ parser.add_option('-t', '--track-duration', type='float', default=60.0,
                   help='Length of time to track each source, in seconds '
                        '(default=%default)')
 parser.add_option('-m', '--max-duration', type='float', default=None,
-                  help='Maximum duration of the script in seconds, after which '
-                       'script will end as soon as the current track finishes '
-                       '(no limit by default)')
+                  help='Maximum duration of the script in seconds, after which the script will end as soon as the current track finishes '
+                       '(no limit by default, i.e. once through all specified sources)')
 parser.add_option('--repeat', action="store_true", default=False,
                   help='Repeatedly loop through the targets until maximum '
                        'duration (which must be set for this)')
