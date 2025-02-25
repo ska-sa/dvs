@@ -261,7 +261,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
         
         fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
-        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask])[1])
+        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask], interpolate=None)[1])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
