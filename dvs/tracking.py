@@ -260,9 +260,6 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
         
-        fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
-        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask], interpolate=None)[1])
-        
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
         # Correct for refraction, which becomes the requested value at input of pointing model
@@ -324,6 +321,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
+        
+        # Extra sensor values
+        fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
+        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask], interpolate=None)[1])
         enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [fi_angle])
     
     if debug or verbose:
