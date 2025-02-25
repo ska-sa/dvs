@@ -361,8 +361,8 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
             self.__hpbw__ = 1.22*(_c_/f_c)/Dant * R2D # [deg]
             self.__set_testopts__() # Defaults
 
-        def select(self, *a, **k): # For test purposes we may ignore the "select()" in reduce_pointing_scans()
-            pass
+        def select(self, *a, **k):
+            self.timestamps = np.arange(0,1000*self.__n_cycles__) # This must be an outer envelope of timestamps produced in compscans()
         
         def __set_testopts__(self, kind="cardioid", scanrad='hpbw', ampl=1, SEFD=300, BW=1e6, ox=0,oy=0):
             """ @param kind: "circle"|"cardioid"|"epicycles"
@@ -393,13 +393,22 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
                     self.wind_direction = 123 + 10*np.random.rand(len(self.timestamps))
                     yield (s, "compscan", target)
 
-    ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
-    hpbw = ds.__hpbw__ # deg
-    for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
-        print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
-        ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
-        fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, track_ant=None, strict=True, verbose=True, debug=debug)
-        save_apss_file("./_demo_reduce_pointing_scans_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
+    try:
+        # Test fixtures
+        _gsv_ = katselib.getsensorvalues
+        katselib.getsensorvalues = lambda sensor, timestamps, *a, **k: (timestamps, np.random.randn(len(timestamps)))
+        
+        ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
+        hpbw = ds.__hpbw__ # deg
+        for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
+            print("Simulated xy offsets", ox*3600, oy*3600, "[arcsec]")
+            ds.__set_testopts__(kind=kind, scanrad='hpbw', ampl=ampl, SEFD=SEFD, BW=10e6, ox=ox,oy=oy)
+            fitted, enviro = reduce_pointing_scans(ds, ds.ants[0].name, track_ant=None, strict=True, verbose=True, debug=debug)
+            save_apss_file("./_demo_reduce_pointing_scans_%.f_%.f.csv"%(ox*3600,oy*3600), ds, ds.ants[0], fitted, enviro)
+    
+    finally: # Undo fixtures
+        katselib.getsensorvalues = _gsv_
+
 
 
 def analyse_beam_scans(ds, ants, chans=None, output_filepattern=None, debug=False, verbose=True, **kwargs):
@@ -470,10 +479,10 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
 
 if __name__ == "__main__":
     if True:
-        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=1)
-        _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
-        _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
-        # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
+        _demo_fit_gaussianoffset_(ampl=5, SEFD=200, cycles=1)
+        _demo_fit_gaussianoffset_(ampl=5, SEFD=200, cycles=100)
+        _demo_reduce_pointing_scans_(freq=11e9, ampl=5, SEFD=200, kind="cardioid")
+        _demo_reduce_pointing_scans_(freq=11e9, ampl=5, SEFD=200, kind="raster", debug=True)
         katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
                                         metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
     plt.show()
