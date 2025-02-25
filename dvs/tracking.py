@@ -10,7 +10,7 @@ import scipy.optimize as sop
 import pylab as plt
 import katpoint
 import typing
-from analysis.katsepnt import save_apss_data
+from analysis import katselib, katsepnt
 
 
 _c_ = 299792458
@@ -204,7 +204,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param kind: specifically used with 'circle','cardioid','epicycles' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
-                   [(temperature, pressure, humidity, wind_speed, wind_dir, sun_Az, sun_El), ...(for each cycle)] )
+                   [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
     """
     if freq_MHz is not None:
         ds.select(reset="F")
@@ -218,7 +218,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         chans = lambda *a: _chans_
     
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
-    enviro = [] # (temperature, pressure, humidity, wind_speed, wind_dir, sun_az, sun_el)
+    enviro = [] # (temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_az, sun_el, feedindexer_angle)
     
     ds.select(reset="", scans=scans, compscans=compscans)
     ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
@@ -258,6 +258,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
+        wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
+        
+        fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
+        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask])[1])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
@@ -320,7 +324,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         if strict and not valid:
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
-        enviro.append([temperature, pressure, humidity,wind_speed, wind_direction] + list(sun_azel))
+        enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [fi_angle])
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
@@ -438,7 +442,7 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
     fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
               'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std', 'baseline_height_I']
     # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
-    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el']
+    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_std', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el', 'feedindexer_angle']
     string_fields = ['target']
     record = {}
     for c,f in enumerate(fields):
@@ -458,7 +462,7 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
     for c,f in enumerate(fields_enviro):
         record[f] = enviro[:,c]
     
-    save_apss_data(output_filename, record, ant)
+    katsepnt.save_apss_data(output_filename, record, ant)
 
 
 if __name__ == "__main__":
@@ -467,7 +471,6 @@ if __name__ == "__main__":
         _demo_fit_gaussianoffset_(ampl=1, SEFD=200, cycles=100)
         _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid")
         # _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="raster", debug=True)
-        from analysis import katsepnt
         katsepnt.eval_pointingstability(["./_demo_reduce_pointing_scans_0_0.csv"], blind_pointing=True, update_model=False,
                                         metrics=["timestamp","azimuth","elevation"], meshplot=[], figs=[])
     plt.show()
