@@ -232,6 +232,9 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
     
     scan_ant_ix = [a.name for a in ds.ants].index(ant)
     scan_ant = ds.ants[scan_ant_ix]
+    fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
+    fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps)
+    
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
     wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
@@ -259,6 +262,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
+        # Extra sensor values
+        fi_angle = np.median(fi_angles[(np.min(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.max(ds.timestamps))])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
@@ -322,9 +327,6 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
         
-        # Extra sensor values
-        fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
-        fi_angle = np.median(katselib.getsensorvalues(fi_sensor%ant, ds.timestamps[mask], interpolate=None)[1])
         enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [fi_angle])
     
     if debug or verbose:
