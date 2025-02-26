@@ -251,7 +251,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
         mask &= scan_r < (np.median(scan_r) + 1*np.std(scan_r))
-        if (len(ds.timestamps[mask]) == 0):
+        scan_r = scan_r[mask]
+        if (len(scan_r) == 0) or (np.max(scan_r) > 6): # All points flagged, or large scan offset may mean antenna lagged behind e.g. near zenith or unwrap!
             continue
         
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
