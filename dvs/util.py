@@ -6,11 +6,16 @@
 import katdal, os, subprocess, shutil, pickle
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 import numpy as np
-from analysis.katselib import GSheet
+import analysis.katselib as ksl
 from analysis import __res__
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
+
+# HACK 02/2025 Usually kat-flap is contacted first for sensor data; it is offline (12/2024 - ...), so to prevent timeouts:
+for k in ksl.SENSOR_PORTALS.keys():
+    if ("kat-flap" in k):
+        ksl.SENSOR_PORTALS[k] = np.inf
 
 
 def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, **kwargs):
@@ -172,7 +177,7 @@ def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditi
         @param replace_all: True to remove all existing log messages for this dataset & antenna before adding the new entry (default False). """
     assert (isinstance(dataset, int) or isinstance(dataset, str)), "Dataset may not be unspecified!"
     
-    gs = GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
+    gs = ksl.GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
 
     if replace_all:
         # Find the rows to clear
@@ -192,7 +197,7 @@ def get_datalog_entries(ant, dataset="*"):
         @param ant: the ID of the antenna that the log message is relevant for, e.g. "SKA119".
         @param dataset: a specific CaptureBlockId or "*" for all
         @return: (headings, values) of entries have been logged against the dataset """
-    gs = GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
+    gs = ksl.GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
     
     values = gs[f"{ant}!A1:Z"] # Expect no more than 26 columns
     headings, values = values[0], values[1:]
@@ -205,3 +210,4 @@ def get_datalog_entries(ant, dataset="*"):
     return headings, values
 
 
+    
