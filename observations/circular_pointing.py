@@ -307,9 +307,11 @@ if __name__=="__main__":
                 targets = []
                 prev_target = None # To keep track of changes in targets
                 while cycle<opts.num_cycles or opts.num_cycles<0: # Override exit conditions are coded in the next ten lines
+                    fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
                         targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
                                                antenna=track_ants[0], el_limit_deg=opts.horizon)[0]
+                        fresh_plan = True
                     if (len(targets) == 0):
                         user_logger.warning("No targets defined!")
                         break
@@ -348,8 +350,12 @@ if __name__=="__main__":
                             break
                     user_logger.info("Targets considered: %s"%(', '.join(targetinfotext)))
                     if target is None:
-                        user_logger.info("Quitting because none of the preferred targets are up")
-                        break
+                        if fresh_plan:
+                            user_logger.info("Quitting because none of the preferred targets are up")
+                            break
+                        else: # Make a fresh plan
+                            targets.clear()
+                            continue
                     else:
                         targets.remove(target)
                         user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
