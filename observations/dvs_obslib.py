@@ -229,6 +229,48 @@ def temp_hack_DisableAllPointingCorrections(cam):
     user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
 
 
+def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
+    """ Switch the indexer out & back, if requested. This implementation currently only works for MKE/SKA Dish!
+        
+        @param cycle: the number of the current cycle, assumed to start from 0.
+        @param switch_indexer_every_nth_cycle: indexer will be moved on cycle==0 and thereafter at intervals as per this argument. 
+    """
+    # Set up parameters to use to switch the indexer between rasters, if requested
+    index0, indexer_sequence = None, [] # Arguments to pass to dsh_SetIndexerPosition()
+    if (switch_indexer_every_nth_cycle > 0):
+        # TODO: This mapping is for MKE - TBC for SKA Dishes
+        indexer_positions, indices = ["B1","B5c","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
+        for ant in cam.ants:
+            try:
+                index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
+                break
+            except:
+                pass
+        assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
+        indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
+        index0 = indices[index0]
+        try: # Remove "switch to self" end case
+            indexer_sequence.remove(index0)
+        except:
+            pass
+    
+    # Execute the switch for the current cycle
+    if (len(indexer_sequence) > 0) and (cycle%switch_indexer_every_nth_cycle == 0): # Switching alternates between indexer_sequence[0] and [1]
+        wrapped_cycle = cycle % (2*switch_indexer_every_nth_cycle)
+        i_cycle = -int(wrapped_cycle/switch_indexer_every_nth_cycle) # Alternates between 0 & -1
+        try:
+            index = indexer_sequence[i_cycle]
+            user_logger.info("Switching Feed Indexer to index %s"%index)
+            if not cam.dry_run:
+                cam.ants.req.dsh_SetIndexerPosition(index)
+            time.sleep(30)
+        finally: # Switch back to the nominal position. This also ensures that we "clean up"
+            user_logger.info("Switching Feed Indexer back to index %s"%index0)
+            if not cam.dry_run:
+                cam.ants.req.dsh_SetIndexerPosition(index0)
+            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible errors if indexer is slow
+
+
 def start_nd_switching(sub, n_on, n_off, T_start='now'):
     """ Start Digitiser-level synchronous Noise Diode cycling.
         
