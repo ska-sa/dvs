@@ -354,7 +354,7 @@ if __name__=="__main__":
                             user_logger.info("Quitting because none of the preferred targets are up")
                             break
                         else: # Make a fresh plan
-                            targets.clear()
+                            del targets[:]
                             continue
                     else:
                         targets.remove(target)
