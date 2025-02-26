@@ -283,10 +283,11 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
             height -= bkg
             if debug: # Prepare figure for debugging
                 fig, axs = plt.subplots(1,3, figsize=(14,3))
-                axs[0].plot(ds.channels, np.mean(hv[...,0], axis=0), '.', ds.channels, np.mean(hv[...,1], axis=0), '.') # H & V separately
-                axs[0].set_xlabel("Frequency [channels]")
+                mu_sigma = np.mean(hv, axis=0)/np.std(hv, axis=0) # Identify non-gaussian processes e.g. RFI
+                axs[0].plot(ds.channels, mu_sigma[:,0], '.', ds.channels, mu_sigma[:,1], '.') # H & V separately
+                axs[0].set_xlabel("Frequency [channels]"); axs[0].set_ylabel("$\mu/\sigma$")
                 axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
-                axs[1].set_xlabel("Time [#]")
+                axs[1].set_xlabel("Time [#]"); axs[1].set_ylabel("target y [deg]")
                 axs[1] = axs[1].twinx(); axs[1].plot(height, 'k.-')
                 # 2D plot, with height scaled to [0, 1]
                 delta_n = height - np.nanmin(height)
@@ -295,6 +296,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
                     axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
                 else:
                     axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
+                axs[2].set_xlabel("target x [deg]")
             constr = {}
             if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycles
                 constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
