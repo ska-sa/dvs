@@ -6,6 +6,7 @@ import time
 
 from katcorelib import standard_script_options, verify_and_connect, start_session, ant_array, user_logger
 from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
+from dvs_obslib import cycle_feedindexer
 
 
 # Script options
@@ -92,24 +93,6 @@ with verify_and_connect(opts) as kat:
         with start_session(kat, **vars(opts)) as session:
             session.standard_setup(**vars(opts))
             
-            # Set up parameters to use to switch the indexer between rasters, if requested
-            index0, indexer_sequence = None, []
-            if (opts.switch_indexer_every > 0): # Currently only for SKA Dish!
-                indexer_positions = ["B1","B5c","B2"] # Arranged in angle sequence, only the positions relevant to DVS listed
-                indices = [1,7,2] # dsh_SetIndexerPosition(?) arguments for the positions above
-                for ant in kat.ants:
-                    try:
-                        index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value()); break
-                    except:
-                        pass
-                assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
-                indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
-                index0 = indices[index0]
-                try: # Remove "switch to self" end case
-                    indexer_sequence.remove(index0)
-                except:
-                    pass
-            
             session.capture_start()
 
             start_time = time.time()
@@ -150,19 +133,8 @@ with verify_and_connect(opts) as kat:
                     if not keep_going:
                         break
                     # Switch the indexer out & back, if requested
-                    if (len(indexer_sequence) > 0) and (count%opts.switch_indexer_every == 0):
-                        try:
-                            index = indexer_sequence[0]
-                            user_logger.info("Switching Feed Indexer to index %s"%index)
-                            if not kat.dry_run:
-                                kat.ants.req.dsh_SetIndexerPosition(index)
-                            time.sleep(30)
-                            indexer_sequence = indexer_sequence[::-1] # Ensure that we alternate, next time around
-                        finally: # Switch back to the nominal position. This also ensures that we "clean up"
-                            user_logger.info("Switching Feed Indexer back to index %s"%index0)
-                            if not kat.dry_run:
-                                kat.ants.req.dsh_SetIndexerPosition(index0)
-                            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible erros if indexer is slow
+                    cycle_feedindexer(kat, count, opts.switch_indexer_every)
+                
                 # Terminate if nothing currently visible
                 if keep_going and (len(targets_observed) == targets_before_loop):
                     user_logger.warning("No targets are currently visible - stopping script instead of hanging around")

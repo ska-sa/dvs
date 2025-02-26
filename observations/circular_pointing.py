@@ -12,11 +12,13 @@ import katpoint
 try:
     from katcorelib import (standard_script_options, verify_and_connect, start_session, user_logger, ant_array)
     from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
+    from dvs_obslib import cycle_feedindexer
     testmode=False
 except:
     testmode=True
     import optparse
-    standard_script_options=optparse.OptionParser
+    standard_script_options = optparse.OptionParser
+    cycle_feedindexer = lambda *a, **k: None
     import matplotlib.pyplot as plt
     
 
@@ -291,24 +293,6 @@ if __name__=="__main__":
                 nd_params = session.nd_params
                 session.nd_params = {'diode': 'coupler', 'off': 0, 'on': 0, 'period': -1}
                 
-                # Set up parameters to use to switch the indexer between rasters, if requested
-                index0, indexer_sequence = None, []
-                if (opts.switch_indexer_every > 0): # Currently only for SKA Dish!
-                    indexer_positions = ["B1","B5c","B2"] # Arranged in angle sequence, only the positions relevant to DVS listed
-                    indices = [1,7,2] # dsh_SetIndexerPosition(?) arguments for the positions above
-                    for ant in kat.ants:
-                        try:
-                            index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value()); break
-                        except:
-                            pass
-                    assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
-                    indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
-                    index0 = indices[index0]
-                    try: # Remove "switch to self" end case
-                        indexer_sequence.remove(index0)
-                    except:
-                        pass
-                
                 # This also does capture_init, which adds capture_block_id view to telstate and saves obs_params
                 session.capture_start()
                 session.label("cycle.group.scan") # Compscan label - same as holography_scan.py, for possible future use
@@ -379,7 +363,14 @@ if __name__=="__main__":
                         targetradec=target.antenna.observer.radec_of(*(targetazel*np.pi/180))
                         radectarget=katpoint.Target('azimuthunwrap,radec,%s,%s'%targetradec)
                         session.label("unwrap") # Compscan label
-                        session.track(radectarget, duration=0, announce=False)
+                        session.track(azeltarget, duration=0, announce=False)#azel target
+                    
+                    # Perform the cycle_track if requested 
+                    if (target != prev_target) or (opts.cycle_tracktime > 0):
+                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        user_logger.info("Performing initial track")
+                        session.label("track") # Compscan label
+                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
@@ -389,13 +380,6 @@ if __name__=="__main__":
                         cx=[com[::-1] for com in compositex[::-1]]
                         cy=[com[::-1] for com in compositey[::-1]]
                         cs=[com[::-1] for com in compositeslew[::-1]]
-                    
-                    # Perform the cycle_track if requested 
-                    if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
-                        user_logger.info("Performing initial track")
-                        session.label("track") # Compscan label
-                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     lasttime = time.time()
@@ -452,16 +436,4 @@ if __name__=="__main__":
                     cycle+=1
 
                     # Switch the indexer out & back, if requested
-                    if (len(indexer_sequence) > 0) and (cycle%opts.switch_indexer_every == 0):
-                        try:
-                            index = indexer_sequence[0]
-                            user_logger.info("Switching Feed Indexer to index %s"%index)
-                            if not kat.dry_run:
-                                kat.ants.req.dsh_SetIndexerPosition(index)
-                            time.sleep(30)
-                            indexer_sequence = indexer_sequence[::-1] # Ensure that we alternate, next time around
-                        finally: # Switch back to the nominal position. This also ensures that we "clean up"
-                            user_logger.info("Switching Feed Indexer back to index %s"%index0)
-                            if not kat.dry_run:
-                                kat.ants.req.dsh_SetIndexerPosition(index0)
-                            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible erros if indexer is slow
+                    cycle_feedindexer(kat, cycle, opts.switch_indexer_every)
