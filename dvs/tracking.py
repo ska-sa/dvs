@@ -194,7 +194,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None, min_len=20):
+def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None, min_len=20):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -203,7 +203,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
         @param freq_MHz: (f_MHzstart,f_MHzstop) to use instead of chans (default None)
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
-        @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
+        @param flags: the katdal flags to apply to the data, or None (default 'cam,data_lost') 
         @param strict: True to set invalid fits to nan (default True)
         @param kind: specifically used with 'circle','cardioid','epicycles' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
@@ -251,9 +251,11 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
         mask &= scan_r < (np.median(scan_r) + 1*np.std(scan_r))
+        if (len(ds.timestamps[mask]) == 0):
+            continue
         
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
-        t_ref = np.median(ds.timestamps[mask])
+        t_ref = np.nanmedian(ds.timestamps[mask])
         
         # Environmental parameters
         sun_azel = katpoint.rad2deg(np.array(sun.azel(t_ref, antenna=scan_ant)))
@@ -267,7 +269,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
         # Extra sensor values
-        fi_angle = np.median(fi_angles[(np.min(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.max(ds.timestamps))])
+        fi_angle = np.median(fi_angles[(np.nanmin(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.nanmax(ds.timestamps))])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
