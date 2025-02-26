@@ -152,10 +152,12 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
     Nsamples_per_dump = 1e6*1 # 1MHz * 1sec
     
     if (cycles == 1): # Debug plots for a specific offset, all different kinds
-        ox,oy = (hpbw/6, 0)
+        ox,oy = (hpbw/6, hpbw/11)
         for powerbeam in [True, False]: # Power & voltage beams
             axs = plt.subplots(3, 4)[1]
             for i,kind in enumerate(['circle','cardioid','epicycles','raster']):
+                # Same pointing offsets for each 'kind'
+                np.random.seed(1)
                 timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
                                                                       Nsamples_per_dump=Nsamples_per_dump, scanrad='hpbw', ox=ox, oy=oy)
                 axs[0][i].set_title(kind)
@@ -164,7 +166,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 axs[1][i] = axs[1][i].twinx(); axs[1][i].plot(m, 'k.-')
                 axs[2][i].scatter(target_x, target_y, m)
                 xoff, yoff, valid, hpwx, hpwy, rot, a0, resid = fit_gaussianoffset(target_x, target_y, m, powerbeam=powerbeam, debug=[axs[1][i],axs[2][i]])
-                # print("x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
+                print(kind, "x: %g -> %g"%(ox, xoff), "y: %g -> %g"%(oy, yoff), "valid: %s"%valid, "HPBW %.3f -> %.3f, %.3f"%(hpbw, hpwx, hpwy), "ampl %g -> %g"%(ampl,a0))
     
     else: # Statistical
         axes = plt.subplots(2,3)[1]
@@ -400,6 +402,7 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
         _gsv_ = katselib.getsensorvalues
         katselib.getsensorvalues = lambda sensor, timestamps, *a, **k: (timestamps, np.random.randn(len(timestamps)))
         
+        print("Demo using " + kind)
         ds = TestDataset(freq, ["s0000"], ["Jupiter"], n_cycles=cycles)
         hpbw = ds.__hpbw__ # deg
         for ox,oy in [(0,0),(hpbw/3,0),(0,hpbw/3)]:
