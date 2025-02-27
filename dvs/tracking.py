@@ -105,7 +105,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
 
 
 def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
-    """ @param kind: "circle"|"cartioid"|"epicycles"|"raster"
+    """ @param kind: "circle"|"cartioid"|"epicycle"|"raster"
         @param ampl, SEFD: powers per polarisation channel [Jy]
         @param Nsamples_per_dump: BW*tau
         @param scanrad: radius for the scan pattern, either "hpbw" or a number in same units as `hpbw`.
@@ -122,7 +122,7 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
         radius = a + b*np.cos(th)
         target_x = radius*np.cos(th) - c/2
         target_y = radius*np.sin(th)
-    elif (kind == "epicycles"):
+    elif (kind == "epicycle"):
         r2 = scanrad/2 # Sets the ratio of the circles to go between scanrad and center
         n = 4 # 2 looks like a cardioid, 3 is too "sparse"
         target_x = r2*np.cos(th) + r2*np.cos(th*n)
@@ -157,7 +157,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
         ox,oy = (hpbw/6, hpbw/11)
         for powerbeam in [True, False]: # Power & voltage beams
             axs = plt.subplots(3, 4)[1]
-            for i,kind in enumerate(['circle','cardioid','epicycles','raster']):
+            for i,kind in enumerate(['circle','cardioid','epicycle','raster']):
                 # Same pointing offsets for each 'kind'
                 np.random.seed(1)
                 timestamps,target_x,target_y,m = _generate_test_data_(kind, powerbeam=powerbeam, hpbw=hpbw, ampl=ampl, SEFD=SEFD,
@@ -174,7 +174,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
         axes = plt.subplots(2,3)[1]
         for powerbeam,axs in zip([True, False], axes): # Power & voltage beams
             axs[0].set_ylabel(" SD" if powerbeam else " INTF")
-            for kind in ['circle','cardioid','epicycles','raster']:
+            for kind in ['circle','cardioid','epicycle','raster']:
                 # Same pointing offsets for each 'kind'
                 np.random.seed(1)
                 offsets = hpbw * np.c_[np.random.rand(cycles) - 0.5, np.random.rand(cycles) - 0.5]
@@ -205,7 +205,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'cam,data_lost') 
         @param strict: True to set invalid fits to nan (default True)
-        @param kind: specifically used with 'circle','cardioid','epicycles' from "circular_pointing.py"
+        @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
@@ -268,7 +268,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
-        wind_std = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, rather than np.std(raw_wind_speed)
+        wind_std = np.std(raw_wind_speed)
+        wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, 3*std - mean. TODO: use 1000sec mean!
         # Extra sensor values
         fi_angle = np.median(fi_angles[(np.nanmin(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.nanmax(ds.timestamps))])
         
@@ -283,7 +284,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
             hv = np.abs(ds.vis[mask])
             hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
             height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
-            if (kind in ['circle','cardioid','epicycles']): # These don't have enough sampling to fit background reliably
+            if (kind in ['circle','cardioid','epicycle']): # These don't have enough sampling to fit background reliably
                 bkg = np.array([0])
             else:
                 bkg = fit_background(target_x, target_y, height, along_edges=True)
@@ -299,13 +300,13 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
                 # 2D plot, with height scaled to [0, 1]
                 delta_n = height - np.nanmin(height)
                 delta_n /= np.nanpercentile(delta_n, 99.9, axis=0)
-                if (kind in ['circle','cardioid','epicycles']):
+                if (kind in ['circle','cardioid','epicycle']):
                     axs[2].scatter(target_x, target_y, s=1+100*delta_n, c=delta_n, alpha=0.5)
                 else:
                     axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
                 axs[2].set_xlabel("target x [deg]")
             constr = {}
-            if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycles
+            if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycle
                 constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
             # Fitted beam center is in (x, y) coordinates, in projection centered on target
             xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
@@ -336,7 +337,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
         
-        enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [fi_angle])
+        enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [wind_dynamic, fi_angle])
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
@@ -374,7 +375,7 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
             self.timestamps = np.arange(0,1000*self.__n_cycles__) # This must be an outer envelope of timestamps produced in compscans()
         
         def __set_testopts__(self, kind="cardioid", scanrad='hpbw', ampl=1, SEFD=300, BW=1e6, ox=0,oy=0):
-            """ @param kind: "circle"|"cardioid"|"epicycles"
+            """ @param kind: "circle"|"cardioid"|"epicycle"
                 @param scanrad: 'hpbw' or radius to scan at, in [degrees]
                 @param ampl, SEFD: Jy per pol
                 @param ox, oy: "error" offsets in degrees
@@ -464,7 +465,7 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
     fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
               'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std', 'baseline_height_I']
     # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
-    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_std', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el', 'feedindexer_angle']
+    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_std', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el', 'wind_dynamic', 'feedindexer_angle']
     string_fields = ['target']
     record = {}
     for c,f in enumerate(fields):
