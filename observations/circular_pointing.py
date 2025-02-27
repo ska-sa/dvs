@@ -201,7 +201,7 @@ if __name__=="__main__":
         sl=[]
         for iarm in range(len(compositex)):
             cx, cy, cs = compositex[iarm], compositey[iarm], compositeslew[iarm]
-            if (iarm == 0) and (opts.cycle_tracktime > 0): # Add a trajectory from cycle_track on bore sight to start of arm
+            if  False: # (iarm == 0) and (opts.cycle_tracktime > 0): # Add a trajectory from cycle_track on bore sight to start of arm
                 nt = int((cx[0]**2 + cy[0]**2)**.5 / (opts.scanspeed*opts.sampletime) + 0.5) # Number of points for this trajectory
                 cx = list(np.linspace(0,cx[0],nt)[:-1]) + list(cx)
                 cy = list(np.linspace(0,cy[0],nt)[:-1]) + list(cy)
@@ -361,19 +361,10 @@ if __name__=="__main__":
                         user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
                         user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
                     session.set_target(target)
-                    # Ensure wrap of session.track is same as being used in load_scan
-                    if (target != prev_target):
-                        user_logger.info("Performing azimuth unwrap")
-                        targetazel=gen_track([time.time()],target)[0][1:] # deg
-                        # Make this an RA,DEC target, so that each antenna gets topocentric az,el!
-                        targetradec=target.antenna.observer.radec_of(*(targetazel*np.pi/180))
-                        radectarget=katpoint.Target('azimuthunwrap,radec,%s,%s'%targetradec)
-                        session.label("unwrap") # Compscan label
-                        session.track(azeltarget, duration=0, announce=False)#azel target
                     
                     # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
@@ -395,7 +386,7 @@ if __name__=="__main__":
                         user_logger.info("Using Scan antennas: %s %s",
                                          ' '.join(always_scan_ants_names),' '.join([ant.name for ant in scan_ants if ant.name not in always_scan_ants_names]))
                         armx, army, arms = cx[iarm], cy[iarm], cs[iarm]
-                        if (iarm == 0) and ((target != prev_target) or (opts.cycle_tracktime > 0)): # WIP: Add a trajectory from bore sight to start of arm
+                        if False: # (iarm == 0) and ((target != prev_target) or (opts.cycle_tracktime > 0)): # WIP: Add a trajectory from bore sight to start of arm
                             nt = int((armx[0]**2 + army[0]**2)**.5 / (opts.scanspeed*session.dump_period) + 0.5) # Number of points for this trajectory
                             if (nt > 0):
                                 armx = np.r_[np.linspace(0,armx[0],nt)[:-1], armx]
@@ -410,7 +401,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         for iant,track_ant in enumerate(track_ants):#also include always_scan_ants in track_ant list
                             if track_ant.name not in always_scan_ants_names:
                                 continue
@@ -421,7 +412,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        session.ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
                         for it in range(len(armx)):
