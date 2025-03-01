@@ -212,7 +212,7 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
             #                                                                = Tsrc_peak*1/K * iint{psi(theta)}/iint{U(theta)}
             #        It follows that  iint{psi(theta)} = Os  and  iint{U(theta)} = lambda^2/Ae
             #TA_moon = 225 * (Os/Om) * (1/K) # contribution from the moon (disk of constant brightness temp)
-            TA_moon = models.Tmoon(freq/1e6,observer.date,HPBW) * (Os/Om) * (1/K) # APH changed from "255*(1/K)" to rather explicitly calculate beam-averaged temperature
+            TA_moon = models.Tmoon(freq/1e6,observer.date) * (Os/Om) * (1/K) # APH changed from "255*(1/K)" to rather explicitly calculate beam-averaged temperature
             gamma = 1.0
             if False: # APH added Thot & Tcold and changed Tsys to Thot-Tcold instead of original TA_moon
                 Thot = TA_moon
