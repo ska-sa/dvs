@@ -192,11 +192,11 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
                 TAh = TAc = 0*freq
             
             Y = hot_spec / cold_spec
-            R = 0.5*models.Dmoon(observer) # radius of the moon disc
-            Os = 2*np.pi*(1-np.cos(R)) # APH changed from original np.pi * R**2 # disk source solid angle 
+            R = 0.5*models.Dmoon(observer) # Radius of the moon disc at date of observation
+            Os = 2*np.pi*(1-np.cos(R)) # Precise formulat for disk source solid angle, rather than approximate pi * R**2 
             fwhm = lambda f_Hz: 1.22*(models._c_/f_Hz)/ap_eff.D 
             HPBW = fwhm(freq)
-            Om = 1.133 * HPBW**2  # main beam solid angle for a gaussian beam
+            Om = 1.133 * HPBW**2  # Solid angle for a gaussian beam: pi*HPBW^2/(4*log(2))
             if Ku:
                 eta_A = 0.7
             else:
@@ -214,18 +214,16 @@ def read_and_plot_data(h5, ants=None, target='off1', select='track', Tbg=0,Toff=
             #TA_moon = 225 * (Os/Om) * (1/K) # contribution from the moon (disk of constant brightness temp)
             TA_moon = models.Tmoon(freq/1e6,observer.date) * (Os/Om) * (1/K) # APH changed from "255*(1/K)" to rather explicitly calculate beam-averaged temperature
             gamma = 1.0
-            if False: # APH added Thot & Tcold and changed Tsys to Thot-Tcold instead of original TA_moon
-                Thot = TA_moon
-                Tcold = 0
-            else: # TODO: merge to diodelib! APH proposed model, the background and atmosphere needs to be included in case elevation differs!
-                C = (Os/K) / Om # Fraction of beam solid angle that is blocked by the Moon = iint_(theta<=R){U(theta)}/iint{U(theta)} = iint_{psi(theta)*U(theta)}/iint{U(theta)}
-                logger.info("Fraction of beam that is NOT blocked by the moon: %.3f..%.3f"%(1-np.max(C),1-np.min(C)))
-                Ton = TA_moon + ((Tbg-C*models.Tcmb)  if np.any(Tbg>0)  else 0) # At the top of atmosphere, Tbg is either 0 or is beam average with moon area blanked out but + 100% Tcmb
-                tau = models.calc_atmospheric_opacity(h5.temperature.mean(), h5.humidity.mean()/100., h5.pressure.mean(), 1.1, freq/1e9) # APH added
-                Tatm = 266.5 + 0.72*air_temp # APH 03/2017 as per Han & Westwater 2000
-                # NB: the reference plane is at ideal antenna aperture -- excl. eta_rad!
-                Thot = Ton*np.exp(-tau/np.sin(el_hot)) + Tatm*(1-np.exp(-tau/np.sin(el_hot)))
-                Tcold = Toff*np.exp(-tau/np.sin(el_cold)) + Tatm*(1-np.exp(-tau/np.sin(el_cold)))
+            
+            # Atmosphere needs to be included in case elevation differs! TODO: merge into katsdpscripts/diodelib.py!
+            C = (Os/K) / Om # Fraction of beam solid angle that is blocked by the Moon = iint_(theta<=R){U(theta)}/iint{U(theta)} = iint_{psi(theta)*U(theta)}/iint{U(theta)}
+            logger.info("Fraction of beam that is NOT blocked by the moon: %.3f..%.3f"%(1-np.max(C),1-np.min(C)))
+            Ton = TA_moon + ((Tbg-C*models.Tcmb)  if np.any(Tbg>0)  else 0) # At the top of atmosphere, Tbg is either 0 or is beam average with moon area blanked out but + 100% Tcmb
+            tau = models.calc_atmospheric_opacity(h5.temperature.mean(), h5.humidity.mean()/100., h5.pressure.mean(), 1.1, freq/1e9) # APH added
+            Tatm = 266.5 + 0.72*air_temp # APH 03/2017 as per Han & Westwater 2000
+            # NB: the reference plane is at ideal antenna aperture -- excl. eta_rad!
+            Thot = Ton*np.exp(-tau/np.sin(el_hot)) + Tatm*(1-np.exp(-tau/np.sin(el_hot)))
+            Tcold = Toff*np.exp(-tau/np.sin(el_cold)) + Tatm*(1-np.exp(-tau/np.sin(el_cold)))
             
             Tsys = gamma * (Thot-Tcold)/(Y-gamma) # Tsys from y-method ... compare with diode TAc
             if error_bars:
