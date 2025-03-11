@@ -83,14 +83,18 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
             dataset = cbid2url(dataset)
     except ValueError:
         pass
+    dsname = dataset if isinstance(dataset, str) else dataset.name
+    cbid = int(dsname.split("/")[-2]) # ASSUMES "*cbid/cbid_l0_.ext"
     
     # Take care of activity boundary time mismatches
     try:
         _time_offset = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
-        if ref_ant:
+        if (1738674000 < cbid): # From 4/02/2025 ~13h00 UTC, the Receptor & Dish proxies have the same lead time offset
+            t_o = 5 # github link TBD
+            katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
+        elif ref_ant:
             if ref_ant.startswith("s"):
                 # https://github.com/ska-sa/katproxy/blob/master/katproxy/proxy/ska_mpi_dsh_model.py#L34
-                dsname = dataset if isinstance(dataset, str) else dataset.name
                 if ("/159" in dsname): t_o = 18 # 06/2020 - 09/2020
                 elif ("/162" in dsname) or ("/163" in dsname): t_o = 10 # 06/2021 - 12/2021
                 else: t_o = 5 # https://github.com/ska-sa/katproxy/pull/702/files
