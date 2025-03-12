@@ -1357,18 +1357,18 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None):
         rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
-            for fi,f in enumerate(r.f_MHz):
-                if accept_MHz(f):
-                    f_MHz.append(r.f_MHz[fi])
-                    feedoffsetsH.append(r.feedoffsetsH[fi])
-                    feedoffsetsV.append(r.feedoffsetsV[fi])
-                    rpeffH.append(r.rpeffH[fi])
-                    rpeffV.append(r.rpeffV[fi])
-                    rpeffV.append(r.rpeffV[fi])
-                    rmsH.append(r.rmsH[fi])
-                    rmsV.append(r.rmsV[fi])
-                    errbeamH.append(r.errbeamH[fi])
-                    errbeamV.append(r.errbeamV[fi])
+                for fi,f in enumerate(r.f_MHz):
+                    if accept_MHz(f):
+                        f_MHz.append(r.f_MHz[fi])
+                        feedoffsetsH.append(r.feedoffsetsH[fi])
+                        feedoffsetsV.append(r.feedoffsetsV[fi])
+                        rpeffH.append(r.rpeffH[fi])
+                        rpeffV.append(r.rpeffV[fi])
+                        rpeffV.append(r.rpeffV[fi])
+                        rmsH.append(r.rmsH[fi])
+                        rmsV.append(r.rmsV[fi])
+                        errbeamH.append(r.errbeamH[fi])
+                        errbeamV.append(r.errbeamV[fi])
             if (len(f_MHz) > 0):
                 hr = HologResults(el_deg=r.el_deg,f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
                                   rpeffH=np.ma.masked_array(rpeffH),rpeffV=np.ma.masked_array(rpeffV),
@@ -1382,3 +1382,55 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None):
             del filtered[tag]
     
     return filtered
+
+
+def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save=False, root="./", band=""):
+    """ Re-computes efficiencies for the physical geometric aperture. For MeerKAT this is as masked for ApertureMap.devmap,
+        rather than the initial ApertureMap.dishdiameter which for MeerKAT defaults to 13.5 m.
+
+        Results are computed as per IEEE Std 145:
+          illumination_efficiency (IEEE ILLUMINATION EFFICIENCY) includes taper & phase, excludes spillover.
+          antenna_efficiency (IEEE ANTENNA APERTURE ILLUMINATION EFFICIENCY) includes all effects that impact on directivity pattern
+        
+        @param apmapsX,apmapsY: lists of katholog.ApertureMap
+        @param freqs_MHz: list of frequencies for each apmapsX,Y [MHz]
+        @param D: specify this to force the use of a circular aperture with diameter D [m] (default None)
+        @param save: True to generate a standard text file (the labeling assumes that X=H and Y=V).
+        @param band: a string to mark the saved filename with.
+        @return: (illumination_efficiency, antenna_efficiency, Ag) - 
+                 each [eff_H,eff_V] all efficiencies in percentage (0-100), Ag in m^2
+    """
+    apmaps = list(zip(apmapsX,apmapsY))
+    # Update the maskmap for the integrals
+    for apmap_xy in apmaps: # Sets of ApertureMaps
+        for apmap in apmap_xy: # H & V
+            if D: # Apply a circular aperture boundary when integrals are re-evaluated
+                diam = apmap.dishdiameter
+                apmap.dishdiameter = D; apmap.gain(blockdiameter=0) # blockdiameter=0 avoids using cached *default* mask
+                apmap.dishdiameter = diam
+            else: # Update the mask to the same as applied to devmap - which follows the main reflector outline
+                _maskmap = apmap.maskmap
+                apmap.maskmap = np.zeros(apmap.maskmap.shape, float); apmap.maskmap[np.isnan(apmap.devmap)] = 1
+                apmap.gain(blockdiameter=None) # blockdiameter=None to use *updated* mask
+                apmap.maskmap = _maskmap
+    
+    _cM_ = 299.792458 # one millionth the speed of light
+    f2wl = lambda f_MHz: _cM_/f_MHz
+    Ag = np.array([[apmap[0].gainuniform*f2wl(f)**2/(4*np.pi), # Geometric aperture area
+                    apmap[1].gainuniform*f2wl(f)**2/(4*np.pi)] for f,apmap in zip(freqs_MHz,apmaps)])
+    # Each map could have its own mask area - calculate factors to scale all efficiencies to the same geometric area
+    avg_Ag = np.nanmean(Ag)
+    scale = np.array([[A[0]/avg_Ag,A[1]/avg_Ag] for f,A in zip(freqs_MHz,Ag)])
+    
+    illeff = np.array([[apmap[0].eff0_illumination, # This is IEEE Std 145 ILLUMINATION EFFICIENCY, includes taper & phase, excludes spillover
+                        apmap[1].eff0_illumination] for f,apmap in zip(freqs_MHz,apmaps)])*100*scale
+    anteff = np.array([[apmap[0].gainmeasured/apmap[0].gainuniform, # This is IEEE ANTENNA APERTURE ILLUMINATION EFFICIENCY, slightly lower than eff0_illumination - includes all effects that impact on directivity pattern (i.e. only excluding Ohmic?) 
+                        apmap[1].gainmeasured/apmap[1].gainuniform] for f,apmap in zip(freqs_MHz,apmaps)])*100*scale
+
+    if save:
+        cbid = apmap.dataset.filename.split("/")[-2]
+        scaled_to = "Scaled to Ag=%.1f m^2 (D=%.1f m)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
+        np.savetxt("%s/eff0_ap_%s.csv"%(root,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
+                   header="gainmeasured/gainuniform as determined from ApertureMaps of %s\n%s\n"%(cbid,scaled_to)+
+                          "f [MHz]\teta_ap H [%]\teta_ap V [%]")
+    return (illeff, anteff, avg_Ag)
