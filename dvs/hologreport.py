@@ -1342,7 +1342,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None):
         
         @param results: {tag:[HologResults]}
         @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
-        @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default "*" i.e. all)
+        @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default None i.e. all)
         @return: {tag:[HologResults]} """
     filtered = {}
     
@@ -1357,18 +1357,19 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None):
         rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
-                for fi,f in enumerate(r.f_MHz):
-                    if accept_MHz(f):
-                        f_MHz.append(r.f_MHz[fi])
-                        feedoffsetsH.append(r.feedoffsetsH[fi])
-                        feedoffsetsV.append(r.feedoffsetsV[fi])
-                        rpeffH.append(r.rpeffH[fi])
-                        rpeffV.append(r.rpeffV[fi])
-                        rpeffV.append(r.rpeffV[fi])
-                        rmsH.append(r.rmsH[fi])
-                        rmsV.append(r.rmsV[fi])
-                        errbeamH.append(r.errbeamH[fi])
-                        errbeamV.append(r.errbeamV[fi])
+            # Filter on frequency
+            for fi,f in enumerate(r.f_MHz):
+                if accept_MHz(f):
+                    f_MHz.append(r.f_MHz[fi])
+                    feedoffsetsH.append(r.feedoffsetsH[fi])
+                    feedoffsetsV.append(r.feedoffsetsV[fi])
+                    rpeffH.append(r.rpeffH[fi])
+                    rpeffV.append(r.rpeffV[fi])
+                    rpeffV.append(r.rpeffV[fi])
+                    rmsH.append(r.rmsH[fi])
+                    rmsV.append(r.rmsV[fi])
+                    errbeamH.append(r.errbeamH[fi])
+                    errbeamV.append(r.errbeamV[fi])
             if (len(f_MHz) > 0):
                 hr = HologResults(el_deg=r.el_deg,f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
                                   rpeffH=np.ma.masked_array(rpeffH),rpeffV=np.ma.masked_array(rpeffV),
