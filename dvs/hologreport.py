@@ -1336,18 +1336,20 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
     plot_eff_freq(sets, labels, fspec_MHz=fspec_MHz, figsize=(14,3))
 
 
-def filter_results(results, exclude_tags=None, fincl_MHz=None):
+def filter_results(results, exclude_tags=None, fincl_MHz=None, wind_speed=None):
     """ Generate a subset of results originally from 'generate_results()'. Omit all HologResults which also appear against 'exclude_tags'
         or not matching 'f_MHz'.
         
         @param results: {tag:[HologResults]}
         @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
         @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default None i.e. all)
+        @param wind_speed: (mps_min,mps_max) wind speed [m/s] to match (default None i.e. all)
         @return: {tag:[HologResults]} """
     filtered = {}
     
     # Only include results for which accept_MHs returns True
     accept_MHz = lambda MHz: (fincl_MHz == "*" ) or (MHz >= np.min(fincl_MHz) and MHz <= np.max(fincl_MHz))
+    accept_enviro = lambda env: True # (env["wind_speed"] <= wind_speed <= env["wind_speed"]) and (env["wind_direction"] <= wind_direction <= env["wind_direction"]) # TODO
     
     exclude_tags = [] if exclude_tags is None else exclude_tags
     omit_tagged = list(iter.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
@@ -1357,19 +1359,21 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None):
         rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
-            # Filter on frequency
-            for fi,f in enumerate(r.f_MHz):
-                if accept_MHz(f):
-                    f_MHz.append(r.f_MHz[fi])
-                    feedoffsetsH.append(r.feedoffsetsH[fi])
-                    feedoffsetsV.append(r.feedoffsetsV[fi])
-                    rpeffH.append(r.rpeffH[fi])
-                    rpeffV.append(r.rpeffV[fi])
-                    rpeffV.append(r.rpeffV[fi])
-                    rmsH.append(r.rmsH[fi])
-                    rmsV.append(r.rmsV[fi])
-                    errbeamH.append(r.errbeamH[fi])
-                    errbeamV.append(r.errbeamV[fi])
+            # Filter on environment
+            if accept_enviro(r.info["enviro"]):
+                # Filter on frequency
+                for fi,f in enumerate(r.f_MHz):
+                    if accept_MHz(f):
+                        f_MHz.append(r.f_MHz[fi])
+                        feedoffsetsH.append(r.feedoffsetsH[fi])
+                        feedoffsetsV.append(r.feedoffsetsV[fi])
+                        rpeffH.append(r.rpeffH[fi])
+                        rpeffV.append(r.rpeffV[fi])
+                        rpeffV.append(r.rpeffV[fi])
+                        rmsH.append(r.rmsH[fi])
+                        rmsV.append(r.rmsV[fi])
+                        errbeamH.append(r.errbeamH[fi])
+                        errbeamV.append(r.errbeamV[fi])
             if (len(f_MHz) > 0):
                 hr = HologResults(el_deg=r.el_deg,f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
                                   rpeffH=np.ma.masked_array(rpeffH),rpeffV=np.ma.masked_array(rpeffV),
@@ -1430,8 +1434,8 @@ def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save=False, root="./", band=
 
     if save:
         cbid = apmap.dataset.filename.split("/")[-2]
-        scaled_to = "Scaled to Ag=%.1f m^2 (D=%.1f m)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
+        scaled_to = "A_g=%.1fm^2 (D_g=%.1fm)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
         np.savetxt("%s/eff0_ap_%s.csv"%(root,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
-                   header="gainmeasured/gainuniform as determined from ApertureMaps of %s\n%s\n"%(cbid,scaled_to)+
+                   header="gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,cbid)+
                           "f [MHz]\teta_ap H [%]\teta_ap V [%]")
     return (illeff, anteff, avg_Ag)
