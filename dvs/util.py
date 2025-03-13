@@ -7,6 +7,7 @@ import katdal, os, subprocess, shutil, pickle
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 import numpy as np
 import analysis.katselib as ksl
+from analysis import katsemat as ksm
 from analysis import __res__
 
 
@@ -168,6 +169,22 @@ def load_rfi_static_mask(filename, freqs, debug_chunks=0):
             else:
                 print("\tFreq. chunk %d: mask omits nothing"%chunk)
     return channel_flags
+
+
+def remove_RFI(freq, x0, x1, rfi_mask, fit_order=9, flag_thresh=0.2, smoothing=0, axis=0):
+    """ Remove RFI and smooth over frequency bins.
+       @return (filt_smooth_x0, filt_smooth_x1) """
+    if isinstance(rfi_mask, str):
+        rfi_mask = load_rfi_static_mask(rfi_mask, freq)
+    sm_x0, sm_x1 = [], []
+    for msd,sms in ([x0 if axis==0 else np.transpose(x0),sm_x0],[x1 if axis==0 else np.transpose(x1),sm_x1]):
+        for m in msd:
+            _m = np.array(m, copy=True); _m[rfi_mask] = np.nan
+            sm = ksm.fitpoly1d(freq, _m, order=fit_order)
+            flags = np.argwhere(np.abs(m/sm-1) > flag_thresh)
+            m[flags] = np.nan
+            sms.append(m if (smoothing <= 0) else ksm.smooth(m, N=smoothing))
+    return np.array(sm_x0 if axis==0 else np.transpose(sm_x0)), np.array(sm_x1 if axis==0 else np.transpose(sm_x1))
 
 
 def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditions, test_procedures=[],
