@@ -1054,6 +1054,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
         @param info: a short bit of text to include in the header, e.g. 'As measured on m012'.
         @param rfi_mask: list of frequency [Hz] ranges to omit from plots e.g. [(924.5e6,960e6)] (default [])
     """
+    T_ND = np.atleast_2d(T_ND)
     if isinstance(rx_band_SN, str):
         rx_band, rx_SN = rx_band_SN.split(".")
     
