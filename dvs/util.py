@@ -171,7 +171,7 @@ def load_rfi_static_mask(filename, freqs, debug_chunks=0):
     return channel_flags
 
 
-def remove_RFI(freq, x0, x1, rfi_mask, fit_order=9, flag_thresh=0.2, smoothing=0, axis=0):
+def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
     """ Remove RFI and smooth over frequency bins.
        @return (filt_smooth_x0, filt_smooth_x1) """
     if isinstance(rfi_mask, str):
@@ -180,10 +180,10 @@ def remove_RFI(freq, x0, x1, rfi_mask, fit_order=9, flag_thresh=0.2, smoothing=0
     for msd,sms in ([x0 if axis==0 else np.transpose(x0),sm_x0],[x1 if axis==0 else np.transpose(x1),sm_x1]):
         for m in msd:
             _m = np.array(m, copy=True); _m[rfi_mask] = np.nan
-            sm = ksm.fitpoly1d(freq, _m, order=fit_order)
+            sm = ksm.smooth(m, N=smoothing, padlen=len(freq)//2, padtype='even')
             flags = np.argwhere(np.abs(m/sm-1) > flag_thresh)
             m[flags] = np.nan
-            sms.append(m if (smoothing <= 0) else ksm.smooth(m, N=smoothing))
+            sms.append(m if (smoothing <= 1) else ksm.smooth(m, N=smoothing))
     return np.array(sm_x0 if axis==0 else np.transpose(sm_x0)), np.array(sm_x1 if axis==0 else np.transpose(sm_x1))
 
 
