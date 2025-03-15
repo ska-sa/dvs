@@ -3,7 +3,7 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, subprocess, shutil, pickle
+import katdal, os, subprocess, shutil
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 import numpy as np
 from analysis import katselib as ksl
@@ -12,6 +12,8 @@ from analysis import __res__
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
+
+load_rfi_static_mask = ksl.load_frequency_mask
 
 # HACK 02/2025 Usually kat-flap is contacted first for sensor data; it is offline (12/2024 - ...), so to prevent timeouts:
 for k in ksl.SENSOR_PORTALS.keys():
@@ -132,45 +134,6 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     return dataset
 
 
-def load_rfi_static_mask(filename, freqs, debug_chunks=0):
-    """ Construct a mask either from a pickle file, or a text file with frequency ranges.
-        
-        @param filename: pickle or text file.
-        @param freqs: list of frequencies [Hz] for which a mask must be created.
-        @param debug_chunks: for debugging purposes, print out how much bandwidth is removed by the mask if 'freqs' is split into this many chunks.
-        @return: boolean mask to match 'freqs' """
-    nchans = len(freqs)
-    channel_width = abs(freqs[1]-freqs[0])
-    try:
-        with open(filename, "rb") as pickle_file:
-            channel_flags = pickle.load(pickle_file)
-        nflags = len(channel_flags)
-        if (nchans != nflags):
-            print("Warning channel mask (%d) is stretched to fit dataset (%d)!"%(nflags,nchans))
-            N = nchans/float(nflags)
-            channel_flags = np.repeat(channel_flags, int(N+0.5)) if (N > 1) else channel_flags[::int(1/N)]
-        channel_flags = channel_flags[:nchans] # Clip, just in case
-    except pickle.UnpicklingError: # Not a pickle file, perhaps a plain text file with frequency ranges in MHz?
-        mask_ranges = np.loadtxt(filename, comments='#', delimiter=',')
-        channel_flags = np.full((nchans,), False)
-        low = freqs - 0.5 * channel_width
-        high = freqs + 0.5 * channel_width
-        for r in mask_ranges:
-            in_range = (low <= r[1]*1e6) & (r[0]*1e6 <= high)
-            idx = np.where(in_range)[0]
-            channel_flags[idx] = True
-    if debug_chunks > 0:
-        for chunk in range(debug_chunks):
-            freq = slice(chunk*(nchans//debug_chunks),(chunk+1)*(nchans//debug_chunks))
-            masked_f = freqs[freq][channel_flags[freq]]
-            if (len(masked_f) > 0):
-                mBW = len(masked_f)*(freqs[1]-freqs[0])
-                print("\tFreq. chunk %d: mask omits %.1fMHz between (%.1f - %.1f)MHz"%(chunk,mBW/1e6,np.min(masked_f)/1e6,np.max(masked_f)/1e6))
-            else:
-                print("\tFreq. chunk %d: mask omits nothing"%chunk)
-    return channel_flags
-
-
 def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
     """ Remove RFI and smooth over frequency bins. The RFI mask is created by first applying the given static mask
         to create smooth interpolated reference curves; the RFI mask is then determined as all values which deviate
@@ -185,7 +148,7 @@ def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
         @param axis: identifies which axis of x0 & x1 corresponds to the `freq` axis (default 0)
         @return (filt_smooth_x0, filt_smooth_x1) """
     if isinstance(rfi_mask, str):
-        rfi_mask = load_rfi_static_mask(rfi_mask, freq)
+        rfi_mask = ksl.load_frequency_mask(rfi_mask, freq)
     sm_x0, sm_x1 = [], []
     for msd,sms in ([x0 if axis==0 else np.transpose(x0),sm_x0],[x1 if axis==0 else np.transpose(x1),sm_x1]):
         for m in msd:
