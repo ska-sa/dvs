@@ -6,7 +6,7 @@
 import katdal, os, subprocess, shutil, pickle
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 import numpy as np
-import analysis.katselib as ksl
+from analysis import katselib as ksl
 from analysis import katsemat as ksm
 from analysis import __res__
 
@@ -172,8 +172,18 @@ def load_rfi_static_mask(filename, freqs, debug_chunks=0):
 
 
 def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
-    """ Remove RFI and smooth over frequency bins.
-       @return (filt_smooth_x0, filt_smooth_x1) """
+    """ Remove RFI and smooth over frequency bins. The RFI mask is created by first applying the given static mask
+        to create smooth interpolated reference curves; the RFI mask is then determined as all values which deviate
+        by more than the specified threshold (fraction) from the reference curves.
+    
+        @param freq: list of frequency bins
+        @param x0,x1: 2-D arrays of values, to be transformed
+        @param rfi_mask: identifier for the static mask, passed to `load_rfi_static_mask()`. 
+        @param flag_thresh: the threshold to use to create the RFI mask that is applied, as a fraction of the smooth
+                 interpolated reference curves (default 0.2 i.e. values exceeding +/-20% of the reference curves are removed).
+        @param smoothing: window length over freq axis to apply to the data after flagging - only effective if > 1 (default 0)
+        @param axis: identifies which axis of x0 & x1 corresponds to the `freq` axis (default 0)
+        @return (filt_smooth_x0, filt_smooth_x1) """
     if isinstance(rfi_mask, str):
         rfi_mask = load_rfi_static_mask(rfi_mask, freq)
     sm_x0, sm_x1 = [], []
