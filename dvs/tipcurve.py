@@ -16,6 +16,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.offsetbox import AnchoredText
+import scipy.io
 import scikits.fitting as fit
 import healpy as hp
 import ephem
@@ -157,29 +158,38 @@ class Sky_temp:
 
 class Tip_Results:
     """ This represents where & when tipping curve measurements were recorded, and the resulting Tsys & Tant vs. frequency. """
-    def __init__(self, ds, filename):
-        self.ant = ds.antenna.name
+    def __init__(self, ds, filename, rec):
+        """@param ds: the scape.Dataset with the raw data, or a dictionary with all results
+           @param filename: the filename of the raw dataset
+           @param rec: unique identifier for the feed package (receiver) """
         self.filename = filename
-        self.freqs = ds.freqs[:] # MHz
-        self.observer_wgs84 = dict(zip(['lat','lon','elev'], map(float, ds.antenna.position_wgs84))) # rad,rad,m. float because the native ephem.Angle isn't pickle-able.
-        self.height = self.observer_wgs84['elev']
-        self.pressure = np.mean(ds.enviro['pressure']['value'])
-        self.air_relative_humidity = np.mean(ds.enviro['humidity']['value'])/100. # Percent -> fraction
-        self.surface_temperature = np.mean(ds.enviro['temperature']['value'])
-        timestamps = np.array([np.average(scan_time) for scan_time in scape.extract_scan_data(ds.scans,'abs_time').data])
-        elevation = np.array([np.average(scan_el) for scan_el in scape.extract_scan_data(ds.scans,'el').data])
-        ra = np.array([np.average(scan_ra) for scan_ra in scape.extract_scan_data(ds.scans,'ra').data])
-        dec = np.array([np.average(scan_dec) for scan_dec in scape.extract_scan_data(ds.scans,'dec').data])
-        sort_ind = elevation.argsort()
-        # Sort data in the order of ascending elevation
-        self.timestamps, self.elevation, self.ra, self.dec = timestamps[sort_ind], elevation[sort_ind], ra[sort_ind], dec[sort_ind]
-        # Cache this - used in process_*()
-        self.sort_ind = sort_ind
-        
-        # Initialise the attributes which are to be computed
-        self.PLANE = None # The reference plane at which the temperatures are represented
-        self.Tsys = [] # [TsysH, TsysV, 0, sigmaTsysH, sigmaTsysV] with 2nd axis: freqs
-        self.Tant = [] # Tsys_meas - Tsys_expected, as [TantH, TantV] with 2nd axis: freqs
+        if (isinstance(ds, dict)): # Initialise from e.g. load()
+            for k,v in ds.items():
+                if not k.startswith("_"):
+                    self.__setattr__(k, v)
+        else: # Initialise from a dataset where the data is still to be loaded
+            self.ant = ds.antenna.name
+            self.rec = rec
+            self.freqs = ds.freqs[:] # MHz
+            self.observer_wgs84 = dict(zip(['lat','lon','elev'], map(float, ds.antenna.position_wgs84))) # rad,rad,m. float because the native ephem.Angle isn't pickle-able.
+            self.height = self.observer_wgs84['elev']
+            self.pressure = np.mean(ds.enviro['pressure']['value'])
+            self.air_relative_humidity = np.mean(ds.enviro['humidity']['value'])/100. # Percent -> fraction
+            self.surface_temperature = np.mean(ds.enviro['temperature']['value'])
+            timestamps = np.array([np.average(scan_time) for scan_time in scape.extract_scan_data(ds.scans,'abs_time').data])
+            elevation = np.array([np.average(scan_el) for scan_el in scape.extract_scan_data(ds.scans,'el').data])
+            ra = np.array([np.average(scan_ra) for scan_ra in scape.extract_scan_data(ds.scans,'ra').data])
+            dec = np.array([np.average(scan_dec) for scan_dec in scape.extract_scan_data(ds.scans,'dec').data])
+            sort_ind = elevation.argsort()
+            # Sort data in the order of ascending elevation
+            self.timestamps, self.elevation, self.ra, self.dec = timestamps[sort_ind], elevation[sort_ind], ra[sort_ind], dec[sort_ind]
+            # Cache this - used in process_*()
+            self.sort_ind = sort_ind
+            
+            # Initialise the attributes which are to be computed
+            self.PLANE = None # The reference plane at which the temperatures are represented
+            self.Tsys = [] # [TsysH, TsysV, 0, sigmaTsysH, sigmaTsysV] with 2nd axis: freqs
+            self.Tant = [] # Tsys_meas - Tsys_expected, as [TantH, TantV] with 2nd axis: freqs
     
     def sky_fig(self, freq=None, annotate_every=10, cartesian=True):
         freq = np.nanmean(self.freqs) if (freq is None) else freq
@@ -189,13 +199,18 @@ class Tip_Results:
                                   pointlabels=['El %.f'%e for e in self.elevation[::annotate_every]], fig=fig, cartesian=cartesian, **self.observer_wgs84)
 
     def save(self, filename):
-        """ Save results to the specified MATLAB file """
-        raise NotImplementedError()
+        """ Save all results in this instance to the specified MATLAB file """
+        scipy.io.savemat(filename, dict(ant=self.ant, rec=self.rec, filename=self.filename, freqs=self.freqs, observer_wgs84=self.observer_wgs84, height=self.height,
+                                        pressure=self.pressure, air_relative_humidity=self.air_relative_humidity, surface_temperature=self.surface_temperature,
+                                        timestamps=self.timestamps, elevation=self.elevation, ra=self.ra, dec=self.dec,
+                                        sort_ind=self.sort_ind, PLANE=self.PLANE, Tsys=self.Tsys, Tant=self.Tant))
     
     @classmethod
     def load(cls, filename):
-        """ Load results from the specified MATLAB file """
-        raise NotImplementedError()
+        """ Load results from the specified MATLAB file and return the corresponding Tip_Results instance. """
+        data = scipy.io.loadmat(filename, squeeze_me=True)
+        data['observer_wgs84'] = {k:float(data['observer_wgs84'][k]) for k in ('lat','lon','elev')}
+        return Tip_Results(data, data["filename"])
 
 
 class System_Temp:
@@ -460,7 +475,7 @@ def process_a(h5, ant, freq_min=0, freq_max=20e9, channel_bw=10e6, sky_radius=30
     print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw/1e6, freq_list.min(),freq_list.max()) )
     band_input = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
     d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,band_input=band_input, freq_mask=freq_mask, debug=debug)
-    tip_rs = Tip_Results(d, filename)
+    tip_rs = Tip_Results(d, filename, rec)
     
     band = models.band(tip_rs.freqs, ant)
     aperture_efficiency = models.Ap_Eff(band=band)
