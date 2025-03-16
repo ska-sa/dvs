@@ -158,10 +158,9 @@ class Sky_temp:
 
 class Tip_Results:
     """ This represents where & when tipping curve measurements were recorded, and the resulting Tsys & Tant vs. frequency. """
-    def __init__(self, ds, filename, rec):
+    def __init__(self, ds, filename):
         """@param ds: the scape.Dataset with the raw data, or a dictionary with all results
-           @param filename: the filename of the raw dataset
-           @param rec: unique identifier for the feed package (receiver) """
+           @param filename: the filename of the raw dataset """
         self.filename = filename
         if (isinstance(ds, dict)): # Initialise from e.g. load()
             for k,v in ds.items():
@@ -169,7 +168,7 @@ class Tip_Results:
                     self.__setattr__(k, v)
         else: # Initialise from a dataset where the data is still to be loaded
             self.ant = ds.antenna.name
-            self.rec = rec
+            self.receiver = ds.receiver
             self.freqs = ds.freqs[:] # MHz
             self.observer_wgs84 = dict(zip(['lat','lon','elev'], map(float, ds.antenna.position_wgs84))) # rad,rad,m. float because the native ephem.Angle isn't pickle-able.
             self.height = self.observer_wgs84['elev']
@@ -200,7 +199,7 @@ class Tip_Results:
 
     def save(self, filename):
         """ Save all results in this instance to the specified MATLAB file """
-        scipy.io.savemat(filename, dict(ant=self.ant, rec=self.rec, filename=self.filename, freqs=self.freqs, observer_wgs84=self.observer_wgs84, height=self.height,
+        scipy.io.savemat(filename, dict(ant=self.ant, receiver=self.receiver, filename=self.filename, freqs=self.freqs, observer_wgs84=self.observer_wgs84, height=self.height,
                                         pressure=self.pressure, air_relative_humidity=self.air_relative_humidity, surface_temperature=self.surface_temperature,
                                         timestamps=self.timestamps, elevation=self.elevation, ra=self.ra, dec=self.dec,
                                         sort_ind=self.sort_ind, PLANE=self.PLANE, Tsys=self.Tsys, Tant=self.Tant))
@@ -475,7 +474,8 @@ def process_a(h5, ant, freq_min=0, freq_max=20e9, channel_bw=10e6, sky_radius=30
     print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw/1e6, freq_list.min(),freq_list.max()) )
     band_input = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
     d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,band_input=band_input, freq_mask=freq_mask, debug=debug)
-    tip_rs = Tip_Results(d, filename, rec)
+    d.receiver = rec
+    tip_rs = Tip_Results(d, filename)
     
     band = models.band(tip_rs.freqs, ant)
     aperture_efficiency = models.Ap_Eff(band=band)
