@@ -806,28 +806,31 @@ def HOD(rawtime, tzoffset):
     return ((tgm[3] + tgm[4]/60.0 + tgm[5]/3600.0 + tzoffset) % 24)
 
 
-def geterrorbeam(measuredG, modelG, crop=0, contourdB=-20, centered=True): # Minor elaboration from katholog.hologreport.geterrorbeam()
+def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True): # Minor elaboration from katholog.hologreport.geterrorbeam()
     """ Computes the errorr beam as measuredG_n**2-modelG_n**2, where _n implies normalization to the peak amplitude.
     
         @param meaduredG, modelG: far field amplitude maps, centred on identical grids.
-        @param crop: the fraction by which, if > 0, measuredG has to be cropped to match modelG, or vice versa if < 0  (default 0).
+        @param meas_extent: the ratio of measured extent to model extent (default 1).
         @param contourdB: error beam below this level (on modelG_n) is set to NaN (default -20).
         @param centered: False to refine the centering of the measured map after zoom (default True).
         @return: errorbeam map
     """
-    # Rescale without re-centering
-    measuredG = katsemat.cropped_zoom(np.abs(measuredG), crop if (crop>0) else 0, 0,0)
-    modelG = katsemat.cropped_zoom(np.abs(modelG), 0 if (crop>0) else -crop, 0,0)
+    measuredG = np.abs(measuredG)
+    modelG = np.abs(modelG)
     
-    if not centered: # Re-centre, BUT experimentation suggests this is always worse than assuming the maps were centred to begin with
-        shape = modelG.shape
-        centre = np.mean(np.argwhere(modelG>=0.7*np.nanmax(modelG)), axis=0) # y,x
-        modelG = katsemat.cropped_zoom(modelG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
-        print("zoomed ", 0 if (crop>0) else -crop, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
-
+    measd_dxdy = model_dxdy = (0, 0)
+    if not centered: # Determine centers, assuming centroids are very prominent
         centre = np.mean(np.argwhere(measuredG>=0.7*np.nanmax(measuredG)), axis=0) # y,x
-        measuredG = katsemat.cropped_zoom(measuredG, 1, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
-        print("zoomed ", crop if (crop>0) else 0, centre[1]-shape[1]/2., centre[0]-shape[0]/2.)
+        measd_dxdy = (centre[1]-measuredG.shape[1]/2., centre[0]-measuredG.shape[0]/2.)
+        centre = np.mean(np.argwhere(modelG>=0.7*np.nanmax(modelG)), axis=0) # y,x
+        model_dxdy = (centre[1]-modelG.shape[1]/2., centre[0]-modelG.shape[0]/2.)
+    
+    if (meas_extent < 1): # Crop the model pattern (i.e. zoom it) to match the measured extent
+        modelG = katsemat.cropped_zoom(modelG, 1/meas_extent-1, *model_dxdy)
+        measuredG = katsemat.cropped_zoom(measuredG, 0, *measd_dxdy)
+    else: # Crop the measured pattern (i.e. zoom it) to match the model extent
+        measuredG = katsemat.cropped_zoom(measuredG, meas_extent-1, *measd_dxdy)
+        modelG = katsemat.cropped_zoom(modelG, 0, *model_dxdy)
     
     # Normalize both patterns & generate the error pattern
     measuredG = measuredG/np.nanmax(measuredG)
@@ -1002,8 +1005,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     for ax,(lbl,meas,sigma,modl,res) in zip(axes,[("H",beam.mGx[0],resid(beam.Gx[0],beam.mGx[0]),p_beam.mGx[0],errbeamH[-1]),
                                                                   ("V",beam.mGy[0],resid(beam.Gy[0],beam.mGy[0]),p_beam.mGy[0],errbeamV[-1])]):
                         ext_ = lambda bm: bm.extent/(300.0/bm.freqgrid[0]) # Normalized to HPBW*D
-                        crop = ext_(beam)/ext_(p_beam) - 1 # Measured to be cropped by this fraction if > 0
-                        errorbeam = geterrorbeam(meas, modl, crop, contourdB=contourdB)
+                        errorbeam = geterrorbeam(meas, modl, ext_(beam)/ext_(p_beam), contourdB=contourdB)
                         max_eb, fs_eb, std_eb = np.nanmax(np.abs(errorbeam)), np.nanpercentile(np.abs(errorbeam),95), np.nanstd(errorbeam)
                         nn_eb = sigma/np.nanmax(np.abs(meas)) # 1sigma measurement noise in the same scale as errorbeam
                         sHV.append("%s-pol < %.1f[%.1f]%% (95pct %.1f%%, std %.1f%%)"%(lbl, max_eb*100, nn_eb*100, fs_eb*100, std_eb*100))
