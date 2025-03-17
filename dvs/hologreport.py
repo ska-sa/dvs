@@ -487,7 +487,7 @@ def _unsqueeze_(rs):
     """ Add back the redundant dimensions to HologResults that standard_report() squeezes out for "1 cycle" sets
         @return: a copy of rs [HologResults] """
     if isinstance(rs.el_deg, float):
-        nest1d = lambda x: np.reshape(x, -1); nest2d = lambda x: np.reshape(x, (-1,np.shape(x)[-1])); nest3d = lambda x: np.reshape(x, (1,-1,np.shape(x)[-1]))
+        nest1d = lambda x: np.reshape(x, -1); nest2d = lambda x: np.reshape(x, (np.shape(x)[-1],-1)); nest3d = lambda x: np.reshape(x, (-1,1,np.shape(x)[-1]))
         rs = HologResults(nest1d(rs.el_deg), rs.f_MHz, nest3d(rs.feedoffsetsH), nest3d(rs.feedoffsetsV),
                           nest3d(rs.rpeffH), nest3d(rs.rpeffV), nest2d(rs.rmsH), nest2d(rs.rmsV), nest3d(rs.errbeamH), nest3d(rs.errbeamV),
                           dict([(k,nest1d(v)) for k,v in rs.info.items()]))
