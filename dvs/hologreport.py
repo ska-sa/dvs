@@ -1116,8 +1116,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                                 smoothbeam(bm, fitdBlevel=contourdB-3, degree=(pbm.Gx[0],pbm.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
-                            crop = ext_(bm)/ext_(pbm) - 1 # Measured to be cropped by this fraction if > 0
-                            eb = geterrorbeam(meas, modl, crop, contourdB=contourdB)
+                            eb = geterrorbeam(meas, modl, ext_(bm)/ext_(pbm), contourdB=contourdB)
                             ax.imshow(eb, origin='lower', extent=[min(bm.extent,pbm.extent)/2.*i for i in [-1,1,-1,1]], clim=clim, cmap=cmap)
                             ax.set_xlim(*extent); ax.set_ylim(*extent)
                 except IndexError: # End of cycles for this pol, continue to next
