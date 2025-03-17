@@ -539,10 +539,7 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
     prev_oort = katpoint.projection.set_out_of_range_treatment("nan")
     for i,(fs,rs,lbl) in enumerate(layout):
         # For each HologResults in 'rs', indices for cycles that are 'masked out'. feedoffsets & errbeam share the same mask
-        if not hasattr(r.feedoffsetsH, "mask"):
-            mask_ix = [[]]*len(rs)
-        else:
-            mask_ix = [[ci for ci in range(len(r.el_deg)) if (np.all(r.feedoffsetsH[f,ci,...].mask) and np.all(r.feedoffsetsV[f,ci,...].mask))] for f,r in zip(fs,rs)]
+        mask_ix = [[] if not hasattr(r.feedoffsetsH, "mask") else [ci for ci in range(len(r.el_deg)) if (np.all(r.feedoffsetsH[f,ci,...].mask) and np.all(r.feedoffsetsV[f,ci,...].mask))] for f,r in zip(fs,rs)]
         
         # Set the title for the top most panel for this series
         ax = axes[5*i]
