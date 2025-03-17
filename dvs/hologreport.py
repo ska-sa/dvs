@@ -843,7 +843,7 @@ def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True)
     
     return errorbeam
 
-def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing="zernike", eb_extent=(-0.2,0.2), coords="SKA", debug=False, makepdf=True, pdfprefix="", **devkwargs):
+def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing='fourier', eb_extent=(-0.2,0.2), coords="SKA", debug=False, makepdf=True, pdfprefix="", **devkwargs):
     """ Makes standard plots and prints information for the supplied holography result sets.
         
         @param measured: the result set to report on [ResultSet]
@@ -852,7 +852,8 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         @param tzoffset: time zone offset of observatory relative to timestamps (default +2).
         @param contourdB: contour within which to determine the 'error beam', in dB below peak (default -20).
         @param beampolydegree: degree of polynomial to smooth the beams with (default 28 for zernike out to radius ~7*HPBW; increase by 2 for each additional HPBW added to radius).
-        @param beamsmoothing: "zernike" (default) to smooth the beam using zernike polynomials, anything else for regular polynomial fitting.
+        @param beamsmoothing: 'fourier' (default) to smooth the beams "in the aperture plane", 'zernike' to smooth the beam using zernike polynomials
+                               anything else for regular polynomial fitting. KNOWN ISSUE: zernike & poly smoothing are only correct if measured & predicted extents match!
         @param coords: "SKA" for feed offsets in SKA coordinate system, instead of the standard katholog convention (default "SKA")
         @param devkwargs: passed to apmap.plot('dev') e.g. 'clim'. May also include 'cmap' to override
                           the colormap for 'dev' maps only.
@@ -993,6 +994,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 # Error beam within specified contour
                 if (_predicted_ is not None):
                     p_beam = _predicted_[-3]
+                    # TODO: zernike & polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
                     smoothbeam(beam, fitdBlevel=contourdB-3, degree=(p_beam.Gx[0],p_beam.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                     if (ci == 0):
                         smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=(p_beam.Gx[0],p_beam.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
@@ -1076,14 +1078,15 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     return results
 
 
-def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing="zernike", contourdB=-20, tzoffset=2, extent=(-0.2,0.2), clim=(-0.1,0.1), ncols=6, cmap=None):
+def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing='fourier', contourdB=-20, tzoffset=2, extent=(-0.2,0.2), clim=(-0.1,0.1), ncols=6, cmap=None):
     """ Plots H & V-pol error beams (not 'absolute value') for multi-cycle records.
         @param recs: list of 'ResultSet'
         @param predicted: predicted patterns to de-embed from measured (default None) [ResultSet]
         @param DF: max frequency offset to an acceptable predicted pattern [MHz] (default 5).
         @param tzoffset: time zone offset of observatory relative to timestamps (default +2).
         @param beampolydegree: degree of polynomial to smooth the beams with, or None if already smoothed (default 28, for zernike out to radius ~7*HPBW).
-        @param beamsmoothing: "zernike" (default) to smooth the beam using zernike polynomials, anything else for regular polynomial fitting.
+        @param beamsmoothing: 'fourier' (default) to smooth the beams "in the aperture plane", 'zernike' to smooth the beam using zernike polynomials
+                               anything else for regular polynomial fitting. KNOWN ISSUE: zernike & poly smoothing are only correct if measured & predicted extents match!
         @param contourdB: contour within which to determine the 'error beam', in dB below peak (default -20). """
     freqs = sorted(set(np.concatenate([rec.f_MHz for rec in recs])))
     for f_MHz in freqs: # Group figures by frequency
@@ -1094,7 +1097,8 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                 continue
             _predicted_ = [(abs(f-f_MHz),f,p,b) for f,p,b in zip(predicted.f_MHz,predicted.beacon_pol,predicted.beams) if (p==rec.beacon_pol[0]) and (abs(f-f_MHz)<=DF)]
             pbm = sorted(_predicted_)[0][-1] # Sorted by df, ascending
-            if (beampolydegree):
+            if (beampolydegree and beamsmoothing):
+                # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
                 smoothbeam(pbm, fitdBlevel=contourdB-3, degree=(pbm.Gx[0],pbm.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
             C = min(len(beams), ncols)
             R = int(len(beams)/float(ncols) + 0.9999) # Columns & rows per pol
@@ -1108,7 +1112,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                             if (pol == 0): ax.set_title("%.1f [LT]"%HOD(beams[r*C+c].time_avg, tzoffset=tzoffset))
                             if (c == 0): ax.set_ylabel("%s-pol"%("HV"[pol]))
                             bm = beams[r*C+c] # Just for first frequency
-                            if (beampolydegree):
+                            if (beampolydegree and beamsmoothing):
                                 smoothbeam(bm, fitdBlevel=contourdB-3, degree=(pbm.Gx[0],pbm.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
