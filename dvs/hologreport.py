@@ -1166,7 +1166,7 @@ def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=
                     axes[ax].fill_between(time_hod[ix], [bm.temp_C[1] for bm in beams[ix]], [bm.temp_C[2] for bm in beams[ix]], facecolor='r', alpha=0.1)
                 axes[ax].set_ylabel("Ambient temperature [degC]")
             elif ("humid" in key): # Humidity
-                humidity = katselib.getsensorvalues("anc_weather_relative_humidity", np.reshape([np.linspace(t-10*60,t+10*60,5) for t in time_avg],(-1,)))[1] # 20 min window
+                humidity = katselib.getsensorvalues("anc_weather_humidity", np.reshape([np.linspace(t-10*60,t+10*60,5) for t in time_avg],(-1,)))[1] # 20 min window
                 humidity = np.reshape(humidity, (-1,5)) # 5 time points per cycle as per 'get' above
                 humidity = (np.mean(humidity,axis=1), np.min(humidity,axis=1), np.max(humidity,axis=1))
                 axes[ax].plot(time_hod, humidity[0], 'k_') # avg
