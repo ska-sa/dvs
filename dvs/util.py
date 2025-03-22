@@ -153,7 +153,7 @@ def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
     for msd,sms in ([x0 if axis==0 else np.transpose(x0),sm_x0],[x1 if axis==0 else np.transpose(x1),sm_x1]):
         for m in msd:
             _m = np.array(m, copy=True); _m[rfi_mask] = np.nan
-            sm = ksm.smooth(m, N=smoothing, padlen=len(freq)//2, padtype='even')
+            sm = ksm.smooth(_m, N=smoothing, padlen=len(freq)//2, padtype='even')
             flags = np.argwhere(np.abs(m/sm-1) > flag_thresh)
             m[flags] = np.nan
             sms.append(m if (smoothing <= 1) else ksm.smooth(m, N=smoothing))
@@ -204,4 +204,31 @@ def get_datalog_entries(ant, dataset="*"):
     return headings, values
 
 
+def ls_archive(query, min_duration=0, min_night_duration=0, vis_status=False,
+               fields=['CaptureBlockId','StartTime','CenterFrequency','InstructionSet'], field_len=60):
+    """ Query the archive and ensure an entry is added to the DVS data registry.
+    """ + ksl.ls_archive.__doc__
+    
+    recs = ksl.ls_archive(query, min_duration, min_night_duration, vis_status=vis_status, fields=fields, field_len=field_len)
+    
+    # TODO: check & add entries to the data registry spreadsheet
+    
+    return recs
+
+
+
+if __name__ == "__main__":
+    # add_datalog_entry("SKA119", 123456, "description", "center_freq", "notes", "env_conditions")
+    h, v = get_datalog_entries("SKA119", dataset="*")
+    print(h)
+    for r in v:
+        print(r)
+    # add_datalog_entry("SKA119", 1234567890, "description2", "center_freq", "notes", "env_conditions", ["TP 1"])
+    # h, v = get_datalog_entries("SKA119", dataset="123456")
+    # print(h)
+    # for r in v:
+    #     print(r)
+    #
+    # add_datalog_entry("SKA119", 1234567890, "description3", -99, "notes", "supper", ["TP 1", "TP 2"],
+    #                   replace_all=True)
     
