@@ -33,14 +33,20 @@ def load_rs_traces(filename):
         header.append(file.readline().split(","))
     labels = header[-1]
     traces = header[0][1::4]
-    xlabels, ylabels = header[-1][0::4], header[-1][1::4]
+    xlabels, ylabels = labels[0::4], labels[1::4]
     
     # Load the data - columns are x, y, empty_column, empty_column[, ...]
     data = np.loadtxt(filename, encoding="UTF-8-SIG", delimiter=",", skiprows=len(header)+2,
                       usecols=[c for c,l in enumerate(labels) if len(l.strip())>0])
     xdata, ydata = data[:,0::2], data[:,1::2]
     
-    header = {"filename":filename, "xlabels":xlabels, "ylabels":ylabels, "traces":traces}
+    def str2num(v):
+        try:
+            return float(v)
+        except:
+            return v 
+    header = {a:str2num(b) for a,b,*_ in header[1:-1]} # Omit labels & traces
+    header.update({"filename":filename, "xlabels":xlabels, "ylabels":ylabels, "traces":traces})
     return (xdata, ydata, header)
 
 
@@ -77,6 +83,7 @@ class WBGDataset(object):
         self.off = [pol0_off, pol1_off]
         self.on = [pol0_on, pol1_on]
         self.header = {} if (header is None) else header
+        self.RBW = header.get("RBW", np.diff(freq).mean())
         self.off_maxhold = None
         self.on_maxhold = None
     
@@ -112,8 +119,8 @@ class WBGDataset(object):
         freq, pol0_on, header = load_rs_traces(root_folder+f"/{pols[0]}polND_ON.csv")
         freq, pol1_off, header = load_rs_traces(root_folder+f"/{pols[1]}polND_OFF.csv")
         freq, pol1_on, header = load_rs_traces(root_folder+f"/{pols[1]}polND_ON.csv")
-        dataset = WBGDataset(freq[:,0], pol0_off[:,0], pol0_on[:,0], pol1_off[:,0], pol1_on[:,0], pols=pols,
-                             header={"xlabel":header['xlabels'][0], "ylabel":header['ylabels'][0]})
+        header.update({"xlabel":header['xlabels'][0], "ylabel":header['ylabels'][0]})
+        dataset = WBGDataset(freq[:,0], pol0_off[:,0], pol0_on[:,0], pol1_off[:,0], pol1_on[:,0], pols=pols, header=header)
         # Some extras for this kind of dataset
         dataset.on_maxhold = [pol0_on[:,1], pol1_on[:,1]]
         dataset.off_maxhold = [pol0_off[:,1], pol1_off[:,1]]
@@ -140,17 +147,18 @@ class WBGDataset(object):
         freq, h_on = load_dig_spectra(files[1], f_sample, NYQ)
         freq, v_off = load_dig_spectra(files[2], f_sample, NYQ)
         freq, v_on = load_dig_spectra(files[3], f_sample, NYQ)
-        dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV",
-                             header={"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"})
+        header = {"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"}
+        dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV", header=header)
         return dataset
 
 
 def band_defs(band_ID):
     """ Returns the appropriate frequency endpoints and the related MeerKAT WBG limit lines
         for the specified frequency band.
+        GTsys_ref represents 18K plus 56dB gain, in linear scale.
         
         @param band_ID: 'u'|'l'|'B1'...
-        @return: freq_band, fracnd_limits, band_mask """
+        @return: freq_band, fracnd_limits, GTsys_ref, band_mask """
     if ('l' in band_ID) or ("B2" in band_ID):
         ulim=-124.3+10*np.log10(3e6)
         mask_f = [0,200e6,420e6,2150e6,2900e6,3600e6]
@@ -167,7 +175,10 @@ def band_defs(band_ID):
         mask_a = [ulim-13, ulim-13, ulim, ulim,np.nan, ulim-13, ulim-13]
         band_freq = (580e6,1050e6)
         nd_lim = (0.5,1.5)
-    return band_freq, nd_lim, (mask_f,mask_a)
+    
+    GTsys_ref = 10**5.6 * 18 # 18K + 56dB
+    
+    return band_freq, nd_lim, GTsys_ref, (mask_f,mask_a)
 
 
 def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
@@ -177,7 +188,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
     """
-    freq_band, nd_lims, band_mask = band_defs(band_ID)
+    freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID)
     nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
     dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
@@ -191,6 +202,8 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         axs[0].plot(dataset.freq, on, label=pol+"_ON")
         # Ratio of T_ND/Tsys
         axs[1].plot(dataset.freq, dB2lin(on)/dB2lin(off) - 1, label=pol)
+    kB = 1.38e-23 # Boltzmann's constant
+    axs[0].plot(dataset.freq, np.full_like(dataset.freq,lin2dB(kB*GTsys_ref*dataset.RBW)+30), 'm--', label="Tsys_ref")
     axs[0].plot(band_mask[0], band_mask[1], 'k-')
     axs[0].set_ylabel(dataset.header["ylabel"]); axs[0].legend()
     axs[1].set_ylabel("TND/Tsys [frac]"); axs[1].legend()
@@ -220,4 +233,4 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         ax.grid(True)
         ax.fill_between([bins[0],nd_lims[0]], [0.05,0.05], [1,1], color='r', alpha=0.3)
         ax.fill_between([nd_lims[-1],bins[-1]], [0,0], [0.95,0.95], color='r', alpha=0.3)
-    
+
