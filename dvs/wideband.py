@@ -108,6 +108,25 @@ class WBGDataset(object):
         
         return WBGDataset(self.freq, d_off[0], d_on[0], d_off[1], d_on[1], self.pols, self.header)
     
+    def scale_to_T(self, T_ND_model):
+        """ Scale the data to temperature, using the measured ND ON-OFF and the given T_ND_model data.
+            
+            @param T_ND_model: an instance of katsemodels.Rec_T_ND
+            @return: (freq [Hz], Tsys_pol0, Tsys_pol1 [K]) """
+        Tnd_p0 = T_ND_model.nd["HH"](self.freq/1e6)
+        Tnd_p1 = T_ND_model.nd["VV"](self.freq/1e6)
+        
+        on, off = self.on, self.off
+        if ("dB" in self.header["ylabel"]):
+            on = dB2lin(np.asarray(on))
+            off = dB2lin(np.asarray(off))
+            
+        Y_factor = on / off
+        Tsys_p0 = Tnd_p0/(Y_factor[0]-1)
+        Tsys_p1 = Tnd_p1/(Y_factor[1]-1)
+        
+        return (self.freq, Tsys_p0, Tsys_p1)
+    
     @classmethod
     def load(cls, root_folder, pols="HV"):
         """ Loads a dataset that was generated using the standard "wizard"
@@ -187,6 +206,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
+        @return: WBGDataset
     """
     freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID)
     nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
@@ -234,3 +254,4 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         ax.fill_between([bins[0],nd_lims[0]], [0.05,0.05], [1,1], color='r', alpha=0.3)
         ax.fill_between([nd_lims[-1],bins[-1]], [0,0], [0.95,0.95], color='r', alpha=0.3)
 
+    return dataset
