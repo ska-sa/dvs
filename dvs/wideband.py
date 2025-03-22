@@ -56,7 +56,7 @@ def load_dig_spectra(filenames, f_sample, NYQ=2):
         @param filenames: one or more filenames containing the digitiser spectrum data
         @param f_sample: digitiser sample rate [Hz]
         @param NYQ: Nyquist zone sampled by the digitiser (default 1).
-        @return: (freqs, spectrum0, ...) in [Hz] and [complex power, dBm] """
+        @return: (freqs, spectrum0, ...) in [Hz] and [complex power, dBcounts] """
     freqs = None
     spectra = []
     for fn in np.atleast_1d(filenames):
@@ -135,9 +135,9 @@ class WBGDataset(object):
         return dataset
 
     @classmethod
-    def load_dig(cls, root_folder, f_sample, NYQ=2):
+    def load_dig(cls, root_folder, f_sample, NYQ=2, pols="HV"):
         """ Load a digitiser spectrometer dataset as if it's a WBGDataset.
-            NB: The files in root_folder must be sorted in this sequence: (H_off,H_on, V_off,V_on)
+            NB: The files in root_folder must be sorted in this sequence: (pols[0]_off,pols[0]_on, pols[1]_off,pols[1]_on)
             
             @return WBGDataset """
         # The files in the folder are assumed to be sorted in this sequence: (H_off,H_on, V_off,V_on)
@@ -147,8 +147,8 @@ class WBGDataset(object):
         freq, h_on = load_dig_spectra(files[1], f_sample, NYQ)
         freq, v_off = load_dig_spectra(files[2], f_sample, NYQ)
         freq, v_on = load_dig_spectra(files[3], f_sample, NYQ)
-        header = {"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"}
-        dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV", header=header)
+        header = {"xlabel":"Frequency [Hz]", "ylabel":"Power [dBcounts]"}
+        dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols=pols, header=header)
         return dataset
 
 
