@@ -36,12 +36,30 @@ def load_rs_traces(filename):
     xlabels, ylabels = header[-1][0::4], header[-1][1::4]
     
     # Load the data - columns are x, y, empty_column, empty_column[, ...]
-    data = np.loadtxt(filename, encoding="UTF-8-sig", delimiter=",", skiprows=len(header)+2,
+    data = np.loadtxt(filename, encoding="UTF-8-SIG", delimiter=",", skiprows=len(header)+2,
                       usecols=[c for c,l in enumerate(labels) if len(l.strip())>0])
     xdata, ydata = data[:,0::2], data[:,1::2]
     
     header = {"filename":filename, "xlabels":xlabels, "ylabels":ylabels, "traces":traces}
     return (xdata, ydata, header)
+
+
+def load_dig_spectra(filenames, f_sample, NYQ=2):
+    """ Load DIGITISER spectrometer data from a local file.
+        
+        @param filenames: one or more filenames containing the digitiser spectrum data
+        @param f_sample: digitiser sample rate [Hz]
+        @param NYQ: Nyquist zone sampled by the digitiser (default 1).
+        @return: (freqs, spectrum0, ...) in [Hz] and [complex power, dBm] """
+    freqs = None
+    spectra = []
+    for fn in np.atleast_1d(filenames):
+        spec = np.loadtxt(fn, delimiter=",")
+        spectra.append(spec)
+        if (freqs is None):
+            freqs = np.linspace(NYQ-1, NYQ, len(spec))*f_sample/2
+            # TODO: interpret NYQ
+    return [freqs] + spectra
 
 
 class WBGDataset(object):
@@ -59,77 +77,72 @@ class WBGDataset(object):
         self.off = [pol0_off, pol1_off]
         self.on = [pol0_on, pol1_on]
         self.header = {} if (header is None) else header
+        self.off_maxhold = None
+        self.on_maxhold = None
     
-    def de_embedded(self, instr_freq, instr_mag):
+    def de_embedded(self, instr_freq, instr_mag0, instr_mag1):
         """ Remove the instrument's contribution from the data.
             
             @param instr_freq: frequencies to match or overlap with .freq (same units & overlapping
-            @param instr_mag: the instrument's contribution (same units as .on & .off)
+            @param instr_mag0,1: the instrument's contribution (same units as .on & .off)
             @return: WBGDataset, with 'on' & 'off' values with the instrumental contribution removed
         """
         # Interpolate as necessary to match frequencies
-        instr_mag = np.interp(self.freq, instr_freq, instr_mag)
-        # Define de-embedding formulas
+        instr_mag = np.array([np.interp(self.freq, instr_freq, instr_mag0),
+                              np.interp(self.freq, instr_freq, instr_mag1)])
+        
         if ("dB" in self.header["ylabel"]):
             instr_mag = dB2lin(instr_mag)
             de_embed = lambda dB: lin2dB( dB2lin(dB) - instr_mag )
         else:
             de_embed = lambda lin: lin - instr_mag
-        if (len(np.shape(self.on[0])) > len(np.shape(instr_mag))):
-            instr_mag = np.c_[instr_mag, instr_mag]
-        # De-embed
-        d_on = [de_embed(d) for d in self.on]
-        d_off = [de_embed(d) for d in self.off]
+        d_on = de_embed(np.asarray(self.on))
+        d_off = de_embed(np.asarray(self.off))
         
         return WBGDataset(self.freq, d_off[0], d_on[0], d_off[1], d_on[1], self.pols, self.header)
     
     @classmethod
     def load(cls, root_folder, pols="HV"):
+        """ Loads a dataset that was generated using the standard "wizard"
+            
+            @return: WBGDataset """
         # This dataset is generated using a "wizard", so the file format is exactly know
+        #   pol* is [[avg(RMS), max_hold(RMS)] by freq]
         freq, pol0_off, header = load_rs_traces(root_folder+f"/{pols[0]}polND_OFF.csv")
         freq, pol0_on, header = load_rs_traces(root_folder+f"/{pols[0]}polND_ON.csv")
         freq, pol1_off, header = load_rs_traces(root_folder+f"/{pols[1]}polND_OFF.csv")
         freq, pol1_on, header = load_rs_traces(root_folder+f"/{pols[1]}polND_ON.csv")
-        i_freq, i_mag, _ = freq[:,0], freq[:,0]-np.inf, None # TODO!
         dataset = WBGDataset(freq[:,0], pol0_off[:,0], pol0_on[:,0], pol1_off[:,0], pol1_on[:,0], pols=pols,
-                             header={"xlabel":header['xlabels'][0], "ylabel":header['ylabels'][0]}).de_embedded(i_freq, i_mag)
+                             header={"xlabel":header['xlabels'][0], "ylabel":header['ylabels'][0]})
         # Some extras for this kind of dataset
-        dataset.on_max = [pol0_on[:,1], pol1_on[:,1]]
-        dataset.off_max = [pol0_off[:,1], pol1_off[:,1]]
+        dataset.on_maxhold = [pol0_on[:,1], pol1_on[:,1]]
+        dataset.off_maxhold = [pol0_off[:,1], pol1_off[:,1]]
+        
+        try:
+            freq_i, pol0_i, header_i = load_rs_traces(root_folder+f"/{pols[0]}pol_Instrument.csv")
+            freq_i, pol1_i, header_i = load_rs_traces(root_folder+f"/{pols[1]}pol_Instrument.csv")
+            dataset = dataset.de_embedded(freq_i, pol0_i, pol1_i)
+        except IOError as e:
+            print("WARNING: Unable to de-embed the spectrum analyser & cable response!", e)
+        
         return dataset
 
-
-def load_wbg_dig(root_folder, f_sample, NYQ=2):
-    """ Load a digitiser spectrometer dataset as if it's a WBGDataset.
-    
-        @return wideband.WBGDataset """
-    def load_digspectra(filenames, f_sample, NYQ=2):
-        """ Load DIGITISER spectrometer data from a local file.
+    @classmethod
+    def load_dig(cls, root_folder, f_sample, NYQ=2):
+        """ Load a digitiser spectrometer dataset as if it's a WBGDataset.
+            NB: The files in root_folder must be sorted in this sequence: (H_off,H_on, V_off,V_on)
             
-            @param filenames: one or more filenames contianing the digitiser spectrum data
-            @param f_sample: digitiser sample rate [Hz]
-            @param NYQ: Nyquist zone sampled by the digitiser (default 1).
-            @return: (freqs, spectrum0, ...) in [Hz] and [complex power, dBm] """
-        freqs = None
-        spectra = []
-        for fn in np.atleast_1d(filenames):
-            spec = np.loadtxt(fn, delimiter=",")
-            spectra.append(spec)
-            if (freqs is None):
-                freqs = np.linspace(NYQ-1, NYQ, len(spec))*f_sample/2
-                # TODO: interpret NYQ
-        return [freqs] + spectra
-    
-    # The files in the folder are assumed to be sorted in this sequence: (H_off,H_on, V_off,V_on)
-    files = sorted(os.listdir(root_folder))
-    files = [root_folder+"/"+f for f in files if ("DIFF" not in f)] # Remove the "HV" cross correlation files
-    freq, h_off = load_digspectra(files[0], f_sample, NYQ)
-    freq, h_on = load_digspectra(files[1], f_sample, NYQ)
-    freq, v_off = load_digspectra(files[2], f_sample,NYQ)
-    freq, v_on = load_digspectra(files[3], f_sample, NYQ)
-    dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV",
-                         header={"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"})
-    return dataset
+            @return WBGDataset """
+        # The files in the folder are assumed to be sorted in this sequence: (H_off,H_on, V_off,V_on)
+        files = sorted(os.listdir(root_folder))
+        files = [root_folder+"/"+f for f in files if ("DIFF" not in f)] # Remove the "HV" cross correlation files
+        freq, h_off = load_dig_spectra(files[0], f_sample, NYQ)
+        freq, h_on = load_dig_spectra(files[1], f_sample, NYQ)
+        freq, v_off = load_dig_spectra(files[2], f_sample, NYQ)
+        freq, v_on = load_dig_spectra(files[3], f_sample, NYQ)
+        dataset = WBGDataset(freq, h_off, h_on, v_off, v_on, pols="HV",
+                             header={"xlabel":"Frequency [Hz]", "ylabel":"Power [counts]"})
+        return dataset
 
 
 def band_defs(band_ID):
@@ -160,6 +173,7 @@ def band_defs(band_ID):
 def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     """ Process a set of H & V pol measurements with ND OFF and ON.
         Generates a standard figure to summarise the results.
+        
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
     """
@@ -191,13 +205,11 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
         ax.vlines(freq_subset, *ax.get_ylim(), 'm')
         ax.set_xlim(*flim)
     
-    if False: # RFI should show up in "max_hold"-"RMS" ~ 9 sigma ~10dB
-        try:
-            for offm,off, onm,on in zip(dataset.off_max,dataset.off, dataset.on_max,dataset.on):
-                axs[1].plot(dataset.freq, offm-off -10, 'k-', alpha=0.7)
-                axs[1].plot(dataset.freq, onm-on -10, 'k-', alpha=0.7)
-        except AttributeError:
-            pass
+    # RFI should show up in "max_hold"-"RMS" ~ 9 sigma ~10dB
+    if False: # dataset.off_maxhold is not None:
+        for offm,off, onm,on in zip(dataset.off_maxhold,dataset.off, dataset.on_maxhold,dataset.on):
+            axs[1].plot(dataset.freq, offm-off -10, 'k-', alpha=0.7)
+            axs[1].plot(dataset.freq, onm-on -10, 'k-', alpha=0.7)
     
     # Statistics only over subset of frequency!
     axs = [fig.add_subplot(gs[-1, i]) for i in range(2)]
