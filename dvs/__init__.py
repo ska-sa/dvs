@@ -17,3 +17,4 @@ from analysis import katsemodels as models
 models.aperture_efficiency_dir = modelsroot+'/aperture-efficiency'
 models.spill_over_dir = modelsroot+'/spill-over'
 models.lab_Trec_dir = modelsroot+'/receiver-models'
+models.nd_models_folder = modelsroot+'/noise-diode-models'
