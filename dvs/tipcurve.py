@@ -30,8 +30,6 @@ from analysis import katselib as ksl
 from analysis import katsemat as mat
 from analysis import katsemodels as models
 
-# Noise Diode Models that are not yet "deployed in the telescope"
-nd_models_folder = modelsroot + '/noise-diode-models'
 
 Tcmb = models.Tcmb # [K]
 T0degC = models.T0degC # [K]
@@ -455,7 +453,6 @@ def process_a(h5, ant, freq_min=0, freq_max=20e9, channel_bw=10e6, sky_radius=30
         @param freq_mask: either a pickle file of boolean flags for the dataset's frequency channels,
                               or a text file with each line frequency start,stop to indicate omitted range.
         @return: (tip_results,T_SysTemps,receiver,SpillOver,aperture_efficiency) """
-    global nd_models_folder
     h5.select(reset="TB", flags="data_lost,ingest_rfi")
     h5.select(scans='track')
     ant = ant if isinstance(ant, str) else ant.name
@@ -473,7 +470,7 @@ def process_a(h5, ant, freq_min=0, freq_max=20e9, channel_bw=10e6, sky_radius=30
         freq_list[j] = h5.channel_freqs[chunk].mean()/1e6
     print("Selecting channel data to form %f MHz Channels spanning %.f - %.f MHz"%(channel_bw/1e6, freq_list.min(),freq_list.max()) )
     band_input = rec.split('.')[0].lower() # APH different from script - if a problem implement manual override when file is loaded
-    d = load_cal(h5, "%s" % (ant,), nd_models_folder, chunks,band_input=band_input, freq_mask=freq_mask, debug=debug)
+    d = load_cal(h5, "%s" % (ant,), models.nd_models_folder, chunks,band_input=band_input, freq_mask=freq_mask, debug=debug)
     d.receiver = rec
     tip_rs = Tip_Results(d, filename)
     
@@ -772,7 +769,7 @@ def report_e(nice_title, tip_rs, aperture_efficiency, pp):
     
 def process(dataset, ant, freq_min=0, freq_max=20e9, freq_mask='', apscale=1.,PLANE="antenna",spec_sky=True,MeerKAT=True):
     """ Load and process the tipping curve data file, to generate the information from which a report can be compiled.
-        Note that the noise diode models are stored either in the dataset itself, or in the global::nd_models_folder,
+        Note that the noise diode models are stored either in the dataset itself, or in models.nd_models_folder,
         where model filenames are like 'rx.%(band).%(serialno).%(pol).csv' (e.g. 'rx.l.4.h.csv').
 
         @param dataset: an open katdal.Dataset
