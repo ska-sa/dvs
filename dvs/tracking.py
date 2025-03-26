@@ -11,6 +11,7 @@ import pylab as plt
 import katpoint
 import typing
 from analysis import katselib, katsepnt
+from analysis.katsemat import sliding_window
 
 
 _c_ = 299792458
@@ -194,7 +195,8 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True, verbose=True, debug=False, kind=None, min_len=20):
+def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True,
+                          kind=None, min_len=20, output_filepattern=None, verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -207,6 +209,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param strict: True to set invalid fits to nan (default True)
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
+        @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
     """
@@ -222,7 +225,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         chans = lambda *a: _chans_
     
     fitted = [] # (timestamp, target, Az, El, dAz, dEl, hpw_x, hpw_y, ampl, resid)
-    enviro = [] # (temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_az, sun_el, feedindexer_angle)
+    enviro = [] # (temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_az, sun_el, wind_dynamic, feedindexer_angle)
     
     ds.select(reset="", scans=scans, compscans=compscans)
     ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
@@ -236,6 +239,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
     
     scan_ant_ix = [a.name for a in ds.ants].index(ant)
     scan_ant = ds.ants[scan_ant_ix]
+    avgws_timestamps, avgws = ds.timestamps[:], sliding_window(ds.timestamps, ds.wind_speed, int(1000/(ds.timestamps[1]-ds.timestamps[0])+0.5), np.mean)
     fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
     fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps)
     
@@ -269,8 +273,9 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         wind_std = np.std(raw_wind_speed)
-        wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_speed # SKA Dish definition, 3*std - mean. TODO: use 1000sec mean!
         # Extra sensor values
+        wind_1000sec = np.mean(avgws[(np.nanmin(ds.timestamps)<=avgws_timestamps) & (avgws_timestamps<=np.nanmax(ds.timestamps))])
+        wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_1000sec # SKA Dish definition, 3*std - mean
         fi_angle = np.median(fi_angles[(np.nanmin(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.nanmax(ds.timestamps))])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
@@ -338,6 +343,9 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
         
         enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [wind_dynamic, fi_angle])
+    
+    if (output_filepattern):
+        save_apss_file(output_filepattern%ant, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
     
     if debug or verbose:
         print("Std [arcsec]", np.nanstd([o[4] for o in fitted])*3600, np.nanstd([o[5] for o in fitted])*3600)
@@ -419,36 +427,6 @@ def _demo_reduce_pointing_scans_(freq=11e9, ampl=1, SEFD=200, kind="cardioid", c
     
     finally: # Undo fixtures
         katselib.getsensorvalues = _gsv_
-
-
-
-def analyse_beam_scans(ds, ants, chans=None, output_filepattern=None, debug=False, verbose=True, **kwargs):
-    """ Generates pointing offsets for a dataset created with point_source_scan.py or circular_pointing.py or similar
-    
-        @param ds: the katdal dataset
-        @param ants: the identifiers of the scanning antennas in the dataset
-        @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
-        @param output_filepattern: filename pattern (with %s for antenna ID) for CSV file to store results to (default None)
-        @param kwargs: extra arguments for reduce_pointing_scans()
-        @return: { antID:[(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid [power]), ...(for each cycle)] }
-    """
-    results = {}
-    for ant in ants:
-        fitted, enviro = reduce_pointing_scans(ds, ant, chans=chans, debug=debug, verbose=verbose, **kwargs)
-        results[ant] = fitted
-        if (output_filepattern):
-            save_apss_file(output_filepattern%ant, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
-        
-    if verbose: # Plot the offsets
-        symbols = ['.', '+', '^', 'D', 'S', 'O', 'v', '*']
-        axs = plt.subplots(2,1, figsize=(14,5))[1]
-        for (ant,fitted),fmt in zip(results.items(),symbols):
-            tAE = np.array([[m[0],m[4],m[5]] for m in fitted])
-            axs[0].plot(tAE[:,0], (tAE[:,1]-np.nanmedian(tAE[:,1]))*3600, fmt, label=ant)
-            axs[1].plot(tAE[:,0], (tAE[:,2]-np.nanmedian(tAE[:,2]))*3600, fmt, label=ant)
-        axs[0].legend(); axs[0].set_ylabel("dAz"); axs[1].set_ylabel("dEl");
-    
-    return results
 
 
 def save_apss_file(output_filename, ds, ant, fitted, enviro):
