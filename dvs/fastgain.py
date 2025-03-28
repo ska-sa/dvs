@@ -169,7 +169,7 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
     
     _pol_lbl_ = lambda pol: "%s pol @ gain %s"%(pol,gains[0]["%s%s"%(ant,pol.lower())])
     dataset_id = "%s: %s[%s]"%(filename,ant,h5.receivers[ant])
-    _info_ = "with FFT shift %d & atten %s" % (fft_shift, atten)
+    _info_ = "with FFT shift %d & atten %sdB" % (fft_shift, atten)
     savefile = "%s_%s.csv"%(filename[-13:-3],ant)
     return standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, xK,
                            dataset_id, _pol_lbl_, _info_, savefile, vs_freq, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
