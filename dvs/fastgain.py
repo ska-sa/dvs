@@ -392,7 +392,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         ret.append(p_t)
         axes[2*i].plot(t, p_t,'+', t, fit_avg(p_t,T_interval/dt), '.'); axes[2*i].set_ylabel("Sampled power [linear]")
         result = 100*sliding_rms(p_t,T_interval/dt)*sfact
-        axes[2*i].set_title("%s pol over %.f sec: 95th pct %.3f%%"%(pol,T_interval,np.percentile(result,95)))
+        axes[2*i].set_title("%s pol over %.f sec: 95th pct %.3f%%"%(pol,T_interval,np.nanpercentile(result,95)))
         axes[2*i+1].plot(t, result);  axes[2*i+1].set_ylabel("RMS over %.f sec [%%]"%T_interval)
         axes[2*i+1].plot(t, sigma_spec+0*t, 'k--') # Spec limit
         axes[2*i+1].set_ylim(0,1.5*sigma_spec)
