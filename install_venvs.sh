@@ -19,16 +19,17 @@ ipython3 kernel install --name "python3" --user
 pip install numpy scipy matplotlib
 pip install pysolr paramiko zernike
 
-pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal}
+pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal,katsdpcalproc}
 # pip install git+ssh://git@github.com/ska-sa/dvsholog
-# TODO: At present, the above package is private - a temporary situation. The workaround is the following:
-pip install gdown
-gdown 1X1CdggMPIgR5xRoeGd2LajHRixf_mVtM && pip install dvsholog-main.zip && rm dvsholog-main.zip
+# TODO: At present, the above repository is private - install as follows
+pip install dvsholog
 
 pip install git+https://github.com/telegraphic/PyGSM
 PY=`ls ~/venv-py3/lib/`
 mv ~/venv-py3/lib/$PY/site-packages/pygsm/gsm2016_components.h5 ~/venv-py3/lib/$PY/site-packages/pygsm/gsm2016_components.h5~
 wget -O ~/venv-py3/lib/$PY/site-packages/pygsm/gsm2016_components.h5 https://zenodo.org/record/3479985/files/gsm2016_components.h5?download=1
+
+pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
 
 ## Set up the DVS workspace
@@ -46,6 +47,9 @@ KS=`jupyter kernelspec list | sed -n -E 's/\s*(dvs)\s+(\S+)/\2/p'`/kernel.json
 PK=\"env\":{\"PYTHONPATH\":\"`pwd`/dvs\"}
 sed -i -E ':a; N; $! ba; s@(.*)}@\1,'$PK'\n}@' $KS
 
+
+echo YOU must install rclone - that's if you want to download local cached datasets!
+# see https://rclone.org/install
 
 echo You may start the notebook server by using the following command:
 echo `readlink -f dvs/startjnb` 
