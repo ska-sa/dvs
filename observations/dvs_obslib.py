@@ -211,22 +211,26 @@ def temp_hack_DisableAllPointingCorrections(cam):
         RE static corrections: this should always be disabled when CAM DishProxy is used
         RE tilt corrections: disable tilt corrections because it's not calibrated / implemented correctly as of 14/11/2024
     """
-    # Find the antennas that expose this functionality:
-    resp = cam.ants.req.dsm_DisablePointingCorrections()
-    d_ants = [a for a,r in resp.items() if (r is not None)]
+    try:
+        # Find the antennas that expose this functionality:
+        resp = cam.ants.req.dsm_DisablePointingCorrections()
+        d_ants = [a for a,r in resp.items() if (r is not None)]
+        
+        # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
+        for ant in cam.ants:
+            if (ant.name in d_ants):
+                az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
+                ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
+                ant.req.mode("POINT")
+        time.sleep(5)
+        resp = cam.ants.req.dsm_DisablePointingCorrections()
+        time.sleep(1)
+        
+        user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
+        user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
     
-    # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
-    for ant in cam.ants:
-        if (ant.name in d_ants):
-            az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
-            ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
-            ant.req.mode("POINT")
-    time.sleep(5)
-    resp = cam.ants.req.dsm_DisablePointingCorrections()
-    time.sleep(1)
-    
-    user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
-    user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
+    except AttributeError: # A subarray that only has MeerKAT receptors does not have `req.dsm_DisablePointingCorrections` 
+        pass
 
 
 def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
