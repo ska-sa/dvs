@@ -196,7 +196,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
 
 
 def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True,
-                          kind=None, min_len=20, output_filepattern="%s_%s_circular_pointing.csv", verbose=True, debug=False):
+                          kind=None, min_len=20, clip_radius=None, output_filepattern="%s_%s_circular_pointing.csv", verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -209,6 +209,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param strict: True to set invalid fits to nan (default True)
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
+        @param clip_radius: maximum radius around target to use for fit, or None for 'median+std' [deg] (default None)
         @param output_filepattern: filename pattern (with %s for dataset and antenna names) for CSV file to store results to (default '%s_%s_circular_pointing.csv')
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
@@ -254,7 +255,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
-        mask &= scan_r < (np.median(scan_r) + 1*np.std(scan_r))
+        mask &= scan_r < (clip_radius if clip_radius else (np.median(scan_r) + 1*np.std(scan_r)))
         scan_r = scan_r[mask]
         if (len(scan_r) == 0) or (np.max(scan_r) > 6): # All points flagged, or large scan offset may mean antenna lagged behind e.g. near zenith or unwrap!
             continue
