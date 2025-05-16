@@ -46,6 +46,7 @@ except:
 import time, os, telnetlib
 import numpy as np
 import katpoint
+import tango
 
 
 def standard_script_options(usage, description):
@@ -228,9 +229,22 @@ def temp_hack_DisableAllPointingCorrections(cam):
         
         user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
         user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
+        
+        temp_EnableTiltCorrections(["s0121"])
     
     except AttributeError: # A subarray that only has MeerKAT receptors does not have `req.dsm_DisablePointingCorrections` 
         pass
+
+def temp_EnableTiltCorrections(dish_names):
+    """ Enable only tilt corrections on the specified dishes.
+        This command is currently not exposed via the CAM proxy, so it uses the tango interface directly.
+    """
+    d_numbers = {"s0000":64, "s0121":65, "s0119":66}
+    for dish in dish_names:
+        lmc_root = "10.96.%d.100:10000/mid_dsh_0121"%d_numbers[dish]
+        dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+        dsm.tiltPointCorrEnabled = False
+        user_logger.info("APPLIED HACK: Tilt Corrections Enabled on %s" % dish)
 
 
 def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
