@@ -214,8 +214,7 @@ def temp_hack_DisableAllPointingCorrections(cam):
     """
     try:
         # Find the antennas that expose this functionality:
-        resp = cam.ants.req.dsm_DisablePointingCorrections()
-        d_ants = [a for a,r in resp.items() if (r is not None)]
+        d_ants = hack_SetPointingCorrections(cam.ants, spem_enabled=False, tilt_enabled=False)
         
         # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
         for ant in cam.ants:
@@ -224,27 +223,30 @@ def temp_hack_DisableAllPointingCorrections(cam):
                 ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
                 ant.req.mode("POINT")
         time.sleep(5)
-        resp = cam.ants.req.dsm_DisablePointingCorrections()
+        hack_SetPointingCorrections(cam.ants, spem_enabled=False, tilt_enabled=False)
         time.sleep(1)
-        
-        user_logger.info("APPLIED HACK: Static Corrections Disabled on %s" % d_ants)
-        user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % d_ants)
-        
-        temp_EnableTiltCorrections(["s0121"])
     
     except AttributeError: # A subarray that only has MeerKAT receptors does not have `req.dsm_DisablePointingCorrections` 
         pass
 
-def temp_EnableTiltCorrections(dish_names):
-    """ Enable only tilt corrections on the specified dishes.
+def hack_SetPointingCorrections(ants, spem_enabled=True, tilt_enabled=True, force=False):
+    """ Enable/Disable SPEM and or Tilt corrections on the specified dishes.
         This command is currently not exposed via the CAM proxy, so it uses the tango interface directly.
+        @return: list of names of ants where it was set.
     """
+    done = []
     d_numbers = {"s0000":64, "s0121":65, "s0119":66}
-    for dish in dish_names:
-        lmc_root = "10.96.%d.100:10000/mid_dsh_0121"%d_numbers[dish]
-        dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-        dsm.tiltPointCorrEnabled = False
-        user_logger.info("APPLIED HACK: Tilt Corrections Enabled on %s" % dish)
+    for a in ants:
+        if (a.name in d_numbers.keys()):
+            lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
+            dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+            dsm.pointCorrEnabled = spem_enabled
+            user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", a.name))
+            if force or (a.name not in ["s0121"]): # Not allowed to disable tilt corrections on these!
+                dsm.tiltPointCorrEnabled = tilt_enabled
+                user_logger.info("APPLIED HACK: Tilt Corrections %s on %s" % ("Enabled" if tilt_enabled else "Disabled", a.name))
+            done.append(a.name)
+    return done
 
 
 def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
