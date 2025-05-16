@@ -12,7 +12,7 @@ import katpoint
 try:
     from katcorelib import (standard_script_options, verify_and_connect, start_session, user_logger, ant_array)
     from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
-    from dvs_obslib import cycle_feedindexer
+    from dvs_obslib import cycle_feedindexer, hack_SetPointingCorrections
     testmode=False
 except:
     testmode=True
@@ -364,7 +364,7 @@ if __name__=="__main__":
                     
                     # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        hack_SetPointingCorrections(all_ants, spem_enabled=False, tilt_enabled=False) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
@@ -401,7 +401,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        hack_SetPointingCorrections(all_ants, spem_enabled=False, tilt_enabled=False) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         for iant,track_ant in enumerate(track_ants):#also include always_scan_ants in track_ant list
                             if track_ant.name not in always_scan_ants_names:
                                 continue
@@ -412,7 +412,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        all_ants.req.dsm_DisablePointingCorrections() # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        hack_SetPointingCorrections(all_ants, spem_enabled=False, tilt_enabled=False) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
                         for it in range(len(armx)):
