@@ -229,14 +229,14 @@ def temp_hack_SetupPointingCorrections(cam):
     time.sleep(1)
 
 
-def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, force=True):
+def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, force=False):
     """ Enable/Disable SPEM and or Tilt corrections on the specified dishes.
         This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
         
         @param ants: list of instances of CAM Receptor/Dish Proxy.
         @param spem_enabled: (default False)
         @param tilt_enabled: (default True)
-        @param force: if True then force tilt to False for all except s0121 (default True)
+        @param force: if True then force tilt to the specified value, else will disable tilt for all except s0121 (default False)
         @return: list of names of ants where the SPEM corrections were changed.
     """
     mod_spem, mod_tilt, force_tilt = [], [], []
@@ -250,7 +250,7 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
             dsm.staticPointCorrEnabled = spem_enabled
             mod_spem.append(a.name)
-            if force and (a.name not in ["s0121"]): # Assumed not-good tilt
+            if (not force) and (a.name not in ["s0121"]): # Assumed not-good tilt
                 dsm.tiltPointCorrEnabled = False
                 force_tilt.append(a.name)
             else:
