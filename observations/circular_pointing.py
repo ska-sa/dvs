@@ -364,7 +364,7 @@ if __name__=="__main__":
                     
                     # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
@@ -401,7 +401,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         for iant,track_ant in enumerate(track_ants):#also include always_scan_ants in track_ant list
                             if track_ant.name not in always_scan_ants_names:
                                 continue
