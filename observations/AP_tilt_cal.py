@@ -7,6 +7,7 @@ import numpy as np
 from katcorelib import (standard_script_options,
                         verify_and_connect,
                         user_logger)
+from dvs_obslib import hack_SetPointingCorrections
 
 
 class ParametersExceedTravelRange(Exception):
@@ -158,8 +159,8 @@ with verify_and_connect(opts) as kat:
                 TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
                 ant.req.ap_enable_point_error_tiltmeter(False)
             for ant in ska_ants:
-                TILT_state[ant.name] = True # ant.sensor.dshTiltCorrections.get_value() # TODO: not exposed 11/2024
-            kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt
+                TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
+            kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt, only effective for SKA dishes
 
         for n in range(opts.repeats):
             rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
@@ -181,8 +182,8 @@ with verify_and_connect(opts) as kat:
                         user_logger.error("FAILED to restore ACU state for %s: %s"%(ant.name, resp.reply))
                 for ant in ska_ants:
                     if (TILT_state[ant.name] == True):
-                        user_logger.warning("TODO: re-enable %s tilt corrections" % ant.name)
                         # ant.req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
+                        hack_SetPointingCorrections(ant, tilt_enabled=True, force=True)
 
             kat.ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
