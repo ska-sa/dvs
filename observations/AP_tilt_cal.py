@@ -70,7 +70,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     user_logger.info("Performing scan to azimuth %s at %s deg/sec.", end_azim, azim_speed)
     if not dry_run:
         ants.req.mode('SCAN') # Start the configured scan
-        ants.req.dsm_DisablePointingCorrections() # TODO: hack necessary 11/2024 because ACU re-enables it
+        hack_SetPointingCorrections(ants, tilt_enabled=False) # TODO: hack necessary 11/2024 because ACU re-enables it
     
     if not dry_run:
         time.sleep(2) # Avoid triggering before the antennas have started moving
@@ -160,7 +160,8 @@ with verify_and_connect(opts) as kat:
                 ant.req.ap_enable_point_error_tiltmeter(False)
             for ant in ska_ants:
                 TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
-            kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt, only effective for SKA dishes
+            #kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt, only effective for SKA dishes
+            hack_SetPointingCorrections(ska_ants, tilt_enabled=False)
 
         for n in range(opts.repeats):
             rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
@@ -183,7 +184,7 @@ with verify_and_connect(opts) as kat:
                 for ant in ska_ants:
                     if (TILT_state[ant.name] == True):
                         # ant.req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
-                        hack_SetPointingCorrections(ant, tilt_enabled=True, force=True)
+                        hack_SetPointingCorrections([ant], tilt_enabled=True, force=True)
 
             kat.ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
