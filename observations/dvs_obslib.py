@@ -68,6 +68,9 @@ def standard_script_options(usage, description):
     nd_params = parser.get_option('--nd-params')
     nd_params.help += ". Use 'switching,3,7,-1' to activate digitiser-level switching, in integer multiples of SDP visibilities dump intervals."
     
+    parser.add_option('--no-tiltcorrections', action='store_true',
+                      help='Explicitly disable tilt corrections during controlled movement.')
+
     return parser
 
 
@@ -203,7 +206,9 @@ def match_ku_siggen_freq(cam, override=False):
         user_logger.error("MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
-def temp_hack_SetupPointingCorrections(cam):
+__tilt_corr_allowed__ = True
+
+def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     """ Temporary hack to disable the MKE ACU static pointing corrections and set tilt corrections according
         to the default rules.
         NB: at present the state gets automatically re-enabled by the ACU when there's a transition out
@@ -212,12 +217,17 @@ def temp_hack_SetupPointingCorrections(cam):
         MPI/OHB have been requested to make the "disabling" a latching configuration setting in the ACU.
         
         RE static corrections: this should always be disabled when CAM DishProxy is used
-        RE tilt corrections: disable tilt corrections on all (except MKE121) because it's not calibrated
-         / implemented correctly as of 16/05/2025
+        RE tilt corrections: default rules applied as per `hack_SetPointingCorrections()`
+        
+        @param allow_tiltcorrections: if False, disables tilt corrections and ensures that all attempts to enable
+            tilt corrections (without 'force') for the duration of the session will be ignored (default True).
     """
+    global __tilt_corr_allowed__
+    # Change the default behaviour of hack_SetPointingCorrections
+    __tilt_corr_allowed__ = not allow_tiltcorrections
+    
     # Find the antennas that expose this functionality:
     d_ants = hack_SetPointingCorrections(cam.ants, spem_enabled=False)
-    
     # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
     for ant in cam.ants:
         if (ant.name in d_ants):
@@ -225,13 +235,16 @@ def temp_hack_SetupPointingCorrections(cam):
             ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
             ant.req.mode("POINT")
     time.sleep(5)
+    # Now disable ACU SPEM corrections (for as long as it only uses POINT mode for controlled motion)
     hack_SetPointingCorrections(cam.ants, spem_enabled=False)
-    time.sleep(1)
 
 
 def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, force=False):
     """ Enable/Disable SPEM and or Tilt corrections on the specified dishes.
         This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
+        
+        Default rules for tilt corrections: disable tilt corrections on all (except MKE121) because they are not
+         calibrated / implemented correctly as of 16/05/2025.
         
         @param ants: list of instances of CAM Receptor/Dish Proxy.
         @param spem_enabled: (default False)
@@ -239,18 +252,20 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
         @param force: if True then force tilt to the specified value, else will disable tilt for all except s0121 (default False)
         @return: list of names of ants where the SPEM corrections were changed.
     """
+    global __tilt_corr_allowed__
     mod_spem, mod_tilt, force_tilt = [], [], []
     # Mapping to match https://github.com/ska-sa/katcamconfig/pull/955/files
     d_numbers = {"s0000":64, "s0121":65, "s0119":66, "s0118":67, "s0107":68, "s0060":69, "s0105":70, "s0110":71, # MKE
                  "s0115":72, "s0117":73, "s0116":74, "s0017":75, "s0018":76, "s0020":77, "s0023":78, # MKE
                  "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
+    d_tilt_OK = ["s0121"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
             dsm.staticPointCorrEnabled = spem_enabled
             mod_spem.append(a.name)
-            if (not force) and (a.name not in ["s0121"]): # Assumed not-good tilt
+            if (not __tilt_corr_allowed__) or ((a.name not in d_tilt_OK) and not force): # Default rule for disabling
                 dsm.tiltPointCorrEnabled = False
                 force_tilt.append(a.name)
             else:
@@ -358,7 +373,7 @@ def start_hacked_session(cam, **kwargs):
             match_ku_siggen_freq(session._cam_)
             # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
             # during which the ACU resets some things which we are trying to hack around.
-            temp_hack_SetupPointingCorrections(session._cam_)
+            temp_hack_SetupPointingCorrections(session._cam_, allow_tiltcorrections=not kwargs.get("no_tiltcorrections", False))
         
         return result
     session.standard_setup = hacked_setup
