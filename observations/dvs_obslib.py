@@ -224,7 +224,7 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     """
     global __tilt_corr_allowed__
     # Change the default behaviour of hack_SetPointingCorrections
-    __tilt_corr_allowed__ = not allow_tiltcorrections
+    __tilt_corr_allowed__ = allow_tiltcorrections
     
     # Find the antennas that expose this functionality:
     d_ants = hack_SetPointingCorrections(cam.ants, spem_enabled=False)
