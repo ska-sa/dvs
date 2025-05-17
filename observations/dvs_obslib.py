@@ -263,14 +263,16 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
         if (a.name in d_numbers.keys()):
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-            dsm.staticPointCorrEnabled = spem_enabled
-            mod_spem.append(a.name)
+            if (dsm.staticPointCorrEnabled != spem_enabled):
+                dsm.staticPointCorrEnabled = spem_enabled
+                mod_spem.append(a.name)
             if (not __tilt_corr_allowed__) or ((a.name not in d_tilt_OK) and not force): # Default rule for disabling
                 dsm.tiltPointCorrEnabled = False
                 force_tilt.append(a.name)
             else:
-                dsm.tiltPointCorrEnabled = tilt_enabled
-                mod_tilt.append(a.name)
+                if (dsm.tiltPointCorrEnabled != tilt_enabled):
+                    dsm.tiltPointCorrEnabled = tilt_enabled
+                    mod_tilt.append(a.name)
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
     if (len(force_tilt) > 0):
