@@ -250,10 +250,10 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
         @param spem_enabled: (default False)
         @param tilt_enabled: (default True)
         @param force: if True then force tilt to the specified value, else will disable tilt for all except s0121 (default False)
-        @return: list of names of ants where the SPEM corrections were changed.
+        @return: list of names of ants that are (potentially) affected.
     """
     global __tilt_corr_allowed__
-    mod_spem, mod_tilt, force_tilt = [], [], []
+    mod_spem, mod_tilt, force_tilt, d = [], [], [], []
     # Mapping to match https://github.com/ska-sa/katcamconfig/pull/955/files
     d_numbers = {"s0000":64, "s0121":65, "s0119":66, "s0118":67, "s0107":68, "s0060":69, "s0105":70, "s0110":71, # MKE
                  "s0115":72, "s0117":73, "s0116":74, "s0017":75, "s0018":76, "s0020":77, "s0023":78, # MKE
@@ -261,25 +261,27 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
     d_tilt_OK = ["s0121"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
+            d.append(a.name)
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-            if (dsm.staticPointCorrEnabled != spem_enabled):
+            # Tango attributes sometimes get different read & set values, to be safe use explicit read_attribute() & write_attribute()
+            if (dsm.read_attribute('staticPointCorrEnabled').value != spem_enabled):
+                dsm.write_attribute('staticPointCorrEnabled', spem_enabled, wait=True)
                 mod_spem.append(a.name)
-            dsm.staticPointCorrEnabled = spem_enabled # Tango attributes sometimes have different read & set values, so make sure
             if (not __tilt_corr_allowed__) or ((a.name not in d_tilt_OK) and not force): # Default rule for disabling
+                dsm.write_attribute('tiltPointCorrEnabled', False, wait=True)
                 force_tilt.append(a.name)
-                dsm.tiltPointCorrEnabled = False
             else:
-                if (dsm.tiltPointCorrEnabled != tilt_enabled):
+                if (dsm.read_attribute('tiltPointCorrEnabled').value != tilt_enabled):
+                    dsm.write_attribute('tiltPointCorrEnabled', tilt_enabled, wait=True)
                     mod_tilt.append(a.name)
-                dsm.tiltPointCorrEnabled = tilt_enabled # Tango attributes sometimes have different read & set values, so make sure
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
     if (len(force_tilt) > 0):
         user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % (",".join(force_tilt)))
     if (len(mod_tilt) > 0):
         user_logger.info("APPLIED HACK: Tilt Corrections %s on %s" % ("Enabled" if tilt_enabled else "Disabled", ",".join(mod_tilt)))
-    return mod_spem
+    return d
 
 
 def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
