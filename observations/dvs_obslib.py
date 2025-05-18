@@ -239,7 +239,7 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     hack_SetPointingCorrections(cam.ants, spem_enabled=False)
 
 
-def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, force=False):
+def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, temp_enabled=False, force=False):
     """ Enable/Disable SPEM and or Tilt corrections on the specified dishes.
         This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
         
@@ -247,8 +247,9 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
          calibrated / implemented correctly as of 16/05/2025.
         
         @param ants: list of instances of CAM Receptor/Dish Proxy.
-        @param spem_enabled: (default False)
-        @param tilt_enabled: (default True)
+        @param spem_enabled: ACU's internal Static Pointing Error Model corrections (default False)
+        @param tilt_enabled: ACU's internal inclinometer-based corrections (default True)
+        @param temp_enabled: ACU's internal ambient temperature-based corrections (default False)
         @param force: if True then force tilt to the specified value, else will disable tilt for all except s0121 (default False)
         @return: list of names of ants where the SPEM corrections were changed.
     """
@@ -263,6 +264,7 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
         if (a.name in d_numbers.keys()):
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+            dsm.tempPointCorrEnabled = temp_enabled
             dsm.staticPointCorrEnabled = spem_enabled
             mod_spem.append(a.name)
             if (not __tilt_corr_allowed__) or ((a.name not in d_tilt_OK) and not force): # Default rule for disabling
@@ -272,6 +274,7 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, for
                 dsm.tiltPointCorrEnabled = tilt_enabled
                 mod_tilt.append(a.name)
     if (len(mod_spem) > 0):
+        user_logger.info("APPLIED HACK: Temperature Corrections %s on %s" % ("Enabled" if temp_enabled else "Disabled", ",".join(mod_spem)))
         user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
     if (len(force_tilt) > 0):
         user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % (",".join(force_tilt)))
