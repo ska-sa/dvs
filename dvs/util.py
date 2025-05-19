@@ -160,6 +160,50 @@ def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
     return np.array(sm_x0 if axis==0 else np.transpose(sm_x0)), np.array(sm_x1 if axis==0 else np.transpose(sm_x1))
 
 
+def load_dsc_dataset(fn, delimiter=";"):
+    """ Load a datset that was recorded using OHB's datalogging recording facility.
+    
+        @param fn: the filename to the CSV file.
+        @return: {column_name:column_values} """
+    # Load & interpret the header
+    with open(fn) as f:
+        header = [f.readline().strip() for _ in range(4)]
+        keys = header[2].split(delimiter)
+        data0 = header[3].split(delimiter)
+        date_cols = [0]
+        bool_cols = [c for c,d in enumerate(data0) if (d.lower() in 'true false')]
+        converters = {c:lambda s:np.datetime64(s[:-1].replace("T"," "),"s") for c in date_cols} # Remove T & Z
+        converters.update({c:lambda b:b.capitalize()=='True' for c in bool_cols}) # bool(...) doesn't work!?
+    d = np.loadtxt(fn, delimiter=delimiter, skiprows=3, converters=converters)
+    return {k:d[:,c] for c,k in enumerate(keys)}
+
+
+def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
+    """ Calculate adjustments to SKA Dish pointing model and FI angle, given a Yf offset from hologreport.
+
+        Exactly one of delta_* must be given!
+        @param delta_Yf: Y_f in SKA Dish coordinate system [mm]
+        @param delta_P4: P4 in katpoint model [deg]
+        @return (P4_adjust_angle, FI_adjust_angle) [deg] to be added to the current FI angle """
+    BDF=0.894; R_FI=1400; F_eq=8507 # [], mm, mm for SKA Dish
+
+    if (delta_P4 is not None):
+        delta_Yf = np.tan(delta_P4*np.pi/180 / BDF) * F_eq
+    else:
+        # On 6/12/2024 I did this, but without the "/2"s - and after the adjustment was made it turned out I needed "/2". BUT WHY?
+        delta_Yf = delta_Yf/2 # TODO: review "/2"
+    
+    # Change in P4 pointing term.
+    # If feed is pointed right looking at SR (Yf>0), correction should decrease P4 (pointing model uses -P4*Az)
+    dP4 = - BDF*np.arctan2(delta_Yf, F_eq) * 180/np.pi
+    
+    # Change in FI angle.
+    # If feed is pointed right looking at SR (Yf>0), correction should decrease FI angle (ICD)
+    dFI_angle = - np.arctan2(delta_Yf, R_FI) * 180/np.pi
+    
+    return (dP4, dFI_angle)
+
+
 def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditions, test_procedures=[],
                       replace_all=False):
     """ Update the log messages against a dataset as used for a specific antenna.
@@ -202,3 +246,4 @@ def get_datalog_entries(ant, dataset="*"):
         values = selected
     
     return headings, values
+
