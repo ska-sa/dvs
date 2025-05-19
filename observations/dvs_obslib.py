@@ -87,6 +87,7 @@ class start_nocapture_session(object):
         self.nd_params = {}
         self.ants = kat.ants
         kat.ants.set_sampling_strategy("lock", "event")
+        self._cam_ = kat
         self.dry_run = kat.dry_run
         self.telstate = self
     
@@ -96,8 +97,13 @@ class start_nocapture_session(object):
     def capture_start(self): # Ignored
         pass
     
-    def standard_setup(self, *a, **k): # Ignored
-        pass
+    def standard_setup(self, *a, **kwargs): # Like start_hacked_session#hacked_setup(), bust the basics that apply to dishes 
+        if (not self.dry_run):
+            # Ensure the Ku-band signal generator matches the center frequency of the subarray
+            match_ku_siggen_freq(self._cam_)
+            # NB: the following must be called after `standard_setup()` because for MKE Dishes that causes a "major state transition"
+            # during which the ACU resets some things which we are trying to hack around.
+            temp_hack_SetupPointingCorrections(self._cam_, allow_tiltcorrections=not kwargs.get("no_tiltcorrections", False))
     
     def set_target(self, target): # copied from https://github.com/ska-sa/katcorelib/blob/master/katcorelib/rts_session.py
         if self.ants is None:
