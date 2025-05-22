@@ -1,6 +1,7 @@
 # Range of frequencies to flag in MHz
 # start_freq, stop_freq
 #
+927.0, 929.0 # E-GSM900
 933.0, 960.5 # GSM900
 1086.5, 1092.5 # SSR
 1100.0, 1113.5 # DME?
@@ -12,9 +13,11 @@
 1519, 1610 # GLONASS L1 & GPS L1 4th nulls, GALILEO L1,E1,E2 & Beidou B1 4th nulls
 1525, 1560 # INMARSAT
 1615.5, 1626.5 # IRIDIUM
+1627.5, 1629.5 # TODO Recorded 2025/02
 1674.5, 1698.5 # METEOSAT & NOAA
 1701.5, 1703.5 # NOAA HRPT & ARGOS
 1706.5, 1708.5 # NOAA HRPT
+1905, 1940 # TODO Sattelite?
 2025, 2110 # S-band downlink
 2200, 2290 # S-band downlink
 2220, 2250 # WiFi & Bluetooth
