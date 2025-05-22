@@ -706,7 +706,7 @@ def plot_offsets_freq(RS, labels=None, figsize=(14,10)):
         XYZ_f = np.array(XYZ_f)
         label = "" if (label is None) else label+":"
         fig.suptitle("%s Elevation %.f .. %.fdeg\n%s" % (label, np.min(el),np.max(el),
-                                        "[X,Y,Z]_f ~ %s"%np.mean(XYZ_f, axis=(0,1))))
+                                        "[X,Y,Z]_f ~ %s"%np.mean(XYZ_f, axis=0)))
 
 
 def plot_eff_el(RS, labels, fspec_MHz=(15000,20000), eff_ix=-1, figsize=(14,4)): 
