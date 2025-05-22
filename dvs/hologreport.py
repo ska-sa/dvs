@@ -683,6 +683,32 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
     ax.set_xlabel("Elevation [deg]"); ax.legend()
 
 
+def plot_offsets_freq(RS, labels=None, figsize=(14,10)):
+    """ Generates a figure of feed offsets vs frequencies. 
+        @param RS: set of lists of 'HologResults'
+        @param labels: a text label for each set of results """
+    if (labels is None) or (len(labels) < len(RS)):
+        labels = [None]*len(RS)
+    for results,label in zip(RS,labels):
+        XYZ_f, el, FI = [], [], []
+        fig, axs = plt.subplots(3,1, layout='constrained', figsize=figsize)
+        for c,r in enumerate(results):
+            el.append(r.el_deg)
+            FI.append(r.info['feedindexer_deg'][1]) # [min,mean,max]
+            XYZ_f.extend(r.feedoffsetsH); XYZ_f.extend(r.feedoffsetsV)
+            for p,l in enumerate("XYZ"):
+                axs[p].plot(r.f_MHz, r.feedoffsetsH[:,p], 'C%do-'%c, label="FI@%.2fdeg"%FI[-1])
+                axs[p].plot(r.f_MHz, r.feedoffsetsV[:,p], 'C%d^--'%c)
+                axs[p].set_ylabel("%s_f [mm]"%l)
+        axs[1].legend() # Because Y_f relates to FI angle
+        axs[-1].set_xlabel("Frequency [MHz]")
+        for ax in axs: ax.grid(True)
+        XYZ_f = np.array(XYZ_f)
+        label = "" if (label is None) else label+":"
+        fig.suptitle("%s Elevation %.f .. %.fdeg\n%s" % (label, np.min(el),np.max(el),
+                                        "[X,Y,Z]_f ~ %s"%np.mean(XYZ_f, axis=(0,1))))
+
+
 def plot_eff_el(RS, labels, fspec_MHz=(15000,20000), eff_ix=-1, figsize=(14,4)): 
     """ Generates a figure of phase efficiency (at max spec freq) vs elevation angle
         @param RS: set of lists of 'HologResults'
