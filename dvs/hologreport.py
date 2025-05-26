@@ -648,7 +648,7 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
         @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
-        @param hide: any subset of "XYZ", to hide the corresponding offset (default "") """
+        @param hide: any subset of "XYZHV", to hide the corresponding offset (default "") """
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
@@ -659,10 +659,12 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
             if (q in hide): continue
             foH = _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)])
             foV = _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
-            ax.plot(el, foH, 'C%do'%p, label="%s_f H"%q)
-            ax.plot(el, foV, 'C%d^'%p, label="%s_f V"%q)
+            if ("H" not in hide): ax.plot(el, foH, 'C%do'%p, label="%s_f H"%q)
+            if ("V" not in hide): ax.plot(el, foV, 'C%d^'%p, label="%s_f V"%q)
             if (fit != None): # Fit offsets vs. elevation angle
                 offsets = np.concatenate([foH, foV])
+                if ("H" in hide): offsets[:len(foH)] = np.nan
+                if ("V" in hide): offsets[-len(foV):] = np.nan
                 _el = np.concatenate([el, el])
                 if (fit == "theil-sen"):
                     fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
@@ -683,10 +685,11 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
     ax.set_xlabel("Elevation [deg]"); ax.legend()
 
 
-def plot_offsets_freq(RS, labels=None, figsize=(14,10)):
+def plot_offsets_freq(RS, labels=None, figsize=(14,10), hide=""):
     """ Generates a figure of feed offsets vs frequencies. 
         @param RS: set of lists of 'HologResults'
-        @param labels: a text label for each set of results """
+        @param labels: a text label for each set of results
+        @param hide: any subset of "HV", to hide the corresponding offset (default "") """
     if (labels is None) or (len(labels) < len(RS)):
         labels = [None]*len(RS)
     for results,label in zip(RS,labels):
@@ -695,10 +698,12 @@ def plot_offsets_freq(RS, labels=None, figsize=(14,10)):
         for c,r in enumerate(results):
             el.append(r.el_deg)
             FI.append(r.info['feedindexer_deg'][1]) # [min,mean,max]
-            XYZ_f.extend(r.feedoffsetsH); XYZ_f.extend(r.feedoffsetsV)
+            if ("H" not in hide): XYZ_f.extend(r.feedoffsetsH)
+            if ("V" not in hide): XYZ_f.extend(r.feedoffsetsV)
             for p,l in enumerate("XYZ"):
-                axs[p].plot(r.f_MHz, r.feedoffsetsH[:,p], 'C%do-'%c, label="FI@%.2fdeg"%FI[-1])
-                axs[p].plot(r.f_MHz, r.feedoffsetsV[:,p], 'C%d^--'%c)
+                if ("H" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsH[:,p], 'C%do-'%c, label="FI@%.2fdeg"%FI[-1])
+                if ("V" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsV[:,p], 'C%d^--'%c,
+                                                  **(dict(label="FI@%.2fdeg"%FI[-1]) if "H" in hide else {})) 
                 axs[p].set_ylabel("%s_f [mm]"%l)
         axs[1].legend() # Because Y_f relates to FI angle
         axs[-1].set_xlabel("Frequency [MHz]")
