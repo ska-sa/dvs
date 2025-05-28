@@ -625,7 +625,7 @@ def _flatten_(twod, invmask=False): # Concatenates arrays (even zero-dimensional
         ll = [np.ma.masked_where(~r.mask, r.data) if hasattr(r, "mask") else r for r in ll]
     return np.ma.concatenate(ll, axis=0)
 
-def plot_errbeam_el(RS, labels, figsize=(14,4), extra="RMS"): 
+def plot_errbeam_el(RS, labels, extra="RMS", figsize=(14,4)): 
     """ Generates a figure of error beam vs elevation angle
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results """
@@ -643,11 +643,12 @@ def plot_errbeam_el(RS, labels, figsize=(14,4), extra="RMS"):
     ax.set_xlabel("Elevation [deg]"); ax.legend()
 
 
-def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
+def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,4)):
     """ Generates a figure of feed offsets vs elevation angle 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
         @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
+        @param elspec_deg: if given and fit is also specified then print out the offsets fitted at these elevation angles (default None)
         @param hide: any subset of "XYZHV", to hide the corresponding offset (default "") """
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     
@@ -677,15 +678,20 @@ def plot_offsets_el(RS, labels, figsize=(14,4), fit=None, hide=""):
                 status = status if (np.nanmax(_el)-np.nanmin(_el) > 15) else 4
                 # Solid line if fitted without warnings
                 ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (status==0) else '--'), alpha=0.3)
-                fits.append("%s_f=%.2f + %.2fEl"%(q, fitp[0], fitp[1]))
+                fits.append((q, fitp[0], fitp[1]))
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join([f for f in fits])))
+            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%f for f in fits])))
+            if (elspec_deg):
+                model = lambda el, offset, slope: offset + slope*el
+                for q,*fitp in fits:
+                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,model(el,*fitp)) for el in np.atleast_1d(elspec_deg)])))
+                    
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
             
     ax.set_xlabel("Elevation [deg]"); ax.legend()
 
 
-def plot_offsets_freq(RS, labels=None, figsize=(14,10), hide=""):
+def plot_offsets_freq(RS, labels=None, hide="", figsize=(14,10)):
     """ Generates a figure of feed offsets vs frequencies. 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
