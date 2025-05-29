@@ -165,8 +165,8 @@ def load_dsc_dataset(fn, delimiter=";", header_len=2):
     
         @param fn: the filename to the CSV file.
         @return: {column_name:column_values} """
-    d = np.genfromtxt(fn, delimiter=delimiter, names=True,deletechars='', dtype=None, skip_header=header_len)
-    d['Date/Time'] = np.array([s[:-1].replace("T"," ") for s in d['Date/Time']],dtype="datetime64[s]")
+    d = np.genfromtxt(fn, delimiter=delimiter, names=True,deletechars='', dtype=None, skip_header=header_len,
+                      converters={'Date/Time':lambda s:np.datetime64(s[:-1].replace("T"," "), 's')})
     return d
 
 
@@ -240,3 +240,4 @@ def get_datalog_entries(ant, dataset="*"):
     return headings, values
 
 
+    
