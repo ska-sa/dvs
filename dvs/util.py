@@ -160,22 +160,14 @@ def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
     return np.array(sm_x0 if axis==0 else np.transpose(sm_x0)), np.array(sm_x1 if axis==0 else np.transpose(sm_x1))
 
 
-def load_dsc_dataset(fn, delimiter=";"):
+def load_dsc_dataset(fn, delimiter=";", header_len=2):
     """ Load a datset that was recorded using OHB's datalogging recording facility.
     
         @param fn: the filename to the CSV file.
         @return: {column_name:column_values} """
-    # Load & interpret the header
-    with open(fn) as f:
-        header = [f.readline().strip() for _ in range(4)]
-        keys = header[2].split(delimiter)
-        data0 = header[3].split(delimiter)
-        date_cols = [0]
-        bool_cols = [c for c,d in enumerate(data0) if (d.lower() in 'true false')]
-        converters = {c:lambda s:np.datetime64(s[:-1].replace("T"," "),"s") for c in date_cols} # Remove T & Z
-        converters.update({c:lambda b:b.capitalize()=='True' for c in bool_cols}) # bool(...) doesn't work!?
-    d = np.loadtxt(fn, delimiter=delimiter, skiprows=3, converters=converters)
-    return {k:d[:,c] for c,k in enumerate(keys)}
+    d = np.genfromtxt(fn, delimiter=delimiter, names=True,deletechars='', dtype=None, skip_header=header_len)
+    d['Date/Time'] = np.array([s[:-1].replace("T"," ") for s in d['Date/Time']],dtype="datetime64[s]")
+    return d
 
 
 def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
@@ -246,4 +238,5 @@ def get_datalog_entries(ant, dataset="*"):
         values = selected
     
     return headings, values
+
 
