@@ -667,24 +667,17 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
                 if ("H" in hide): offsets[:len(foH)] = np.nan
                 if ("V" in hide): offsets[-len(foV):] = np.nan
                 _el = np.concatenate([el, el])
-                if (fit == "theil-sen"):
-                    fitp, model = katsemat.polyfit(_el, offsets, order=1, method="theil-sen")
-                    status = 0
-                    fitted = model(fitp, np.sort(el))
-                else:
-                    model = lambda offset, slope, el: offset + slope*el
-                    fitp, *_, status = sop.fmin_powell(lambda p: np.nansum((offsets-model(*p,el=_el))**2), [0,0], full_output=True, disp=False) # Same model fitted to both polarisations
-                    fitted = model(*fitp, el=np.sort(el))
-                status = status if (np.nanmax(_el)-np.nanmin(_el) > 15) else 4
+                fitp, model = katsemat.polyfit(_el, offsets, order=1, method='leastsq' if fit=='lin' else fit)
+                warn = 0 if (np.nanmax(_el)-np.nanmin(_el) > 15) else 4
+                fitted = model(np.sort(el))
                 # Solid line if fitted without warnings
-                ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (status==0) else '--'), alpha=0.3)
-                fits.append((q, fitp[0], fitp[1]))
+                ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (warn==0) else '--'), alpha=0.3)
+                fits.append((q, fitp, model))
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%f for f in fits])))
+            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%f[:2] for f in fits])))
             if (elspec_deg):
-                model = lambda el, offset, slope: offset + slope*el
-                for q,*fitp in fits:
-                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,model(el,*fitp)) for el in np.atleast_1d(elspec_deg)])))
+                for q,fitp,model in fits:
+                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,model(el)) for el in np.atleast_1d(elspec_deg)])))
                     
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
             
