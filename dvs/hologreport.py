@@ -674,7 +674,7 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
                 ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (warn==0) else '--'), alpha=0.3)
                 fits.append((q, fitp, model))
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%f[:2] for f in fits])))
+            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%f[1] for f in fits])))
             if (elspec_deg):
                 for q,fitp,model in fits:
                     print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,model(el)) for el in np.atleast_1d(elspec_deg)])))
