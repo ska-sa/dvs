@@ -195,8 +195,9 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
                 ax.legend(); ax.set_xlabel(unit)
 
 
-def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True,
-                          polswap=None, kind=None, min_len=20, clip_radius=None, output_filepattern="%s_%s_circular_pointing.csv", verbose=True, debug=False):
+def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, phased_up=False, flags='cam,data_lost', scans="~slew", compscans="~slew",
+                          polswap=None, kind=None, min_len=20, clip_radius=None, strict=True, output_filepattern="%s_%s_circular_pointing.csv",
+                          verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technique (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
@@ -205,12 +206,13 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param chans: channel indices to use, or a function like `lambda target_name,fGHz: channel_indices`, or None to use the pre-existing selection.
         @param freq_MHz: (f_MHzstart,f_MHzstop) to use instead of chans (default None)
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
+        @param phased_up: True if the phase slope between ant & track_ant products is <<180deg (default False)
         @param flags: the katdal flags to apply to the data, or None (default 'cam,data_lost') 
-        @param strict: True to set invalid fits to nan (default True)
         @param polswap: a comma-separated list of antenna IDs where the polarisation is swapped (default None)
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @param clip_radius: maximum radius around target to use for fit, or None for 'median+std' [deg] (default None)
+        @param strict: True to set invalid fits to nan (default True)
         @param output_filepattern: filename pattern (with %s for dataset and antenna names) for CSV file to store results to (default '%s_%s_circular_pointing.csv')
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
                    [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
@@ -232,7 +234,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
     ds.select(reset="", scans=scans, compscans=compscans)
     ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
     polswap = "" if polswap is None else polswap
-    pols = {ant:"HV" if (ant not in polswap) else "VH" for ant in [ant,track_ant]}
+    pols = {a:"HV" if (a not in polswap) else "VH" for a in [ant,track_ant]}
     if (track_ant):
         pols_to_use = [pols[ant][i]+pols[track_ant][i] for i in (0,1)]
         ds.select(corrprods="cross", pol=pols_to_use, ants=[ant,track_ant])
@@ -292,17 +294,23 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         try: # Fit the beam
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
             assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
-            hv = np.abs(ds.vis[mask])
-            hv /= np.mean(hv, axis=0) # Normalise for H-V gains & bandpass
-            height = np.sum(hv, axis=(1,2)) # TOTAL power integrated over frequency
+            hv = ds.vis[mask]
+            hv_mag = np.abs(hv)
+            hv /= np.mean(hv_mag, axis=0) # Normalise for H-V gains & bandpass
+            if track_ant and phased_up: # Phase coherent average
+                height = np.abs(np.sum(hv, axis=(1,2))) # TOTAL complex power integrated  over frequency
+            else:
+                height = np.sum(np.abs(hv), axis=(1,2)) # TOTAL power integrated over frequency
+            
             if (kind in ['circle','cardioid','epicycle']): # These don't have enough sampling to fit background reliably
                 bkg = np.array([0])
             else:
                 bkg = fit_background(target_x, target_y, height, along_edges=True)
             height -= bkg
+            
             if debug: # Prepare figure for debugging
                 fig, axs = plt.subplots(1,3, figsize=(14,3))
-                mu_sigma = np.mean(hv, axis=0)/np.std(hv, axis=0) # Identify non-gaussian processes e.g. RFI
+                mu_sigma = np.mean(hv_mag, axis=0)/np.std(hv_mag, axis=0) # Identify non-gaussian processes e.g. RFI
                 axs[0].plot(ds.channels, mu_sigma[:,0], '.', ds.channels, mu_sigma[:,1], '.') # H & V separately
                 axs[0].set_xlabel("Frequency [channels]"); axs[0].set_ylabel("$\mu/\sigma$")
                 axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
