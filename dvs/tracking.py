@@ -196,8 +196,8 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
 
 
 def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, flags='cam,data_lost', scans="~slew", compscans="~slew", strict=True,
-                          kind=None, min_len=20, clip_radius=None, output_filepattern="%s_%s_circular_pointing.csv", verbose=True, debug=False):
-    """ Generates pointing offsets for a dataset created with (any) intensity mapping technieu (point_source_scan.py, circular_pointing.py etc),
+                          polswap=None, kind=None, min_len=20, clip_radius=None, output_filepattern="%s_%s_circular_pointing.csv", verbose=True, debug=False):
+    """ Generates pointing offsets for a dataset created with (any) intensity mapping technique (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
     
         @param ds: the dataset (selection is reset!)
@@ -207,6 +207,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
         @param track_ant: the identifier of the tracking antenna in the dataset, if not single dish mode (default None)
         @param flags: the katdal flags to apply to the data, or None (default 'cam,data_lost') 
         @param strict: True to set invalid fits to nan (default True)
+        @param polswap: a comma-separated list of antenna IDs where the polarisation is swapped (default None)
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @param clip_radius: maximum radius around target to use for fit, or None for 'median+std' [deg] (default None)
@@ -230,10 +231,14 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, fl
     
     ds.select(reset="", scans=scans, compscans=compscans)
     ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
+    polswap = "" if polswap is None else polswap
+    pols = {ant:"HV" if (ant not in polswap) else "VH" for ant in [ant,track_ant]}
     if (track_ant):
-        ds.select(corrprods="cross", pol=["HH","VV"], ants=[ant,track_ant])
+        pols_to_use = [pols[ant][i]+pols[track_ant][i] for i in (0,1)]
+        ds.select(corrprods="cross", pol=pols_to_use, ants=[ant,track_ant])
     else:
-        ds.select(pol=["HH","VV"], ants=[ant])
+        pols_to_use = [pols[ant][i]+pols[ant][i] for i in (0,1)]
+        ds.select(pol=pols_to_use, ants=[ant])
     if flags:
         ds.select(flags=flags)
     fGHz = np.round(ds.spectral_windows[0].centre_freq/1e9, 4)
