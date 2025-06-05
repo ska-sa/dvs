@@ -185,6 +185,9 @@ if __name__=="__main__":
     parser.add_option('--sunmoon-separation', type="float", default=10,
                       help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
     
+    parser.add_option('--cluster-radius', type="float", default=0,
+                      help="Group targets into clusters with this great circle dimension, in degrees (default=%default)")
+    
     parser.add_option('--switch-indexer-every', type="int", default=-1,
                       help="Switch the feed indexer out & back again after every few scans, alternating directions if possible (default=never)")
     
@@ -258,7 +261,7 @@ if __name__=="__main__":
             catalogue = filter_separation(catalogue, time.time(), kat.sources.antenna,
                                           separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
             targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
-                                   antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
+                                   cluster_radius=opts.cluster_radius, antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             # Initialise a capturing session
             with start_session(kat, **vars(opts)) as session:
                 # Use the command-line options to set up the system
@@ -310,7 +313,7 @@ if __name__=="__main__":
                     fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
                         targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
-                                               antenna=track_ants[0], el_limit_deg=opts.horizon)[0]
+                                               cluster_radius=opts.cluster_radius, antenna=track_ants[0], el_limit_deg=opts.horizon)[0]
                         fresh_plan = True
                     if (len(targets) == 0):
                         user_logger.warning("No targets defined!")
