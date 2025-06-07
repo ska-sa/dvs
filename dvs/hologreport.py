@@ -649,8 +649,10 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
         @param labels: a text label for each set of results
         @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
         @param elspec_deg: if given and fit is also specified then print out the offsets fitted at these elevation angles (default None)
-        @param hide: any subset of "XYZHV", to hide the corresponding offset (default "") """
+        @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
+        @return: (X,Y,Z) offsets at each `elspec_deg` (or None)"""
     layout = _plan_layout_(RS, labels, separate_freqs=False)
+    offsets_el = None if (elspec_deg is None) else []
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
     for ax,(fs,rs,lbl) in zip(axes,layout):
@@ -673,15 +675,21 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
                 # Solid line if fitted without warnings
                 ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (warn==0) else '--'), alpha=0.3)
                 fits.append((q, fitp, model))
+        
         if (len(fits) > 0):
             print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%(f[0],*f[1]) for f in fits])))
             if (elspec_deg):
+                elspec_deg = np.atleast_1d(elspec_deg)
+                offset = {}
                 for q,fitp,model in fits:
-                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,model(el)) for el in np.atleast_1d(elspec_deg)])))
+                    offset[q] = [model(el) for el in elspec_deg]
+                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,off) for el,off in zip(elspec_deg,offset[q])])))
+                offsets_el.append([offset.get(q,[np.nan]*len(elspec_deg)) for q in "XYZ"])
                     
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
-            
     ax.set_xlabel("Elevation [deg]"); ax.legend()
+    
+    return offsets_el
 
 
 def plot_offsets_freq(RS, labels=None, hide="", figsize=(14,10)):
@@ -939,13 +947,13 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     plt.figure(figsize=(14,18))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAs-is")
-                    plt.subplot(4,2,1); beam.plot("Gx", doclf=False); plt.title("Gx")
+                    plt.subplot(4,2,1); beam.plot("Gx", clim=(0,-60), doclf=False); plt.title("Gx")
                     if (_predicted_ is not None):
                         plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gx[0])), [-43], alpha=0.2)
                         plt.gca().set_xlim(beam.margin[0], beam.margin[-1]); plt.gca().set_ylim(beam.margin[0], beam.margin[-1])
                     plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.title("Dx")
                     plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.title("Dy")
-                    plt.subplot(4,2,4); beam.plot("Gy", doclf=False); plt.title("Gy")
+                    plt.subplot(4,2,4); beam.plot("Gy", clim=(0,-60), doclf=False); plt.title("Gy")
                     if (_predicted_ is not None):
                         plt.contour(_predicted_[-3].margin, _predicted_[-3].margin, 20*np.log10(np.abs(_predicted_[-3].Gy[0])), [-43], alpha=0.2)
                         plt.gca().set_xlim(beam.margin[0], beam.margin[-1]); plt.gca().set_ylim(beam.margin[0], beam.margin[-1])
@@ -1063,10 +1071,10 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 beam,apmapH,apmapV = _predicted_[-3:]
                 plt.figure(figsize=(14,18))
                 plt.suptitle("Reference patterns @ %.1fMHz"%_predicted_[1])
-                plt.subplot(4,2,1); beam.plot("Gx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gx")
+                plt.subplot(4,2,1); beam.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gx")
                 plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dx")
                 plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dy")
-                plt.subplot(4,2,4); beam.plot("Gy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gy")
+                plt.subplot(4,2,4); beam.plot("Gy", clim=(0,-60), doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gy")
                 plt.subplot(4,2,5); apmapH.plot('amp', doclf=False); plt.title("Aperture amplitude x")
                 plt.subplot(4,2,6); apmapV.plot('amp', doclf=False); plt.title("Aperture amplitude y")
                 plt.subplot(4,2,7); apmapH.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation x")
