@@ -196,7 +196,7 @@ def e_bn(pol, tilt_deg, northern_observer=False):
     return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
 
 
-def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz=0.1, load_cycles=None, overlap_cycles=0,
+def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
               loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
@@ -204,8 +204,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         @param freqMHz: frequency for measured patterns [MHz], must be accurate to within +/-dMHz/2.
         @param DISHPARAMS: {telescope, xyzoffsets, xmag, focallength} to project the patterns to the physical geometry.
         @param timingoffset: used to adjust the time offset between signal and pointing coordinates, passed to katholog.Dataset (default 0).
-        @param polswap: "0" | "1" | "0,1" if the polarisations of any of the antennas must be swapped (0=scan|track, 1=track|scan: baseline ordering is not "regular",
-                       but m0xx will always be 0 if the other antenna is s0xxx) (default None)
+        @param polswap: list of antenna IDs where the polarisations must be swapped (default None)
         @param load_cycles: indices of individual cycles to load e.g. [0,1,3] or None to load it as a single cycle (default None)
         @param overlap_cycles: how many additional cycles to combine into a single map (default 0)
         @param loadscan_cycles: similar to 'load_cycles', but specifically for "loadscan" style datasets and NOT affected by 'overlap_cycles' (default None)
@@ -218,20 +217,30 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method='gainrawabs', timingoffset=timingoffset, **kwargs)
     dataset.band = dataset.h5.spectral_windows[0].band # Cache this value for later reference
-    if polswap: # Correct for polarisation swap(s) at scan antenna
+    polswap = None if (polswap == False) else polswap # Backward compatibility
+    if polswap is not None: # Correct for polarisation swap(s) at scan antenna
         # Unfortunately the following is not usable for katdal datasets
         # dataset.visibilities = [dataset.visibilities[i] for i in [2,3,0,1]] # ['(V)H','(V)V','(H)H','(H)V'] -> ['(H)H','(H)V','(V)H','(V)V']
         # Either change dataset.pols_to_use or equivalently overload dataset.getvisslice() & swap the order of its outputs.
+        # dataset.pols_to_use is e.g. ['HH','HV','VH','VV'], antenna order is (scan,track); the code maps this in **fixed order** to [xx, xy, yx, yy]
         
-        # dataset.pols_to_use is e.g. ['HH','HV','VH','VV'], pairs are either (scan,track) OR (track,scan); the code maps this in **fixed order** to [xx, xy, yx, yy]
-        # According to MdV katdal baseline ordering is not "regular" but makes m0xx always before s0xxx, regardless of which antenna scans.
-        # TODO: use dataset.h5.corr_products to automate this mapping!
-        if (polswap=="0"): POL_ORDER = [({'H':'V','V':'H'}[p[0]])+p[1] for p in dataset.pols_to_use] # First antenna in the pair has the swap
-        if (polswap=="1"): POL_ORDER = [p[0]+({'H':'V','V':'H'}[p[1]]) for p in dataset.pols_to_use] # Second antenna in the pair has the swap
-        if (polswap=="0,1"): POL_ORDER = [({'H':'V','V':'H'}[p[0]])+({'H':'V','V':'H'}[p[1]]) for p in dataset.pols_to_use] # Both antennas have the swap
-        
-        POL_ORDER = [list(dataset.pols_to_use).index(p) for p in POL_ORDER] # Convert to indices
-        dataset.pols_to_use = [dataset.pols_to_use[p] for p in POL_ORDER] # Swap the order used by all loading & processing
+        # Determine the IDs of antennas where the pol must be swapped
+        try: # Old pattern - comma-separated list of antenna order indices
+            polswap = [dataset.radialscan_allantenna[int(_.strip())] for _ in polswap.split(",")]
+        except: # Possibly a list of IDs in string format
+            try:
+                polswap = [_.strip() for _ in polswap.split(",")]
+            except:
+                pass
+        assert (len(dataset.radialscan_allantenna) == 2) or (polswap == [dataset.trackantennas[0]]), \
+               "Polarisation swap in a multi-antenna dataset can only be corrected for the reference antenna!"
+        # Convert list of antenna IDs to order in products
+        polswap = [0 if (a!=dataset.trackantennas[0]) else 1 for a in polswap]
+
+        # Swap the order used by all loading & processing
+        swap = lambda prod, idx: {'H':'V', 'V':'H'}[prod[0]]+prod[1] if (idx==0) else prod[0]+{'H':'V', 'V':'H'}[prod[1]]
+        for idx in polswap:
+            dataset.pols_to_use = [swap(p,idx) for p in dataset.pols_to_use]
     
     dMHz = max(dMHz, abs(dataset.h5.channel_freqs[1]-dataset.h5.channel_freqs[0])/2/1e6)
     flags_hrs = [] if (flags_hrs is None) else flags_hrs
@@ -265,14 +274,16 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         # 'rawonboresight'
         if True: # Indented to show this is unaffected by dataset.flagdata(), consider loading only once
             trackant = dataset.radialscan_allantenna[dataset.trackantennas[0]]
-            polproducts = [("%s%s"%(scanant,p[0].lower()), "%s%s"%(trackant,p[1].lower())) for p in dataset.pols_to_use] # Potentially different order: originally [HH,HV,VH,VV]
+            polproducts = [("%s%s"%(scanant,p[0].lower()), "%s%s"%(trackant,p[1].lower())) for p in dataset.pols_to_use] # Same order used in dataset for products [xx, xy, yx, yy]
             cpindices = []
             for p in polproducts: # The correlator's ordering matters and some times it is the other way round
                 cpi = np.all(dataset.h5.corr_products==p,axis=1) | np.all(dataset.h5.corr_products==list(reversed(p)), axis=1)
                 cpindices.append(np.flatnonzero(cpi)[0])
+            if polswap is not None: # Change the labels to match the swapped polarisation
+                swap = lambda prod: prod[:-1]+{'h':'v', 'v':'h'}[prod[-1]]
+                for idx in polswap:
+                    polproducts = [(swap(p[0]),p[1]) if (idx==0) else (p[0],swap(p[1]))  for p in polproducts]
             polproducts = [p[0]+'-'+p[1] for p in polproducts] # Convert to simpler format for reporting.
-            if polswap: # Swap the order of the labels if necessary
-                polproducts = [polproducts[p] for p in POL_ORDER]
             bore_dumps = (dataset.ll)**2+(dataset.mm)**2 < (dataset.radialscan_sampling)**2
         dumps = bore_dumps[dataset.time_range]
         timestamps = dataset.h5.timestamps[dumps]
@@ -289,7 +300,6 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap="", dMHz
         # Measured patterns are 'as-received patterns' i.e. include the polarisation state of the beacon. Instead of correcting
         # these, the adopted approach is to generate predicted (beam & aperture) patterns to match the measured patterns.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
-        # TODO: polswap does not seem to affect BeamCube!
         b_buf.append(katholog.BeamCube(dataset, scanantennaname=scanant, freqMHz=f_MHz, dMHz=dMHz, applypointing=applypointing, interpmethod='scipy', xyzoffsets=xyzoffsets, gridsize=gridsize))
         aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
         aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
