@@ -119,13 +119,20 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         Simulated patterns are converted from native "transmit" to "receive".
         File naming convention: either MK_GDSatcom_{freqMHz}.mat or {band}_{el_deg}_{freqMHz}.mat
         
-        @param freqMHz: frequency for simulated patterns [MHz]
-        @param beacon_pol: [e_H,e_V] basis vectors or None for an un-polarised beacon; e.g. [1,-1j] for RCP (also recognises 'RCP'& 'LCP').
+        @param freqMHz: frequency(ies) for simulated patterns [MHz]
+        @param beacon_pol: for each frequency specified, the [e_H,e_V] basis vectors e.g. [1,-1j] (RCP), or 'RCP', 'LCP' or None (un-polarised).
         @param DISHPARAMS: {telescope, xyzoffsets, xmag, focallength} to project the patterns to the physical geometry.
         @param el_deg: elevation for simulated distortion, 45deg is essentially undistorted.
         @param kwargs: passed to katdal.Dataset e.g. 'clipextent'
-        @return: (BeamCube, ApertureMap{H}, ApertureMap{V})
+        @return: (BeamCube, ApertureMap{H}, ApertureMap{V}) - each matching the dimensions of freqMHz
     """
+    if (len(np.atleast_1d(freqMHz)) > 1):
+        beams, apmapsH, apmapsV = [], [], []
+        for f_MHz,pol in zip(freqMHz,beacon_pol):
+            b, aH, aV = load_predicted(f_MHz, pol, DISHPARAMS, el_deg, band, root, applypointing, gridsize, **kwargs)
+            beams.append(b); apmapsH.append(aH); apmapsV.append(aV)
+        return beams, apmapsH, apmapsV
+    
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     
     ff = freqMHz - int(freqMHz)
@@ -165,6 +172,10 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     apmapH = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcH,flip) for k,v in d.items()})
     apmapV = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcV,flip) for k,v in d.items()})
     
+    if (telescope == "MeerKAT"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
+        for apmap in [apmapH,apmapV]:
+            apmap.unwrapmaskmap = apmap.unwrapmaskmap[::-1,:]; apmap.analyse()
+    
     return (beamcube, apmapH, apmapV)
 
 
@@ -201,7 +212,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
         @param fn: the filename or URL for the dataset.
-        @param freqMHz: frequency for measured patterns [MHz], must be accurate to within +/-dMHz/2.
+        @param freqMHz: frequency(ies) for measured patterns [MHz], must be accurate to within +/-dMHz/2.
         @param DISHPARAMS: {telescope, xyzoffsets, xmag, focallength} to project the patterns to the physical geometry.
         @param timingoffset: used to adjust the time offset between signal and pointing coordinates, passed to katholog.Dataset (default 0).
         @param polswap: list of antenna IDs where the polarisations must be swapped (default None)
@@ -363,6 +374,10 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     for f_MHz in np.atleast_1d(freqMHz):
         _load_cycle_(f_MHz, beams, apmapsH, apmapsV)
     
+    if (telescope == "MeerKAT"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
+        for apmap in apmapsH+apmapsV:
+            apmap.unwrapmaskmap = apmap.unwrapmaskmap[::-1,:]; apmap.analyse()
+    
     dataset.h5 = None # This object is not used further and since it is not serializable, it complicates use cases 
     return beams, apmapsH, apmapsV
 
@@ -455,16 +470,17 @@ ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=N
                 fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
                 clipextent,cycles,overlap_cycles,flags_hrs,polswap,[] if tags==None else tags)
 
-def load_records(holo_recs, scanant, timingoffset, DISHPARAMS, clipextent=None, flag_slew=False, inspect_DT=False,  gridsize=512, flush=False, **load_kwargs):
+def load_records(holo_recs, scanant, DISHPARAMS, clipextent=None, is_loadscan=False, timingoffset=0, inspect_DT=False, flush=False, **load_kwargs):
     """ Loads the datasets into the records' results fields. Uses global TIME_OFFSETS.
         Results are loaded into holo_recs(ResultSet).beams, apmapsH & apmapsV and have the same shape as (ResultSet).cycles.
         
         @param holo_recs: a list of 'ResultSet's
-        @param timingoffset: combined with global 'TIME_OFFSETS' & passed to 'load_data()'
         @param clipextent: override the value defined in the records' 'clipextent' attribute (default None)
-        @param flag_slew: True to ensure "slew" activities are always flagged out, otherwise may include "slew" if quality is OK (default False).
+        @param timingoffset: combined with global 'TIME_OFFSETS' & passed to 'load_data()'
         @param inspect_DT: True to load data also with timingoffset=0 to generate a debug plot (default False)
+        @param flush: True to re-load the data for the records, False to skip if already loaded (default False).
     """
+    print("WARNING: load_records() is deprecated, use load_data() directly!")
     global TIME_OFFSETS
     for rec in holo_recs:
         filename = fid2fn(rec.fid)
@@ -473,14 +489,17 @@ def load_records(holo_recs, scanant, timingoffset, DISHPARAMS, clipextent=None, 
         if flush:
             del rec.beams[:], rec.apmapsH[:], rec.apmapsV[:]
         if (len(rec.beams) == 0): # Don't overwrite previous results
+            cycles = dict(overlap_cycles=rec.overlap_cycles)
             load_cycles = rec.cycles if ((rec.cycles is None) or not isinstance(rec.cycles, int)) else [rec.cycles]
-            b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0+timingoffset, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=load_cycles, overlap_cycles=rec.overlap_cycles, **load_kwargs)
+            cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = load_cycles
+            b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0+timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)
             if isinstance(rec.cycles, int):
-                    b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
+                b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
             rec.beams.extend(b); rec.apmapsH.extend(aH); rec.apmapsV.extend(aV)
             if inspect_DT:
                 cycle0 = 0 if (load_cycles is None) else load_cycles[0]
-                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0, polswap=rec.polswap, flag_slew=flag_slew, gridsize=gridsize, clipextent=clip, load_cycles=[cycle0], overlap_cycles=rec.overlap_cycles, **load_kwargs)[0]
+                cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = [cycle0]
+                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)[0]
                 plt.figure(figsize=(12,6))
                 plt.subplot(1,2,1); np.atleast_1d(b0[0])[0].plot("Gx", doclf=False); plt.title("%d: timingoffset = 0"%rec.fid) # First frequency, first cycle
                 plt.subplot(1,2,2); np.atleast_1d(b[0])[0].plot("Gx", doclf=False); plt.title("timingoffset = %g"%timingoffset)
