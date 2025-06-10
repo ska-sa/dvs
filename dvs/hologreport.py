@@ -69,13 +69,14 @@ def fitzernike(pattern, fitdBlevel, n, normalized=True, fill_value=np.nan):
     result[mask] = fill_value
     return result
 
-def smooth_fourier(image, fitdBlevel, model, normalized=True, fill_value=np.nan, modelFTaperdB=14):
+def smooth_fourier(image, fitdBlevel, model=None, normalized=True, fill_value=np.nan, modelFTaperdB=14):
     """ Filter the 2D map in the Fourier domain, using a kernel derived from the model.
-        @param fitdBlevel: ignored.
-        @param model: the model image from which to derive the smoothing kernel (identical shape to image).
+        
+        @param model: the model image from which to derive the smoothing kernel or None to use the truncated image (identical shape to image).
         @param modelFTaperdB: the edge of the Fourier transfer of 'model' is low by this power ratio [dB] from the peak amplitude, defines the boundary of the kernel (default 14)
-        @return: the smoothed map, with NaNs below 'fitdBlevel'
+        @return: the smoothed map, with 'fill_value' below 'fitdBlevel'
     """
+    model = image if (model is None) else model
     assert (np.prod(image.shape) == np.prod(model.shape)), "Can't filter mismatching shapes 'image' %s & 'model' %s"%(image.shape, model.shape)
     
     mask = ~np.isfinite(image)
@@ -97,19 +98,19 @@ def smooth_fourier(image, fitdBlevel, model, normalized=True, fill_value=np.nan,
     
     return filtered
 
-def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False): # TODO: make zernike the default in katholog.BeamCube?
-    if (kind.lower()=="zernike"): # Best fits when using all data (ignoring fitdBlevel) except in cases with very large-scale distortion
+def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False):
+    if (kind.lower()=="zernike"): # Best fits when using all data (ignoring fitdBlevel) except in cases with very large-scale structure (sidelobes!)
         beam.mGx = np.array([fitzernike(g, None, degree) for g in beam.Gx])
         beam.mGy = np.array([fitzernike(g, None, degree) for g in beam.Gy])
         if d_terms:
             beam.mDx = np.array([fitzernike(g, None, degree) for g in beam.Dx])
             beam.mDy = np.array([fitzernike(g, None, degree) for g in beam.Dy])
-    elif (kind.lower()=="fourier"): # fitdBlevel is irrelevant; 'degree' is assumed to be '(modelx,modely)'
-        beam.mGx = np.array([smooth_fourier(g, None, degree[0]) for g in beam.Gx])
-        beam.mGy = np.array([smooth_fourier(g, None, degree[1]) for g in beam.Gy])
+    elif (kind.lower()=="fourier"): # fitdBlevel is irrelevant; 'degree' is assumed to be 'modelFTaperdB'
+        beam.mGx = np.array([smooth_fourier(g, None, modelFTaperdB=degree) for g in beam.Gx])
+        beam.mGy = np.array([smooth_fourier(g, None, modelFTaperdB=degree) for g in beam.Gy])
         if d_terms:
-            beam.mDx = np.array([smooth_fourier(g, None, degree[0]) for g in beam.Dx])
-            beam.mDy = np.array([smooth_fourier(g, None, degree[1]) for g in beam.Dy])
+            beam.mDx = np.array([smooth_fourier(g, None, modelFTaperdB=degree) for g in beam.Dx])
+            beam.mDy = np.array([smooth_fourier(g, None, modelFTaperdB=degree) for g in beam.Dy])
     else: # Polynomial fitting is typically very sensitive to fitdBlevel
         beam.fitpoly(fitdBlevel=fitdBlevel, degree=degree)
 
@@ -1068,9 +1069,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 if (_predicted_ is not None):
                     p_beam = _predicted_[-3]
                     # TODO: zernike & polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=(p_beam.Gx[0],p_beam.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=contourdB+6 if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                     if (ci == 0):
-                        smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=(p_beam.Gx[0],p_beam.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                        smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=contourdB+6 if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                         # Only figures for the first cycle
                         axes = plt.subplots(1,2, figsize=(14,8))[1]
                         plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
@@ -1087,7 +1088,8 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                         res.append([max_eb, fs_eb, std_eb, nn_eb])
                         if (ci == 0): # Only figures for the first cycle
                             im = ax.imshow(errorbeam, origin='lower', extent=[min(beam.extent,p_beam.extent)/2.*i for i in [-1,1,-1,1]]) # Square
-                            ax.contour(p_beam.margin, p_beam.margin, 20*np.log10(np.abs(modl)), [contourdB], alpha=0.2) # Especially useful to see if smoothing broadens the pattern
+                            ax.contour(p_beam.margin, p_beam.margin, 20*np.log10(np.abs(modl)), np.linspace(contourdB,-3,3), colors='k', alpha=0.2) # Un-distorted pattern
+                            ax.contour(beam.margin, beam.margin, 20*np.log10(np.abs(meas)), np.linspace(contourdB,-3,3), colors='y', alpha=0.3) # Distorted pattern
                             ax.set_title("Error Beam %s-pol [frac]"%lbl)
                             ax.set_xlabel("degrees"); ax.set_ylabel("degrees")
                             ax.set_xlim(*eb_extent); ax.set_ylim(*eb_extent)
@@ -1172,7 +1174,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
             pbm = sorted(_predicted_)[0][-1] # Sorted by df, ascending
             if (beampolydegree and beamsmoothing):
                 # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                smoothbeam(pbm, fitdBlevel=contourdB-3, degree=(pbm.Gx[0],pbm.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                smoothbeam(pbm, fitdBlevel=contourdB-3, degree=contourdB+6 if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
             C = min(len(beams), ncols)
             R = int(len(beams)/float(ncols) + 0.9999) # Columns & rows per pol
             axes = plt.subplots(2*R, ncols, figsize=(18,2*R*18./ncols))[1]
@@ -1186,7 +1188,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                             if (c == 0): ax.set_ylabel("%s-pol"%("HV"[pol]))
                             bm = beams[r*C+c] # Just for first frequency
                             if (beampolydegree and beamsmoothing):
-                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=(pbm.Gx[0],pbm.Gy[0]) if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=contourdB+6 if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
                             eb = geterrorbeam(meas, modl, ext_(bm)/ext_(pbm), contourdB=contourdB)
