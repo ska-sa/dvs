@@ -132,8 +132,10 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
             b, aH, aV = load_predicted(f_MHz, pol, DISHPARAMS, el_deg, band, root, applypointing, gridsize, **kwargs)
             beams.append(b); apmapsH.append(aH); apmapsV.append(aV)
         return beams, apmapsH, apmapsV
-    if not np.isscalar(freqMHz): # freq & pol are packaged as 1-element arrays?
+    all_scalar = np.isscalar(freqMHz)
+    if not all_scalar: # freq & pol are packaged as 1-element arrays
         freqMHz, beacon_pol = freqMHz[0], beacon_pol[0]
+    
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     
     ff = freqMHz - int(freqMHz)
@@ -177,7 +179,10 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         for apmap in [apmapH,apmapV]:
             apmap.unwrapmaskmap = apmap.unwrapmaskmap[::-1,:]; apmap.analyse()
     
-    return (beamcube, apmapH, apmapV)
+    if all_scalar:
+        return (beamcube, apmapH, apmapV)
+    else:
+        return ([beamcube], [apmapH], [apmapV])
 
 
 def e_bn(pol, tilt_deg, northern_observer=False):
