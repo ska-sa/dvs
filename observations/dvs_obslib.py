@@ -429,6 +429,7 @@ def start_hacked_session(cam, **kwargs):
             user_logger.info('DONE')
             user_logger.info('Ended data capturing session with experiment '
                              'ID %s', session.experiment_id)
+            session.stop_antennas()
             user_logger.info('==========================')
     session.end = hacked_end
     
