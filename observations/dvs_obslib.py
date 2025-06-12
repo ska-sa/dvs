@@ -363,6 +363,8 @@ def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
         1. `standard_setup()` checks & updates Ku-band siggen frequency
         2. `standard_setup()` disables pointing corrections for MKE Dish ACU's
+        3. `capture_start()` handles hardware-level noise diode switching
+        4. `capture_start()`, `label()` & `add()` are skipped if no_capture option is True
         
         @return: the session object.
     """
@@ -405,6 +407,11 @@ def start_hacked_session(cam, **kwargs):
             user_logger.info("Started digitiser-level noise diode switching: " + str(params))
         return result
     session.capture_start = hacked_capture_start
+    
+    if kwargs.get('no_capture', False): # Hack the functions that don't properly handle no_capture
+        session.add = lambda *a, **k: None # For telstate
+        session.capture_start = lambda *a, **k: None # Start capturing data to HDF5 file. Ignored!
+        session.label = lambda *a, **k: None # Add timestamped label to HDF5 file. Ignored!
     
     # Hack the "standard end" function
     session._end_ = session.end
