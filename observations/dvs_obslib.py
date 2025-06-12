@@ -75,7 +75,7 @@ def standard_script_options(usage, description):
 
 
 class start_nocapture_session(object):
-    """ Hacked "no capture session" to ignore cbf & sdp """
+    """ Like katsdpscripts.rts_session.CaptureSession, but this one avoids interacting with cbf & sdp. """
     def __enter__(self):
         return self
     
@@ -94,7 +94,10 @@ class start_nocapture_session(object):
     def add(self, *a, **k): # For telstate
         pass
     
-    def capture_start(self): # Ignored
+    def capture_start(self): # Start capturing data to HDF5 file. Ignored!
+        pass
+    
+    def label(self, *a, **k): # Add timestamped label to HDF5 file. Ignored!
         pass
     
     def standard_setup(self, *a, **kwargs): # Like start_hacked_session#hacked_setup(), bust the basics that apply to dishes 
