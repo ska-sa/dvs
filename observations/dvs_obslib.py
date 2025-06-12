@@ -422,7 +422,14 @@ def start_hacked_session(cam, **kwargs):
             if (not session._cam_.dry_run):
                 session.ants.req.dig_noise_source('now', 'off')
             user_logger.info("Stopped digitiser-level noise diode switching.")
-        return session._end_(*a, **k)
+        # Shut down capturing stream, except for no-capture session
+        if kwargs.get('no_capture', False):
+            user_logger.info('DONE')
+            user_logger.info('Ended data capturing session with experiment '
+                             'ID %s', session.experiment_id)
+            user_logger.info('==========================')
+        else:
+            return session._end_(*a, **k)
     session.end = hacked_end
     
     return session
