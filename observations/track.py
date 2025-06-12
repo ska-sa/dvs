@@ -6,7 +6,7 @@ import numpy as np
 
 from katcorelib import (standard_script_options, verify_and_connect,
                         start_session, user_logger)
-from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_nocapture_session, start_hacked_session as start_session # Override previous import
+from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
 
 
 class NoTargetsUpError(Exception):
@@ -22,8 +22,6 @@ parser.add_option('--catalogue', default='',
                   help="Name of file containing catalogue of targets to use, instead of default system catalogue.")
 
 # Add experiment-specific options
-parser.add_option('--no-capture', action="store_true", default=False,
-                  help='Start the session without interacting with either CBF or SDP (i.e. subarray doesn\'t need to have them!)')
 parser.add_option('-t', '--track-duration', type='float', default=60.0,
                   help='Length of time to track each source, in seconds '
                        '(default=%default)')
@@ -47,9 +45,6 @@ if (not os.path.isfile(opts.catalogue)) and (len(args) == 0):
     raise ValueError("Please specify at least one target argument via name "
                      "('Cygnus A'), description ('azel, 20, 30') or catalogue "
                      "file name ('sources.csv')")
-
-if opts.no_capture:
-    start_session = start_nocapture_session
 
 # Check options and build KAT configuration, connecting to proxies and devices
 with verify_and_connect(opts) as kat:
