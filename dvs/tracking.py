@@ -234,6 +234,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     ds.select(reset="", scans=scans, compscans=compscans)
     ds.select(reset="", compscans="~unwrap") # Definitely don't want these - OK to hard-code this.
     polswap = "" if polswap is None else polswap
+    track_ant = "" if track_ant is None else track_ant
     pols = {a:"HV" if (a not in polswap) else "VH" for a in [ant,track_ant]}
     if (track_ant):
         pols_to_use = [pols[ant][i]+pols[track_ant][i] for i in (0,1)]
