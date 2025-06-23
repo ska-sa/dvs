@@ -237,11 +237,11 @@ b = unwrapped_group_delay / sigma_delay
 good = sigma_delay < opts.max_sigma * max_sigma_delay
 A = A[:, good]
 b = b[good]
+if not opts.fit_niao: # Remove NIAO from fit
+    A = np.delete(A, 4+np.arange(len(data.ants)-1)*5, axis=0)
 print('\nFitting %d parameters to %d data points (discarded %d)...' % (A.shape[0], len(b), len(sigma_delay) - len(b)))
 if len(b) == 0:
     raise ValueError('No solution possible, as all data points were discarded')
-if not opts.fit_niao: # Remove NIAO from fit
-    A = np.vstack((A[0], np.delete(A, slice(None,None,4), axis=0)))
 # Solve linear least-squares problem using SVD (see NRinC, 2nd ed, Eq. 15.4.17)
 U, s, Vrt = np.linalg.svd(A.transpose(), full_matrices=False)
 params = np.dot(Vrt.T, np.dot(U.T, b) / s)
