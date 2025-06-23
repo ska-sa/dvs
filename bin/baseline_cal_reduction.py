@@ -241,7 +241,7 @@ print('\nFitting %d parameters to %d data points (discarded %d)...' % (A.shape[0
 if len(b) == 0:
     raise ValueError('No solution possible, as all data points were discarded')
 if not opts.fit_niao: # Remove NIAO from fit
-    A = A[:4, ...]
+    A = np.vstack((A[0], np.delete(A, slice(None,None,4), axis=0)))
 # Solve linear least-squares problem using SVD (see NRinC, 2nd ed, Eq. 15.4.17)
 U, s, Vrt = np.linalg.svd(A.transpose(), full_matrices=False)
 params = np.dot(Vrt.T, np.dot(U.T, b) / s)
@@ -250,8 +250,8 @@ sigma_params = np.sqrt(np.sum((Vrt.T / s[np.newaxis, :]) ** 2, axis=1))
 print('Condition number = %.3f' % (s[0] / s[-1],))
 if not opts.fit_niao: # Add "old" NIAO because it wasn't fitted
     fixed_niao = np.r_[old_niao[:ref_ant_ind], old_niao[ref_ant_ind+1:]] - old_niao[ref_ant_ind]
-    params = np.hstack((params, fixed_niao / katpoint.lightspeed))
-    sigma_params = np.hstack((sigma_params, np.zeros(len(data.ants)-1)))
+    params = np.hstack((params.reshape((-1,4)), np.c_[fixed_niao / katpoint.lightspeed])).ravel()
+    sigma_params = np.hstack((sigma_params.reshape(-1,4), np.c_[np.zeros(len(data.ants)-1)])).ravel()
     
 # Reshape parameters to be per antenna, also inserting a row of zeros for reference antenna
 ant_params = params.reshape(-1, 5)
