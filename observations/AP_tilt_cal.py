@@ -17,28 +17,9 @@ def wrap(angle, period):
     """ @return: angle in the interval -period/2 ... period/2 """
     return (angle + 0.5*period) % period - 0.5*period
 
-def wait_on_sensor(ants, sensor_name, check_function, timeout):
-    """ As of 11/2024, this is a work around for ants.wait() breaks if the sensor is not defined for both types of antennas. """
-    try:
-        ants.wait(sensor_name, check_function, timeout=timeout)
-    except KeyError: # Sensor not defined for some antennas
-        mkat_ants = [ant for ant in kat.ants if (ant.name[0] == "m")]
-        ska_ants = [ant for ant in kat.ants if (ant.name[0] != "m")]
-        try:
-            for a in mkat_ants:
-                a.wait(sensor_name, check_function, timeout=timeout)
-        except KeyError:
-            for a in ska_ants:
-                a.wait(sensor_name, check_function, timeout=timeout)
-
-    
-az_sensor_names = ["ap.actual-azim", "dsm.azPosition"] # For MeerKAT Receptors & SKA1-MID Dishes
-
 
 def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, dry_run=False):
     """ Turn ants from center azim,elev at the specified speeds for a duration to cover specified azim_range & elev_range. """
-    global az_sensor_names
-    
     azim = wrap(azim, 360)
     target = "Scan, azel, %f,%f, d_az %f..%f, d_el %f..%f"%(azim,elev, -azim_range/2,azim_range/2, -elev_range/2,elev_range/2)
     start_azim = azim - np.sign(azim_speed)*azim_range/2
@@ -74,18 +55,13 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     
     if not dry_run:
         time.sleep(2) # Avoid triggering before the antennas have started moving
-        # Note: ants.wait('ap.on-target', True, timeout) & 'dsm.targetLock' are True during the SCAN, so must use following:
-        threshold = 1 # To catch it at 0.5 second polling period at full speed (2 deg/sec).
-        def wait_on_target(t_az,t_el,timeout):
-            for s_n in az_sensor_names:
-                wait_on_sensor(ants, s_n, lambda c: abs(c.value - t_az) < threshold, timeout=timeout)
         try: # Wait until we are at the expected end point
             try: # Wait for the shortest possible time required
-                wait_on_target(end_azim, end_elev, timeout=T_duration+100)
+                ants.wait('lock', True, timeout=T_duration+100)
                 user_logger.info("Reached the end position.")
             except Exception as e:
                 user_logger.info("Taking longer than expected to reach the end point. Allowing unwrap time.")
-                wait_on_target(end_azim, end_elev, timeout=T_timeout)
+                ants.wait('lock', True, timeout=T_timeout)
             ants.wait('lock', True, timeout=100) # Allow scan to complete gracefully
         except Exception as e: # Some conditions like wind stow are recoverable, so just log and try to continue
             user_logger.info("Timed out while waiting to reach end point. %s"%e)
@@ -98,8 +74,8 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
 
 # Set up standard script options
 
-parser = standard_script_options(usage="%prog [options] <'target/catalogue'> [<'target/catalogue'> ...]",
-                                 description="Turn the antennas in azimuth at the specified speed.")
+parser = standard_script_options(usage="%prog [options]",
+                                 description="Turn the antennas in azimuth at the specified speed - without capturing sky data.")
 
 parser.add_option('--start-az', type='float',
                   default=-135.0,
@@ -141,8 +117,6 @@ with verify_and_connect(opts) as kat:
     kat.ants.set_sampling_strategy("ap.on-target", "event") # This is a combination of mount-lock & lock, so set all three
     kat.ants.set_sampling_strategy("mount-lock", "event")
     kat.ants.set_sampling_strategy("lock", "event")
-    for s_n in az_sensor_names:
-        kat.ants.set_sampling_strategy(s_n, "period 0.5")
 
     if not kat.dry_run and kat.ants.req.mode('STOP'):
         user_logger.info("Setting antennas to mode 'STOP'")
