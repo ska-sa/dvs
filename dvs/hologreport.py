@@ -1513,7 +1513,7 @@ def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save_to=None, band=""):
                         apmap[1].gainmeasured/apmap[1].gainuniform] for f,apmap in zip(freqs_MHz,apmaps)])*100*scale
 
     if save_to:
-        cbid = " & ".join([apmap.dataset.filename.split("/")[-2] for apmap in apmapsX])
+        cbid = apmap.dataset.filename.split("/")[-2]
         scaled_to = "A_g=%.1fm^2 (D_g=%.1fm)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
         np.savetxt("%s/%s_ant_eff.csv"%(save_to,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
                    header="The ratio gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,cbid)+
