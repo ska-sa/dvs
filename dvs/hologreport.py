@@ -314,6 +314,13 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # NB: flip the sign of 'mm' to get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
         #      katholog registers +mm (+dEl) when antenna points above target, while measuring the lower part of the pattern, which is -mm for predicted patterns.
         dataset.mm = -dataset.mm
+        # MdV 06/2025: flipping the data using dataset.mm=-dataset.mm : you should use ApertureMap(...,parabolaoffsetdev=[0,-15/2]) instead of the default parabolaoffsetdev=None which becomes [0,15/2] (for offset dishes).
+        #              Fortunately this makes the correspondence to the raytracing a little bit better at the lower edge, but unfortunately it makes the LCP V pol look a bit more different from the H pol in the upper region.
+        try:
+            flip['parabolaoffsetdev'] = DISHPARAMS['parabolaoffsetdev']
+        except:
+            pass
+        
         # Measured patterns are 'as-received patterns' i.e. include the polarisation state of the beacon. Instead of correcting
         # these, the adopted approach is to generate predicted (beam & aperture) patterns to match the measured patterns.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
