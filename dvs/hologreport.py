@@ -1469,7 +1469,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz=None, wind_speed=None):
     return filtered
 
 
-def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save=False, root="./", band=""):
+def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save_to=None, band=""):
     """ Re-computes efficiencies for the physical geometric aperture. For MeerKAT this is as masked for ApertureMap.devmap,
         rather than the initial ApertureMap.dishdiameter which for MeerKAT defaults to 13.5 m.
 
@@ -1480,7 +1480,7 @@ def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save=False, root="./", band=
         @param apmapsX,apmapsY: lists of katholog.ApertureMap
         @param freqs_MHz: list of frequencies for each apmapsX,Y [MHz]
         @param D: specify this to force the use of a circular aperture with diameter D [m] (default None)
-        @param save: True to save results to a file that can be used with katsemodels.py (the labeling assumes that X=H and Y=V).
+        @param save_to: specify this folder to save results to a file that can be used with katsemodels.py (the labeling assumes that X=H and Y=V).
         @param band: a string to mark the saved filename with.
         @return: (illumination_efficiency, antenna_efficiency, Ag) - 
                  each [eff_H,eff_V] all efficiencies in percentage (0-100), Ag in m^2
@@ -1512,10 +1512,10 @@ def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save=False, root="./", band=
     anteff = np.array([[apmap[0].gainmeasured/apmap[0].gainuniform, # This is IEEE ANTENNA APERTURE ILLUMINATION EFFICIENCY, slightly lower than eff0_illumination - includes all effects that impact on directivity pattern (i.e. only excluding Ohmic?) 
                         apmap[1].gainmeasured/apmap[1].gainuniform] for f,apmap in zip(freqs_MHz,apmaps)])*100*scale
 
-    if save:
-        cbid = apmap.dataset.filename.split("/")[-2]
+    if save_to:
+        cbid = " & ".join([apmap.dataset.filename.split("/")[-2] for apmap in apmapsX])
         scaled_to = "A_g=%.1fm^2 (D_g=%.1fm)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
-        np.savetxt("%s/%s_ant_eff.csv"%(root,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
-                   header="gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,cbid)+
+        np.savetxt("%s/%s_ant_eff.csv"%(save_to,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
+                   header="The ratio gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,cbid)+
                           "f [MHz]\teta_ap H [%]\teta_ap V [%]")
     return (illeff, anteff, avg_Ag)
