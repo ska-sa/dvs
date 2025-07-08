@@ -34,9 +34,9 @@ def reset_ACU(cam_ant):
     dsm.AckInterlock(); time.sleep(5)
     dsm.ClearLatchedErrors(); time.sleep(1)
     dsm.ClearOldTasks(); time.sleep(1)
-    dsm.SetStandbyFPMode(); time.sleep(5)
     dsm.ResetTrackTableBuffer(); time.sleep(1)
-    dsm.ResetTrackTable()
+    dsm.ResetTrackTable(); time.sleep(1)
+    dsm.SetStandbyFPMode()
 
 
 def match_ku_siggen_freq(cam, override=False):
