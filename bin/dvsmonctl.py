@@ -36,8 +36,7 @@ def reset_ACU(cam_ant):
     dsm.ClearOldTasks(); time.sleep(1)
     dsm.SetStandbyFPMode(); time.sleep(5)
     dsm.ResetTrackTableBuffer(); time.sleep(1)
-    dsm.ResetTrackTable(); time.sleep(1)
-    cam_ant.req.dsh_ResetDishMode() # This is necessary to get rid of (some) occurrences of FORBIDDEN
+    dsm.ResetTrackTable()
 
 
 def match_ku_siggen_freq(cam, override=False):
