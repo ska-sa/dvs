@@ -120,7 +120,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         File naming convention: either MK_GDSatcom_{freqMHz}.mat or {band}_{el_deg}_{freqMHz}.mat
         
         @param freqMHz: frequency(ies) for simulated patterns [MHz]
-        @param beacon_pol: for each frequency specified, the [e_H,e_V] basis vectors e.g. [1,-1j] (RCP), or 'RCP', 'LCP' or None (un-polarised).
+        @param beacon_pol: for each frequency specified, the [e_X,e_Y] basis vectors (see `e_bn()`), or 'RCP', 'LCP' or None (un-polarised).
         @param DISHPARAMS: {telescope, xyzoffsets, xmag, focallength} to project the patterns to the physical geometry.
         @param el_deg: elevation for simulated distortion, 45deg is essentially undistorted.
         @param kwargs: passed to katdal.Dataset e.g. 'clipextent'
@@ -159,7 +159,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     
     beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
     if (beacon_pol is not None):
-        beacon_pol = [1,-1j] if (beacon_pol == "RCP") else ([1,1j] if (beacon_pol == "LCP") else beacon_pol)
+        beacon_pol = e_bn(beacon_pol) if (beacon_pol in ["RCP","LCP"]) else beacon_pol
         fcH = dict(feedcombine=[beacon_pol[0],beacon_pol[1],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
         fcV = dict(feedcombine=[0,0,beacon_pol[-2],beacon_pol[-1]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
@@ -185,32 +185,51 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         return ([beamcube], [apmapH], [apmapV])
 
 
-def e_bn(pol, tilt_deg, northern_observer=False):
-    """ Generates the E-field components for a linear polarised signal radiated from a satellite,
+def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
+    """ Generates the linear E-field components for a polarised signal arriving from space,
         according to the convention that the satellite's +V points towards the NCP, and the observed
         tilt angle from the surface of the Earth in the northern hemisphere is positive in a
-        clockwise sense. Tilt angles from e.g. https://www.satbeams.com/footprints?beam=8511.
+        clockwise sense. Tilt angles either from e.g. https://www.satbeams.com/footprints?beam=8511 
+        or pass in (sat lon, extra tilt) to have it calculated.
         
+        IAU +X and +Y are in the plane of the sky toward the North and East, respectively, with position angle
+        increasing from North through the East so that Y lags X when receiving RCP, i.e. [eX, eY] = [1, -1j].
+        For an AzEl mount pointed at Zenith with Az=South we see that +V -> North == +X and +H -> East == +Y
+        provides a mapping that is consistent with the IAU convention.
+        This function follows the IAU mapping!
+             
         Test cases for northern observer:
-            V@0deg should be [0,1]; H@0deg should be [1,0]
+            V@0deg should be [1,0]; H@0deg should be [0,1]
             H@90deg should equal V@0deg
         Test cases for southern observer:
-            V@0deg should be [0,-1]; H@0deg should be [-1,0]
+            V@0deg should be [-1,0]; H@0deg should be [0,-1]
             H@90deg should equal V@0deg
         
-        @param tit_deg: the angle by which the satellite's V plane is tilted away from the observer's meridian.
-        @param northern_observer: True if the tilt angle is for an observer in the northern hemisphere (default False).
-        @return: [eH, eV] components for the specified satellite beacon """
+        @param pol: may be one of 'RCP'|'LCP'|'H'|'V'
+        @param tilt_deg: the angle by which the satellite's V plane is tilted East of the observer's meridian,
+                        or a tuple (satellite lon [deg E], extra_tilt [deg rotate N to E])
+        @param obs_lon, obs_lat: observer's geodetic longitude & latitude [degree] (default: reference coordinate of MeerKAT).
+        @return: [e_X, e_Y] components for the specified satellite beacon """
     if (pol == "RCP"): return [1,-1j]
     
     if (pol == "LCP"): return [1, 1j]
     
+    D2R = np.pi/180
+    
+    if (len(np.atleast_1d(tilt_deg)) == 2): # (sat lon, extra tilt) to calculate skew angle for GEO satellite
+        sat_lon, extra_tilt = tilt_deg
+        # Eq. 42 in Satellite Orbits, Coverage and Antenna Alignment. Festo Didactic, 2015
+        skew = np.atan(np.sin((sat_lon-obs_lon)*D2R)/np.tan(obs_lat*D2R))
+        tilt_deg = skew/D2R + extra_tilt
+    
     if (pol=="H"): tilt_deg -= 90 # 0deg = +V; +tilt angle rotates H to V
-    if northern_observer: # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
+    
+    if (obs_lat >= 0): # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
         pass
     else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H is observed as -H)
         tilt_deg = tilt_deg + 180
-    return [-np.sin(tilt_deg*np.pi/180), np.cos(tilt_deg*np.pi/180)]
+    
+    return [np.cos(tilt_deg*D2R), -np.sin(tilt_deg*D2R)]
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
