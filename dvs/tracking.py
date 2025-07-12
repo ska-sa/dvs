@@ -263,8 +263,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             ds.select(reset="", channels=ds.channels[1:])
         
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
-        if (len(ds.timestamps) > 0) and (len(ds.timestamps[mask]) == 0): # All points flagged out
-            print(f"WARNING: Skipping scan #{cs_no} no data remains after applying flags {flags}!")
+        if (len(ds.timestamps[mask]) == 0): # All points flagged out
             continue
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
