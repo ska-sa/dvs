@@ -93,8 +93,8 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
-    resid = np.std(height - model_height)
-    valid = p.success and (ampl/resid > 3) # 3sigma is the absolute minimum for reliable fits! 
+    resid = np.mean((height - model_height)**2)**.5
+    valid = p.success and (ampl/resid > 7) # 3sigma is the absolute minimum for reliable fits! 
     valid = valid and (fwhmx/scanext < 0.99) and (fwhmy/scanext < 0.99) # Width must be smaller than measured extent for reliable fits - especially when fit is constrained! 
     valid = valid and (xoffset/scanext < 0.8) and (yoffset/scanext < 0.8) # A fit is not reliable if it extrapolates far outside the measured region!
     
@@ -224,7 +224,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         f_start, f_stop, *_ = list(np.atleast_1d(freq_MHz))*2 # Allow a single value to be given
         chans = (f_start-.5*df <= freqsMHz) & (freqsMHz <= f_stop+.5*df)
     
-    if (not callable(chans)) and (chans is not None):
+    if (not callable(chans)) and (chans is not None): # Convert a mask array to a function
         _chans_ = chans
         chans = lambda *a: _chans_
     
@@ -259,8 +259,13 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     for (cs_no, cs_label, target) in ds.compscans():
         if chans:
             ds.select(channels=chans(target.name, fGHz))
+        if (ds.channels[0] == 0): # Always omit the 0th channel (FFT bin 0)
+            ds.select(reset="", channels=ds.channels[1:])
         
         mask = np.any(~ds.flags[:],axis=(1,2)) if flags else np.full(ds.timestamps.shape, True)
+        if (len(ds.timestamps) > 0) and (len(ds.timestamps[mask]) == 0): # All points flagged out
+            print(f"WARNING: Skipping scan #{cs_no} no data remains after applying flags {flags}!")
+            continue
         # Also omit data points that are far from the majority - to avoid stray points from skewing the fit
         scan_r = np.squeeze((ds.target_x[...,scan_ant_ix]**2+ds.target_y[...,scan_ant_ix]**2)**.5)
         mask &= scan_r < (clip_radius if clip_radius else (np.median(scan_r) + 1*np.std(scan_r)))
@@ -297,7 +302,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
             hv = ds.vis[mask]
             hv_mag = np.abs(hv)
-            hv /= np.mean(hv_mag, axis=0) # Normalise for H-V gains & bandpass
+            hv_c_angle = np.median(np.unwrap(np.angle(hv), axis=0), axis=0) # Flatten phases relative to median over time
+            hv /= np.mean(hv_mag, axis=0)*np.exp(1j*hv_c_angle) # Normalise for H-V gains & bandpass
             if track_ant and phased_up: # Phase coherent average
                 height = np.abs(np.sum(hv, axis=(1,2))) # TOTAL complex power integrated  over frequency
             else:
