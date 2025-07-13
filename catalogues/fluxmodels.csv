@@ -50,10 +50,21 @@ J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:0
 J0408-6545 | 1Jy 0407-65 | J0408-6544 | PKS 0408-65, radec, 04:08:20.38,-65:45:09.1, (145. 18000. -0.9790 3.3662 -1.1216 0.0861)   , , 0            , 0            , 0                 , gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 
 
+# 3C286: Polarisation ~10% @ 33deg over 1 - 40GHz from Perley & Butler 2014; Width from Perley & Butler 2017's LAS/3 as half power width for Gaussian
+J1331+3030 | 3C286                            , radec, 13:31:08.29, +30:30:32.96, , (1.2481 -0.4507 -0.1798 0.0357 coeff_freq=1e9)   , 0.1          , 33           , 1.2               , gaussian, Perley & Butler 2017, Over 0.05 - 50 GHz
+J1331+3030 | 3C286                            , radec, 13:31:08.29, +30:30:32.96, (50. 50000 0.0181 1.5920 -0.5011 0.0357)         , , 0.1          , 33           , 1.2               , gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+
+
+# 3C138: Polarisation approx to Perley & Butler 2014; Width from Perley & Butler 2017's LAS/3 as half power width for Gaussian
+J0521+1638 | 3C138 | PKS 0518+16              , radec, 05:21:09.89, +16:38:22.1, , (1.0088 -0.4981 -0.1552 -0.0102 0.0223 coeff_freq=1e9)       , 8 , -10          , 0.22              , gaussian, Perley & Butler 2017, Over 0.2 - 50 GHz
+J0521+1638 | 3C138 | PKS 0518+16              , radec, 05:21:09.89, +16:38:22.1, (1410.0 8400.0 -1.32934004351 1.91278744917 -0.376296576679) , , 8 , -10          , 0.22              , gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+
+
 # Copied from github.com/ska-sa/katsdpcatalogues/../cals_Lband.csv on 17/11/2021
 J0010-4153 | 0008-421,radec gaincal,00:10:52.52,-41:53:10.8,(145. 20000. -16.9316 15.3898 -4.2105 0.3496),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0025-2602 | 0023-263,radec gaincal,00:25:49.17,-26:02:12.8,(333. 99000. -8.4450 9.2780 -2.7801 0.2499),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0059+0006 | 0056-001,radec gaincal,00:59:05.53,+00:06:51.5,(74.   8400. -0.9051 1.8362 -0.6141 0.0518),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
+J0137+3309 | 3C48,radec,01:37:41.29,+33:09:35.13,,(1.3253 -0.7553 -0.1914 0.0498 coeff_freq=1e9), 0.005+0.0061*fGHz-0.0012*fGHz**2, -67-100*np.exp(-(fGHz-1)/2), 0.4, gaussian, SARAO, Perley & Butler 2017, Over 0.05 - 50 GHz; Polarisation approx to Perley & Butler 2014; Width from Perley & Butler 2017's LAS/3 as half power width for Gaussian; SLOW VARIABLE!
 J0137+3309 | 3C48,radec bpcal,01:37:41.29,+33:09:35.13,(50. 50000. 0.5240 1.7377 -0.6396 0.0498),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0203-4349 | 0201-440,radec gaincal,02:03:40.754300,-43:49:50.783,(80.  22000. 1.4053 0.1893 -0.1654 0.0030),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0240-2309 | 0237-233,radec gaincal,02:40:08.14,-23:09:16.0,(365. 43000. -23.5170 20.5047 -5.5855 0.4851),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
@@ -61,7 +72,6 @@ J0252-7104 | 0252-712,radec bpcal,02:52:46.31,-71:04:36.2,(145. 20000. 1.1245 0.
 J0318+1628 | CTA21,radec gaincal,03:18:57.77,16:28:33.1,(318. 43000. -13.4672 12.4587 -3.4110 0.2867),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0405-1308 | 0403-132,radec gaincal,04:05:33.94,-13:08:14.4,(74.  22000. -0.8395 2.4438 -0.9451 0.1006),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0420-6223 | 0420-625,radec gaincal,04:20:56.19,-62:23:37.6,(145. 20000. 4.7772 -2.1190 0.3788 -0.0433),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
-J0521+1638 | 3C138,radec bpcal,05:21:09.93,+16:38:22.2,(50. 50000. 1.3781 0.1619 -0.0650 -0.0100),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0534+1927 | 0531+194,radec gaincal,05:34:44.51,+19:27:21.7,(74.  22000. -3.4915 5.0261 -1.6476 0.1549),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0616-3456 | 0614-349,radec gaincal,06:16:35.981369,-34:56:16.5633960,(80.  20000. 1.6678 -0.2215 -0.0396 -0.0044),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J0825-5010 | 0823-500,radec bpcal,08:25:26.86,-50:10:38.486,(408. 22000. -33.5795 27.9753 -7.3670 0.6198),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
@@ -75,7 +85,6 @@ J1154-3505 | 1151-348,radec gaincal,11:54:21.76,-35:05:29.4,(75.  43000. -2.9686
 J1311-2216 | 3C283,radec gaincal,13:11:39.33,-22:16:41.74,(60.  43000. -3.3516 6.4132 -2.4230 0.2522),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J1318-4620 | 1315-460,radec gaincal,13:18:30.064,-46:20:34.90,(145. 20000. 8.1689 -6.5930 2.0835 -0.2452),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J1330+2509 | 3C287,radec gaincal,13:30:37.69,+25:09:10.9,(80 14900 1.0388 0.5265 -0.2145 0.0089),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
-J1331+3030 | 3C286,radec bpcal,13:31:08.288,+30:30:32.959,(50. 50000 0.0181 1.5920 -0.5011 0.0357),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J1347+1217 | 1345+125,radec gaincal,13:47:33.36,+12:17:24.238,(333. 99000. 1.4389 -0.2156 0.0345 -0.0130),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J1424-4913 | 1421-490,radec gaincal,14:24:32.08,-49:13:50.7,(145. 99000. 6.0550 -4.1963 1.1975 -0.1218),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
 J1501-3918 | 1458-391,radec gaincal,15:01:35,-39:18:39,(408. 20000. 5.7026 -3.9782 1.1342 -0.1271),,  0,0,0,gaussian, SARAO, katsdpcatalogues/../cals_Lband.csv
