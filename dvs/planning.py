@@ -108,7 +108,7 @@ def _baseline_endpt_(ant, baseline_pt):
 
 
 def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(1000,0,0), freq=1e9, show_LST=False,
-             catfn='catalogues/sources_all.csv',catant="m000, -30.713, 21.444, 1050.0", **figargs):
+             catfn='catalogues/sources_all.csv',ant="m000, -30.713, 21.444, 1050.0", **figargs):
     """ Notes rise & set times and plots the elevation trajectory if end_date is given.
         Also prints the geometric delay rate for the baseline as specified. 
         
@@ -120,15 +120,16 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         @param baseline_pt: the reference point for a baseline to calculate fringe rate,
                             either katpoint.Antenna or (dEast,dNorth,dUp)[m] (default (1000,0,0)).
         @param freq: frequency for calculating fringe rate (default 1e9) [Hz]
-        @param catfn, catant: defaults to use in case target is simply an identifier string.
+        @param catfn, ant: defaults to use in case target is simply an identifier string.
         @return: target (a list, if multiple matches)- a katpoint.Target
     """
     date = to_ephem_date(date)
     if (end_date is not None):
         end_date = to_ephem_date(end_date)
+    ant = figargs.pop("catant", ant) # Backwards compatibility
     
     if isinstance(target,str):
-        cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(catant))
+        cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(ant))
         if (target != "*"):
             matches = target.split("|")
             targets = [cat[t] for t in matches if (cat[t] is not None)]
@@ -297,7 +298,8 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     plt.ylabel("Tsys/mean(Tsys) on sky [K/K]" if normalize else "Tsys on sky [K]")
 
 
-def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_deg=1, sunmoon_separation_deg=10, verbose=False, **fitkwargs):
+def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_deg=1, sunmoon_separation_deg=10,
+                             ant='m000, -30.713, 21.444, 1050.0', verbose=False, **fitkwargs):
     """ Simulates pointing measurement sessions and makes plots to allow you to see
         the resulting sky coverage using the specified catalogue.
         @param catfn: the catalogue file.
@@ -307,7 +309,7 @@ def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_d
         @param sunmoon_separation_deg: omit targets that are closer than this distance from Sun & Moon (default 10) [deg]
         @param fitkwargs: passed to `cattools.sim_pointingfit()`
     """
-    cat = katpoint.Catalogue(open(catfn), antenna=katpoint.Antenna('m000, -30.713, 21.444, 1050.0'))
+    cat = katpoint.Catalogue(open(catfn), antenna=katpoint.Antenna(ant))
     print("Using ", catfn)
     axes = np.ravel(plt.subplots(max(1,int(S/2+0.5)),2, subplot_kw=dict(projection='polar'), figsize=(12,12))[1])
     for n in range(S): # Repeat each "plan" so many times
@@ -319,3 +321,37 @@ def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_d
         resid = cattools.sim_pointingfit(catfn, el_limit_deg, Hr*60, t_observe/60+1, Tstart=T0, **fitkwargs) # +1min for slews
         cattools.plot_skycat(cat_n, T0+np.arange(M)*T, t_observe, ax=axes[n])
         axes[n].set_title("%s T+%d hrs (RMS<%.f'')"%(catfn, Hr*n, np.max(resid)))
+
+
+def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant='m000, -30.713, 21.444, 1050.0', **figkwargs):
+    """
+        @param schedule: a list of (target [name or description], duration [sec]); targets not recognised will simply pass the time.
+        @param catfn: the catalogue file to use to resolve target names.
+        @param Tstart: start time [UTC Unix seconds]
+        @param interval: time to elapse before starting a schedule entry [sec] (default 60).
+    """
+    cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(ant))
+    
+    # Plot sky trajectories
+    plt.figure(**figkwargs)
+    plt.title("Targets as observed by [%s]" % cat.antenna.name)
+    all_tgts = [] # Unique list of names - helps keep legend manageable
+    start_time = Tstart
+    for target,duration in schedule:
+        target = cat[target]
+        if (target is not None):
+            start_time += interval
+            timestamps = start_time + np.linspace(0,duration,10)
+            _, el = target.azel(timestamps) # rad
+            el = el*180/np.pi
+            kwargs = dict()
+            if (target.name not in all_tgts):
+                all_tgts.append(target.name)
+                kwargs['label'] = target.name + ("|"+"|".join(target.aliases) if target.aliases else "")
+            plt.plot((timestamps-Tstart)/3600, el, 'C%d-'%all_tgts.index(target.name), **kwargs)
+            if (np.min(el) >= el_limit_deg): # Print out the calendar line for this observation
+                print(katpoint.Timestamp(start_time), f"{target.name}|{'|'.join(target.aliases)}, {int(duration/60+0.5)}min")
+        start_time += duration
+    plt.hlines(el_limit_deg, 0, (start_time-Tstart)/3600, 'k'); plt.ylim(0, 90)
+    plt.xlabel(f"Time since {str(katpoint.Timestamp(Tstart))} UTC [hours]"); plt.ylabel("El [deg]")
+    plt.grid(True); plt.legend(fontsize='small')
