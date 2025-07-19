@@ -349,13 +349,12 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
             if (target.name not in all_tgts):
                 all_tgts.append(target.name)
                 kwargs['label'] = target.name + ("|"+"|".join(target.aliases) if target.aliases else "")
-            plt.plot((timestamps-Tstart)/3600, el, 'C%d-'%all_tgts.index(target.name), **kwargs)
+            plt.plot(np.asarray(timestamps,dtype='datetime64[s]'), el, 'C%d-'%all_tgts.index(target.name), **kwargs)
             # Print out the calendar line for this observation
-            activity = "SKIP!" if (np.min(el) < el_limit_deg) else f"{target.name}|{'|'.join(target.aliases)}"
-        else:
-            activity = tgt
-        print(katpoint.Timestamp(start_time), f"{activity}, {int(duration/60+0.5)}min")
+            if (np.min(el) < el_limit_deg):
+                tgt = "CLIPPED-" + tgt + "-CLIPPED"
+        print(np.datetime_as_string(np.datetime64(int(start_time),'s'), unit='m', timezone='UTC'), f"{tgt}, {int(duration/60+0.5)}min")
         start_time += duration
-    plt.hlines(el_limit_deg, 0, (start_time-Tstart)/3600, 'k'); plt.ylim(0, 90)
-    plt.xlabel(f"Time since {str(katpoint.Timestamp(Tstart))} UTC [hours]"); plt.ylabel("El [deg]")
+    plt.hlines(el_limit_deg, np.datetime64(int(Tstart),'s'), np.datetime64(int(start_time),'s'), 'k'); plt.ylim(0, 90)
+    plt.xlabel(f"Time [UTC]"); plt.ylabel("El [deg]")
     plt.grid(True); plt.legend(fontsize='small')
