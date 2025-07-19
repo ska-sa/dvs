@@ -338,8 +338,8 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
     plt.title("Targets as observed by [%s]" % cat.antenna.name)
     all_tgts = [] # Unique list of names - helps keep legend manageable
     start_time = Tstart
-    for target,duration in schedule:
-        target = cat[target]
+    for tgt,duration in schedule:
+        target = cat[tgt]
         if (target is not None):
             start_time += interval
             timestamps = start_time + np.linspace(0,duration,10)
@@ -352,7 +352,9 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
             plt.plot((timestamps-Tstart)/3600, el, 'C%d-'%all_tgts.index(target.name), **kwargs)
             # Print out the calendar line for this observation
             activity = "SKIP!" if (np.min(el) < el_limit_deg) else f"{target.name}|{'|'.join(target.aliases)}"
-            print(katpoint.Timestamp(start_time), f"{activity}, {int(duration/60+0.5)}min")
+        else:
+            activity = tgt
+        print(katpoint.Timestamp(start_time), f"{activity}, {int(duration/60+0.5)}min")
         start_time += duration
     plt.hlines(el_limit_deg, 0, (start_time-Tstart)/3600, 'k'); plt.ylim(0, 90)
     plt.xlabel(f"Time since {str(katpoint.Timestamp(Tstart))} UTC [hours]"); plt.ylabel("El [deg]")
