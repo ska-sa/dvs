@@ -353,7 +353,7 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
             # Print out the calendar line for this observation
             if (np.min(el) < el_limit_deg):
                 tgt = "CLIPPED-" + tgt + "-CLIPPED"
-        print(np.datetime_as_string(np.datetime64(int(start_time),'s'), unit='m', timezone='UTC'), f"{tgt}, {int(duration/60+0.5)}min")
+        print(np.datetime64(int(start_time),'s').item().strftime('%Hh%M'), "--", f"{tgt}, {int(duration/60+0.5)}min")
         start_time += duration
     plt.hlines(el_limit_deg, np.datetime64(int(Tstart),'s'), np.datetime64(int(start_time),'s'), 'k'); plt.ylim(0, 90)
     plt.xlabel(f"Time [UTC]"); plt.ylabel("El [deg]")
