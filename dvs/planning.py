@@ -324,7 +324,8 @@ def sim_pointingmeasurements(catfn, Tstart, Hr, S, el_limit_deg=20, separation_d
 
 
 def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant='m000, -30.713, 21.444, 1050.0', **figkwargs):
-    """
+    """ Simulate a sequence of observations, to evalaute target elevation angles against the specified limit.
+        
         @param schedule: a list of (target [name or description], duration [sec]); targets not recognised will simply pass the time.
         @param catfn: the catalogue file to use to resolve target names.
         @param Tstart: start time [UTC Unix seconds]
@@ -349,8 +350,9 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
                 all_tgts.append(target.name)
                 kwargs['label'] = target.name + ("|"+"|".join(target.aliases) if target.aliases else "")
             plt.plot((timestamps-Tstart)/3600, el, 'C%d-'%all_tgts.index(target.name), **kwargs)
-            if (np.min(el) >= el_limit_deg): # Print out the calendar line for this observation
-                print(katpoint.Timestamp(start_time), f"{target.name}|{'|'.join(target.aliases)}, {int(duration/60+0.5)}min")
+            # Print out the calendar line for this observation
+            activity = "SKIP!" if (np.min(el) < el_limit_deg) else f"{target.name}|{'|'.join(target.aliases)}"
+            print(katpoint.Timestamp(start_time), f"{activity}, {int(duration/60+0.5)}min")
         start_time += duration
     plt.hlines(el_limit_deg, 0, (start_time-Tstart)/3600, 'k'); plt.ylim(0, 90)
     plt.xlabel(f"Time since {str(katpoint.Timestamp(Tstart))} UTC [hours]"); plt.ylabel("El [deg]")
