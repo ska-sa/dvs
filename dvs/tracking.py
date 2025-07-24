@@ -106,7 +106,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
 
 
 def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsamples_per_dump=1e6*1, scanrad='hpbw', ox=0, oy=0):
-    """ @param kind: "circle"|"cartioid"|"epicycle"|"raster"
+    """ @param kind: "circle"|"cardioid"|"epicycle"|"raster"
         @param ampl, SEFD: powers per polarisation channel [Jy]
         @param Nsamples_per_dump: BW*tau
         @param scanrad: radius for the scan pattern, either "hpbw" or a number in same units as `hpbw`.
