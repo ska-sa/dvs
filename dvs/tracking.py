@@ -131,6 +131,7 @@ def _generate_test_data_(kind, powerbeam=True, hpbw=0.01, ampl=5, SEFD=200, Nsam
     elif (kind == "raster"):
         N = int(len(timestamps)**.5) # We ensure timestamp is square!
         target_x, target_y = np.meshgrid(np.linspace(-hpbw,hpbw,N), np.linspace(-hpbw,hpbw,N))
+        target_x[::2,:] = target_x[::2,::-1]
         target_x, target_y = target_x.ravel(), target_y.ravel()
     actual_x = target_x - ox
     actual_y = target_y - oy
