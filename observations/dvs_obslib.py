@@ -268,7 +268,7 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
     d_numbers = {"s0000":64, "s0121":65, "s0119":66, "s0118":67, "s0107":68, "s0060":69, "s0105":70, "s0110":71, # MKE
                  "s0115":72, "s0117":73, "s0116":74, "s0017":75, "s0018":76, "s0020":77, "s0023":78, # MKE
                  "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
-    d_tilt_OK = ["s0121"] # These tilt installations believed to be OK
+    d_tilt_OK = ["s0121","s0117"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
@@ -357,7 +357,7 @@ def start_nd_switching(sub, n_on, n_off, T_start='now'):
     T_start = max(T_start, T0 + ND_LEAD_TIME) # Specified time or on the next(+1) dump boundary
     ants.req.dig_noise_source(T_start, on_fraction, sdp_dt*(n_on+n_off))
     return T_start, on_fraction, sdp_dt*(n_on+n_off)
-
+            
 
 def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
