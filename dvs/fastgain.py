@@ -37,7 +37,7 @@ def fit_avg(x, win_length):
 
 def calculate_allanvariance(data):
     """
-        Calculates the Allan variance series, as proposed by Rau, Schneider & Vowinkel
+        Calculates the Allan variance of frequency, as described by Rau, Schneider & Vowinkel
         - see "Characterization and Measurement of Radiometer Stability"
         @param data: measurements spaced at regular intervals
         @return: (Ks, sA2) - the number of integration intervals and the Allan variance^2,
@@ -46,7 +46,7 @@ def calculate_allanvariance(data):
     # Functions to calculate the Allan variance:
     # (The python compiler does a good job at optimizing this, so I focused on readability.)
     def R(i, K, x):
-        y = [x[i*K + n] for n in range(K)]
+        y = x[i*K:(i+1)*K]
         return np.nanmean(y)
     
     def s2(K, x):
@@ -61,10 +61,10 @@ def calculate_allanvariance(data):
 
 def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitude [lin]"), label=None, title="", grid=False, plot_raw=False, normalize=True, figs=None):
     """
-        Creates the Allan variance plot for the (regularly sampled) data, as
+        Creates the Allan variance plot for the regularly sampled frequency or magnitude data, as
         proposed by Rau, Schneider & Vowinkel
         - see "Characterization and Measurement of Radiometer Stability"
-        @parm x: time series data - in a linear scale!
+        @param x: time series data - either magnitude or frequency - in a linear scale!
         @param dt: the time increment between successive data measurements.
         @param time: the regularly spaced time vector, if available.
         @param sfact: scale factor to apply to deviations e.g. in case of samples being differences (default 1)
@@ -78,8 +78,6 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
         figures to plot over, or None to create new ones (default None).
         @return: the list of figures created / re-used ("raw" is at index 0, "avar" is at -1)
     """
-    time = dt*np.arange(len(x)) if (time is None) else time
-    time = time - time[0] # Ensure there are no confusing sample offsets
     p_data = np.asarray(x)
     if normalize: # Legacy support: has no impact on the slope of Allan variance curve
         p_data = p_data/np.nanmean(p_data)
@@ -91,6 +89,8 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
             plt.sca(figs[0].axes[-1])
         else:
             figs[0] = figure(figsize=(14,6))
+        time = dt*np.arange(len(x)) if (time is None) else time
+        time = time - time[0] # Ensure there are no confusing sample offsets
         plot(time, p_data, ".", label=label); legend()
         xlabel(xylabels[0]); ylabel(xylabels[1]); plt.grid(grid)
         plt.title("Time series: %s"%title)
