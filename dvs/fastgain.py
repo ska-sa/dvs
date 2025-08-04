@@ -107,8 +107,8 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
         plt.sca(figs[-1].axes[-1])
     else:
         figs[-1] = figure(figsize=(14,6))
-    plot(np.log10(K), 0.5*np.log10(sA2), ".--", label=label); legend()
-    plot(np.log10(K), 0.5*np.log10(sA2[0]/K), "-") # White noise, for comparison
+    plot(np.log10(K*dt), 0.5*np.log10(sA2), ".--", label=label); legend()
+    plot(np.log10(K*dt), 0.5*np.log10(sA2[0]/K), "-") # White noise, for comparison
     ylabel(r"$\log_{10}(\sigma_A)$"); xlabel(xylabels[0]); plt.grid(grid)
     plt.title("Allan Variance: %s"%title)
     plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda k, pos: round(dt*10**k,ndecimals)))
