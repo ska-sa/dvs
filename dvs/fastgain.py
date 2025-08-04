@@ -19,13 +19,13 @@ import pylab as plt
 
 def sliding_rms(x, win_length):
     """ @return: RMS computed over sliding windows on x, zero-padded to align with x. """
+    rms = lambda x_block: (np.sum((x_block-np.average(x_block))**2)/np.size(x_block))**.5
+#     return katsemat.sliding_window(x, x, W, func=rms, overlap=1) # This would be equivalent 
+    results = np.zeros_like(x) # Allocate & fill with zeros
     W = np.min([len(x), int(win_length+0.1)])
-    rms1 = lambda x_block: (np.sum((x_block-np.average(x_block))**2)/float(W))**.5
-#     return katsemat.sliding_window(x, x, win_length, func=rms1, overlap=1) # TODO: use this in future
-    results = list(0*x) # Allocate & fill with zeros
     for i in range(len(x)-W): # Process sliding blocks of length N
-        results[W//2+i] = rms1(x[i:i+W])
-    return np.asarray(results)
+        results[W//2+i] = rms(x[i:i+W])
+    return results
 
 def fit_avg(x, win_length):
     """ @return: block average over x."""
