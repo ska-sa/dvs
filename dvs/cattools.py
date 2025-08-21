@@ -8,6 +8,7 @@ import pylab as plt
 import matplotlib
 import katpoint
 
+
 D2R = np.pi/180
 R2D = 1/D2R
 
@@ -116,6 +117,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
         @return: [list of Targets], expected duration in seconds """
     antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
     antenna = catalogue.antenna if (antenna is None) else antenna
+    
     todo = list(catalogue.targets)
     done = []
     T = T_start # Absolute time
@@ -123,11 +125,11 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
     available = catalogue.filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
     next_tgt = available.targets[0] if (len(available.targets) > 0) else None
     while (next_tgt is not None):
-        # Observe
+                # Observe
         if debug: print(next_tgt)
-        next_tgt.antenna = antenna
-        done.append(next_tgt)
-        todo.pop(todo.index(next_tgt))
+                next_tgt.antenna = antenna
+                done.append(next_tgt)
+                todo.pop(todo.index(next_tgt))
         T += t_observe
         # Find next visible target
         available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
@@ -142,7 +144,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
     T -= T_start # Now duration
     if debug: print("DURATION: %d out of %d targets in %.f min"%(len(done),len(catalogue.targets),T/60.))
     return done, T
-
+    
 
 def nominal_pos(ant_id, verbose=False):
     """ Calculates the (Lat,Lon,HAE) of the point of intersection of the axes,
@@ -158,7 +160,7 @@ def nominal_pos(ant_id, verbose=False):
     if ant_id.startswith("m0"):
         ant_no = int(ant_id[1:])
         llh = np.loadtxt(catroot+"/meerkat.txt", comments="#", delimiter=",")[ant_no]
-        PH = (8.250-0.330) # General Layout, Drawing, MD-1012033-22000-00-0 rev B
+        PH = 8.250 # General Layout, Drawing, MD-1012033-22000-00-0 rev B
         NIAO = 1
     elif ant_id.startswith("SKA"):
         ant_no = int(ant_id[3:])
@@ -305,7 +307,7 @@ if __name__ == "__main__":
         remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_L.csv")), eps=2*60*60, debug=True)
         remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_S.csv")), eps=60*60, debug=True)
         remove_overlapping(katpoint.Catalogue(open(catroot+"/targets_pnt_Ku.csv")), eps=30*60, debug=True)
-    
+        
     elif True: # Planning a pointing measurement session
         catfiles = ["targets_pnt_S.csv"]
         for catfile in catfiles:
