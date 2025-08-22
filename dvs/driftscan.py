@@ -264,7 +264,7 @@ class DriftDataset(object):
     def debug(self):
         vis_ = self.vis/np.nanpercentile(self.vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
         chans = self.channels
-        ax = plt.subplots(2,2, sharex=True, gridspec_kw={'height_ratios':[2,1]}, figsize=(16,8))[1]
+        ax = plt.subplots(2,3, sharex='col', gridspec_kw={'height_ratios':[2,1],'width_ratios':[4,4,1]}, figsize=(16,8))[1]
         for p,P in enumerate(self._pol):
             ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
@@ -272,6 +272,9 @@ class DriftDataset(object):
             ax[1][p].plot(chans, 10*np.log10(np.nanmax(self.vis[:,:,p], axis=0)))
             ax[1][p].set_ylabel("max [dBcounts]"); ax[1][p].grid(True)
             ax[1][p].set_xlabel("Channel #")
+            ax[0][2].plot(10*np.log10(np.nanmean(self.vis[:,:,p], axis=1)), range(self.vis.shape[0]), label=P)
+        ax[0][2].set_ylim(0,self.vis.shape[0]); ax[0][2].legend()
+        ax[1][2].remove()
         
         freqs = self.channel_freqs/1e6
         for i in [0,1]:
