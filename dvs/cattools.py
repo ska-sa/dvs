@@ -117,7 +117,6 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
         @return: [list of Targets], expected duration in seconds """
     antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
     antenna = catalogue.antenna if (antenna is None) else antenna
-    
     todo = list(catalogue.targets)
     done = []
     T = T_start # Absolute time
@@ -125,11 +124,11 @@ def plan_targets(catalogue, T_start, t_observe, dAdt, antenna=None, el_limit_deg
     available = catalogue.filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
     next_tgt = available.targets[0] if (len(available.targets) > 0) else None
     while (next_tgt is not None):
-                # Observe
+        # Observe
         if debug: print(next_tgt)
-                next_tgt.antenna = antenna
-                done.append(next_tgt)
-                todo.pop(todo.index(next_tgt))
+        next_tgt.antenna = antenna
+        done.append(next_tgt)
+        todo.pop(todo.index(next_tgt))
         T += t_observe
         # Find next visible target
         available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
