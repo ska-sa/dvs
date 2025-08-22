@@ -880,7 +880,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     
     # Combine fitfreqrange and freqmask
     fitchans = _idx(ds.channel_freqs, fitfreqrange)
-    fitchans = mask_where(fitchans, ds.channel_freqs, freqmask)
+    fitchans &= ~mask_where(fitchans, ds.channel_freqs, freqmask).mask
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
