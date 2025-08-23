@@ -6,6 +6,7 @@
 import numpy as np
 import scipy.optimize as sop
 import scipy.interpolate as interp
+import scipy.signal as ss
 from analysis.katsemat import Polynomial2DFit, downsample
 import pylab as plt
 
@@ -119,77 +120,57 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     return bl, bm, sigma, mu
 
 
-def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
-    """ Automatically masks discontinuities in first two axes, independently across fourther axes. Builds on top
-        of any existing mask, if present.
-        @param data: N dimensional (N>2), real data (must be a masked array).
-        @param jump_zone: a single value for both axes, or a tuple; >=0 to blank out this many samples either side of a jump,
-                          <0 for no blanking (default 0).
-        @param fill_value: fill value for the masked data in the returned array (default numpy.nan)
-        @param thresh: threshold for flags, as a multiple of median(diff(2)) (default 10)
-        @return: (masked_data, mask0, mask1). Masks are N-1 dimensional with True where data is masked out. """
-    N_t, N_f = data.shape[:2]
-    t_axis = np.arange(N_t)
-    f_axis = np.arange(N_f)
-    jump_zone = [jump_zone]*2 if np.isscalar(jump_zone) else jump_zone
-    
-    fmask = np.full([N_f]+list(data.shape[2:]), True)
-    if (jump_zone[1] > 0): # Flag out frequency axis with extreme jumps - like RFI
-        flags = np.ma.median(data, axis=0).data # Power over frequency, product
-        flags = np.abs(np.diff(flags/np.nanmedian(flags, axis=0), 2, axis=0)) # Discontinuity in slope identify edges
-        flags[np.isnan(flags)] = np.nanmax(flags) # Avoid warning message in 'flags>' below
-        # Remember we flag out 2*jump_zone samples around each jump, so be careful to not ID too many jumps
-        jump_thresh = thresh*np.nanmedian(flags[flags>np.nanmedian(flags[jump_zone[1]:-1-jump_zone[1]])])
-        if debug: # Plot the second order derivatives, which show the jumps
-            plt.figure(figsize=(12,4))
-            plt.subplot(1,2,2); plt.title("axis 1")
-            plt.plot(f_axis[2:], flags)
-            plt.plot(f_axis[2:], jump_thresh+0*flags); plt.ylim(0,10*jump_thresh)
-        fmask = np.r_[flags[0:2],flags] > jump_thresh # Expand to match shape of data again & apply threshold
-        for k in range(jump_zone[1]//2,0,-1): # Block out 'jump_zone' samples either side of a jump
-            fmask = fmask | np.roll(fmask,k, axis=0) | np.roll(fmask,-k,axis=0)
-        data = np.ma.masked_array(data, np.stack([fmask]*N_t,axis=0), fill_value=fill_value) # Same mask for all time samples
-    fmask = np.count_nonzero(data.mask, axis=0) > 0.1*N_t # Collapse time axis @10% & combine with pre-existing mask, if any.
-    #fmask = np.any(data.mask, axis=0) # There's a chicken-and-egg situation, which we solve by using the preceding line instead of this one
+def _mask_jumps_(data, k_size=(3,3), thresh=1, debug=False):
+    """ Identifies discontinuities in first two axes, based on difference from median filtered version.
+        'data' is modified in-place, with discontinuities set to nan.
+        
+        @param data: N dimensional (N>2), real data (modified in-place!).
+        @param k_size: a single value for both axes, or a tuple for median filter window length in the first two axes (default (3,3)).
+        @param thresh: percentage of data to flag as jumps [percent] (default 1)
+        @return: (mod_data, mask0, mask1). Masks are 1 dimensional with True where data is masked out. """
+    # Make a diff map
+    k_size = [k_size]*2 if np.isscalar(k_size) else k_size
+    smoothed = ss.medfilt(data, list(k_size)+[1]*(len(np.shape(data))-len(k_size)))
+    delta = np.abs(data-smoothed)
 
-    tmask = np.full([N_t]+list(data.shape[2:]), True)
-    if (jump_zone[0] > 0): # Flag out time axis with extreme jumps - like RFI, ND at start & end, or gain jumps?
-        flags = np.ma.median(data, axis=1).data # Power over time, product
-        flags = np.abs(np.diff(flags/np.max(flags, axis=0), 2, axis=0)) # Discontinuity in slope identify edges which is not expected for "good drift scans"
-        flags[np.isnan(flags)] = np.nanmax(flags) # Avoid warning message in 'flags>' below
-        # Remember we flag out 2*jump_zone samples around each jump, so be careful to not ID too many jumps
-        jump_thresh = thresh*np.nanmedian(flags[flags>np.nanmedian(flags[jump_zone[0]:-1-jump_zone[0]])])
-        if debug: # Plot the second order derivatives, which show the jumps
-            if (jump_zone[1] <= 0):
-                plt.figure(figsize=(12,4))
-            plt.subplot(1,2,1); plt.title("axis 0")
-            plt.plot(t_axis[2:], flags)
-            plt.plot(t_axis[2:], jump_thresh+0*flags); plt.ylim(0,10*jump_thresh)
-        tmask = np.r_[flags[0:2],flags] > jump_thresh # Expand to match shape of data again & apply threshold
-        for k in range(jump_zone[0]//2,0,-1): # Block out 'jump_zone' samples either side of a jump
-            tmask = tmask | np.roll(tmask,k, axis=0) | np.roll(tmask,-k,axis=0)
-        data = np.ma.masked_array(data, np.stack([tmask]*N_f,axis=1), fill_value=fill_value) # Same mask for all frequency bins
-    tmask = np.any(data.mask[:,~np.any(fmask,1),:], axis=1) # Collapse freq axis & combine with pre-existing mask, if any.
-    
+    # Construct 1D masks for the first two dimensions
+    mask0 = np.nansum(delta, axis=(1,2))
+    mask1 = np.nansum(delta, axis=(0,2))
+    thresh0 = np.nanpercentile(mask0, 100-thresh)
+    thresh1 = np.nanpercentile(mask1, 100-thresh)
+    if debug: # Plot the 1D masks
+        axs = plt.subplots(1,2, figsize=(12,3))[1]
+        axs[0].plot(mask0, '.'); axs[0].plot(mask0*0+thresh0, 'r-'); axs[0].set_xlabel("axis 0")
+        axs[1].plot(mask1, '.'); axs[1].plot(mask1*0+thresh1, 'r-'); axs[1].set_xlabel("axis 1")
+    mask0 = mask0 > thresh0
+    mask1 = mask1 > thresh1
+    for k in range(k_size[0]//2,0,-1): # Block out 'k_size' samples either side of a jump
+        mask0 |= np.roll(mask0,k, axis=0) | np.roll(mask0,-k,axis=0)
+    for k in range(k_size[1]//2,0,-1): # Block out 'k_size' samples either side of a jump
+        mask1 |= np.roll(mask1,k, axis=0) | np.roll(mask1,-k,axis=0)
+
+    # Use the masks to mark the data
+    data[mask0,...] = np.nan
+    data[:,mask1,...] = np.nan
     if debug and (len(data.shape) == 3):
         ax = plt.subplots(1,2, figsize=(12,6))[1]
         ax[0].imshow(data[...,0], aspect='auto')
         ax[1].imshow(data[...,1], aspect='auto')
         ax[0].set_ylabel("axis0"); ax[0].set_xlabel("axis1"); ax[1].set_xlabel("axis1")
-    
-    return data, tmask, fmask
+
+    return (data, mask0, mask1)
 
 
-def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0, debug_label=None):
+def fit_bm(vis, freqchans, timemask, n_chunks=0, k_size=None, debug=0, debug_label=None):
     """ Fit a Gaussian bump plus a baseline defined by a 2nd order polynomial to the time (spatial) axis and
         a first order polynomial over frequency.
         Note: execution time scales linearly with n_chunks, typically at 0.3sec/channel.
 
         @param vis: data arranged as (time,freq,products)
+        @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps.
+        @param timemask: selector to filter out samples in time.
         @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 0).
-        @param freqchans: selector to filter the indices of frequency channels to use exclusively to identify jumps (default None).
-        @param timemask: selector to filter out samples in time (default None)
-        @param jump_zone: >=0 to blank out this many samples either side of a jump, <0 for no blanking (default 0).
+        @param k_size: (k_time,k_freq) with k >=0 and odd! to blank out this many samples either side of discontinuities, None for no blanking (default None).
         @param debug: 0/False for no debugging, 1/True for showing the fitted 'mu & sigma', 2 to also show the raw & model data (default 0)
         @param debug_label: text to label debug figures with (default None)
         @return: baseline, beam (Power, same shapes as vis), sigma (Note 1,3), mu (Note 2,3).
@@ -206,24 +187,26 @@ def fit_bm(vis, n_chunks=0, freqchans=None, timemask=None, jump_zone=0, debug=0,
     t_axis = np.arange(N_t)
     f_axis = np.arange(N_f)
     
-    mask = np.isnan(vis) # False to keep data
-    if freqchans is not None:
-        m2 = np.full(vis.shape, True); m2[:,freqchans,:] = False
-        mask |= m2 # Discard those that remain True
-    if timemask is not None:
-        m2 = np.full(vis.shape, True); m2[timemask,...] = False
-        mask |= m2 # Discard those that remain True
-    vis = np.ma.masked_array(vis, mask, fill_value=np.nan) # No need for copy=True because vis never gets modified
-    vis, tmask, fmask = _mask_jumps_(vis, jump_zone=jump_zone, fill_value=np.nan) # Using nan together with np.nan* below
-    tmask = ~np.any(tmask, axis=1) # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
-    fmask = ~np.any(fmask, axis=1) # Includes freqchans
+    # Create a mask by setting entries to nan - on a copy of the data
+    tmask, fmask = np.full(N_t, False), np.full(N_f, False) # True to keep data
+    if (freqchans is not None): fmask[freqchans] = True
+    if (timemask is not None): tmask[timemask] = True
+    # To be robust against static patterns in freq & pol, normalise with "baseline" over time
+    vis_masked = np.array(vis/np.nanpercentile(vis, 1, axis=0), copy=True)
+    vis_masked[~tmask, ...] = np.nan; vis_masked[:,~fmask, ...] = np.nan
+    if (k_size not in (None,0)):
+        vis_masked, jmask0, jmask1 = _mask_jumps_(vis_masked, k_size=k_size, debug=debug>=3)
+        tmask &= ~jmask0 # True to keep data; collapsed across products, since code below doesn't yet cope with mask per pol.
+        fmask &= ~jmask1
+    
+    vis = np.ma.masked_array(vis, np.isnan(vis_masked), fill_value=np.nan) # No need for copy=True because vis never gets modified
     # 0
     if (debug >= 2):
         fig, axs = plt.subplots(2,1, figsize=(12,6))
         fig.suptitle(debug_label)
         axs[0].set_title("Provisional baseline fitting")
-        axs[0].plot(t_axis, np.nanmean(vis[:,fmask,:], axis=1))
-        axs[0].plot(t_axis[tmask], np.nanmean(vis[tmask,:,:], axis=1))
+        axs[0].plot(t_axis, np.nanmean(vis.data, axis=1), '-')
+        axs[0].plot(t_axis, np.nanmean(vis, axis=1), '.')
         axs[0].set_ylabel("Power [linear]"); axs[0].grid(True)
         # axs[1] is completed in steps up to 2 below
     

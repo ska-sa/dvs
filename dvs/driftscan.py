@@ -524,7 +524,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
     # To speed up, fit only to 64 frequency channels
-    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=3)
+    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=2)
     f, bore, sigma = beamfits[:3]
     HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
@@ -1094,7 +1094,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
         outfile.close()
 
 
-def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, cached=False, return_all=False, debug=2):
+def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=5, cached=False, return_all=False, debug=2):
     """ Processes a raw dataset to determine the beam crossing time instant, as well as the half power crossing duration.
         Note that the crossing duration is scaled to represent a target on the ecliptic (declination=0), which simplifies
         further interpretation.
@@ -1106,7 +1106,7 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, ca
         @param savetofile: npz filename to save the data to (default None)
         @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 64).
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on (default None).
-        @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 0)
+        @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 5)
         @param cached: True to load from 'savetofile' if it exists (default False)
         @param return_all: True if ds is a raw dataset, to also return fitted (baseline,beam) as extra data (default False)
         @param debug: as for fit_bm()
@@ -1126,7 +1126,7 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=0, ca
         
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, n_chunks=n_chunks, freqchans=cleanchans, timemask=time_mask, jump_zone=jump_zone, debug=debug)
+        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, cleanchans, time_mask, n_chunks=n_chunks, k_size=(jump_zone,1), debug=debug)
         
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = ds.target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
