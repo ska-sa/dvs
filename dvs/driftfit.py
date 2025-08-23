@@ -135,7 +135,7 @@ def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
     
     fmask = np.full([N_f]+list(data.shape[2:]), True)
     if (jump_zone[1] > 0): # Flag out frequency axis with extreme jumps - like RFI
-        flags = np.ma.median(data, axis=0) # Power over frequency, product
+        flags = np.ma.median(data, axis=0).data # Power over frequency, product
         flags = np.abs(np.diff(flags/np.nanmedian(flags, axis=0), 2, axis=0)) # Discontinuity in slope identify edges
         flags[np.isnan(flags)] = np.nanmax(flags) # Avoid warning message in 'flags>' below
         # Remember we flag out 2*jump_zone samples around each jump, so be careful to not ID too many jumps
@@ -154,12 +154,14 @@ def _mask_jumps_(data, jump_zone=0, fill_value=np.nan, thresh=10, debug=False):
 
     tmask = np.full([N_t]+list(data.shape[2:]), True)
     if (jump_zone[0] > 0): # Flag out time axis with extreme jumps - like RFI, ND at start & end, or gain jumps?
-        flags = np.ma.median(data, axis=1) # Power over time, product
+        flags = np.ma.median(data, axis=1).data # Power over time, product
         flags = np.abs(np.diff(flags/np.max(flags, axis=0), 2, axis=0)) # Discontinuity in slope identify edges which is not expected for "good drift scans"
         flags[np.isnan(flags)] = np.nanmax(flags) # Avoid warning message in 'flags>' below
         # Remember we flag out 2*jump_zone samples around each jump, so be careful to not ID too many jumps
         jump_thresh = thresh*np.nanmedian(flags[flags>np.nanmedian(flags[jump_zone[0]:-1-jump_zone[0]])])
         if debug: # Plot the second order derivatives, which show the jumps
+            if (jump_zone[1] <= 0):
+                plt.figure(figsize=(12,4))
             plt.subplot(1,2,1); plt.title("axis 0")
             plt.plot(t_axis[2:], flags)
             plt.plot(t_axis[2:], jump_thresh+0*flags); plt.ylim(0,10*jump_thresh)
