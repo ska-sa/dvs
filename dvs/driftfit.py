@@ -11,17 +11,15 @@ from analysis.katsemat import Polynomial2DFit, downsample
 import pylab as plt
 
 
-def _fit_bl_(vis, masks=None, polyorders=[1,1]):
-    """ Fit a (low order) polynomial to the first two axes of the data.
-        NB: masking (numpy.ma.masked_array) of the input data is ignored for the fit; only the 'vis-baseline' result
-        inherits the masking of the input data.
+def _fit_bl_(data, masks=None, polyorders=[1,1]):
+    """ Fit a (low order) polynomial to the first two axes of the data. Nan values are ignored.
         
-        @param vis: real-valued data.
+        @param data: real-valued, 3 dimensional data.
         @param masks: optional (mask0,mask1) to select across first two axes (default None)
         @param polyorders: the orders of the polynomials to fit over the two axes (default [1,1])
-        @return: (baseline, vis-baseline) both with the  same shape as 'vis'.
+        @return: (baseline) with the  same shape as 'vis'.
     """
-    N_t, N_f, N_p = vis.shape
+    N_t, N_f, N_p = data.shape
     f_mesh, t_mesh = np.meshgrid(np.arange(N_f), np.arange(N_t))
     if (masks is None) or ((masks[0] is None) and (masks[-1] is None)):
         masked = lambda x: x
@@ -31,18 +29,17 @@ def _fit_bl_(vis, masks=None, polyorders=[1,1]):
         masked = lambda x: x[masks[0],...]
     elif (masks[1] is not None):
         masked = lambda x: x[:,masks[1],...]
-    x_p, y_p = masked(t_mesh), masked(f_mesh)
     
-    # The fit seems to be much improved if we remove bias in both the data, as well as in all axes with gaps in it
-    x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.nanmean(vis, axis=0)
-    z_p = masked(vis - v0)
+    # The fit is more robust if we remove bias from all axes with gaps in it and also specifically from the first axis of data
+    x_p, y_p = masked(t_mesh), masked(f_mesh)
+    x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.nanmean(data, axis=0)
+    z_p = masked(data-v0)
     model = Polynomial2DFit(polyorders)
     bl = [model.fit([x_p-x0, y_p-y0], z_p[...,p])([t_mesh-x0, f_mesh-y0]) for p in range(N_p)]
-    bl = np.stack(bl, axis=-1) # t,f,p
+    bl = np.stack(bl, axis=-1) # ...,p
     bl += v0 # Restore bias
     
-    v_nb = vis - bl # The data with the fitted baseline subtracted
-    return bl, v_nb
+    return bl
 
 
 def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
@@ -205,28 +202,29 @@ def fit_bm(vis, freqchans, timemask, n_chunks=0, k_size=None, debug=0, debug_lab
         fig, axs = plt.subplots(2,1, figsize=(12,6))
         fig.suptitle(debug_label)
         axs[0].set_title("Provisional baseline fitting")
-        axs[0].plot(t_axis, np.nanmean(vis.data, axis=1), '-')
+        axs[0].plot(t_axis, np.nanmean(vis.data, axis=1), '-') # This contains ND - may obscure detail!
         axs[0].plot(t_axis, np.nanmean(vis, axis=1), '.')
         axs[0].set_ylabel("Power [linear]"); axs[0].grid(True)
         # axs[1] is completed in steps up to 2 below
     
     # 1. Fit & subtract provisional baseline through first x% and last x% of the time series.
     # Ideally this should vary over frequency, but _fit_bl_ needs regular shaped, un-masked data, and it might not be worthwhile to transform vis to (time, angle/HPBW, prod)
-    _tmask = np.array(tmask, copy=True); _tmask[N_t//4:-N_t//4] = False
-    bl, vis_nb = _fit_bl_(vis, (_tmask,fmask), polyorders=[1,2])
+    _tmask_ = np.array(tmask, copy=True); _tmask_[N_t//4:-N_t//4] = False
+    bl = _fit_bl_(vis.filled(), (_tmask_,fmask), polyorders=[1,2])
+    vis_nb = vis - bl # The masked data with the fitted baseline subtracted
     if (debug >= 2):
-        axs[0].plot(t_axis, np.mean(bl[:,fmask,:], axis=1))
+        axs[0].plot(t_axis, np.nanmean(bl, axis=1))
     
     # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
-    vis0_nb = np.ma.mean(vis_nb[:,fmask,:], axis=1) # Integrated power in H & V, over time
+    vis0_nb = np.ma.mean(vis_nb, axis=1) # Integrated power in H & V, over time
     dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
     dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0) # Repeat along (existing) freq axis
     
     if (n_chunks <= 0): # Asked for the band average fits are copied across frequency
         if (debug >= 2):
             axs[1].set_title("Baselines subtracted")
-            axs[1].plot(t_axis, np.nanmean((vis-bl-dbl)[:,fmask,:],axis=1), label="Baselines subtracted")
-            axs[1].plot(t_axis, np.nanmean(bm[:,fmask,:],axis=1), label="Fitted models")
+            axs[1].plot(t_axis, np.nanmean(vis-bl-dbl,axis=1), label="Baselines subtracted")
+            axs[1].plot(t_axis, np.nanmean(bm,axis=1), label="Fitted models")
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
 
     else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
