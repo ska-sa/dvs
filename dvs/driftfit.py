@@ -30,7 +30,7 @@ def _fit_bl_(data, masks=None, polyorders=[1,1]):
     elif (masks[1] is not None):
         masked = lambda x: x[:,masks[1],...]
     
-    # The fit is more robust if we remove bias from all axes with gaps in it and also specifically from the first axis of data
+    # The fit is more robust if we remove bias from all axes and also remove from the data the average shape (average over first axis e.g. time)
     x_p, y_p = masked(t_mesh), masked(f_mesh)
     x0, y0, v0 = np.mean(x_p), np.mean(y_p), np.nanmean(data, axis=0)
     z_p = masked(data-v0)
@@ -72,7 +72,7 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     if np.isnan(mu0): # This happens in some pathological cases (e.g. channel 0), return NaN's
         return (np.nan+vis), (np.nan+vis), [[np.nan]*2]*N_f, [[np.nan]*2]*N_f
     
-    A0 = np.nanpercentile(vis[int(mu0-10):int(mu0+10),...].data,95,axis=0) - np.nanpercentile(vis.data,5,axis=0) # (freq,prod) Use .data since can't use ma.compressed() - it discards dimensions
+    A0 = np.nanpercentile(vis[int(mu0-sigma0):int(mu0+sigma0),...].data,95,axis=0) - np.nanpercentile(vis.data,5,axis=0) # (freq,prod)
     
     bl, bm, sigma, mu = [], [], [], [] # Arranged as (freq,time,prod) and (freq,prod)
     vis = vis / A0 # Normalize amplitudes, so that both pols contribute similarly to optimization metric
@@ -218,9 +218,9 @@ def fit_bm(vis, freqchans, timemask, n_chunks=0, k_size=None, debug=0, debug_lab
     # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
     vis0_nb = np.ma.mean(vis_nb, axis=1) # Integrated power in H & V, over time
     dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
-    dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0) # Repeat along (existing) freq axis
     
     if (n_chunks <= 0): # Asked for the band average fits are copied across frequency
+        dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0)
         if (debug >= 2):
             axs[1].set_title("Baselines subtracted")
             axs[1].plot(t_axis, np.nanmean(vis-bl-dbl,axis=1), label="Baselines subtracted")
