@@ -1094,7 +1094,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
         outfile.close()
 
 
-def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=5, cached=False, return_all=False, debug=2):
+def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=3, cached=False, return_all=False, debug=2):
     """ Processes a raw dataset to determine the beam crossing time instant, as well as the half power crossing duration.
         Note that the crossing duration is scaled to represent a target on the ecliptic (declination=0), which simplifies
         further interpretation.
@@ -1106,7 +1106,7 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_zone=5, ca
         @param savetofile: npz filename to save the data to (default None)
         @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 64).
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on (default None).
-        @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 5)
+        @param jump_zone: controls automatic excision of jumps over time, see 'fit_bm()' (default 3)
         @param cached: True to load from 'savetofile' if it exists (default False)
         @param return_all: True if ds is a raw dataset, to also return fitted (baseline,beam) as extra data (default False)
         @param debug: as for fit_bm()
