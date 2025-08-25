@@ -65,8 +65,10 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     
     # Starting estimates: ampl, sigma, mu
     if sigmu0 is None:
-        mu0 = np.median(t_axis[np.ma.any(vis>np.nanpercentile(vis,80,axis=(0,1)), axis=(1,2))])
-        sigma0 = N_t/9. # Reasonable guess to start for typical scans -- no fit expected if 4*sigma > N_t
+        mu0 = np.nansum(vis*t_axis.reshape((-1,1)), axis=0) / np.nansum(vis, axis=0)
+        mu0 = np.median(mu0)
+        sigma0 = (np.nansum(vis*(t_axis.reshape((-1,1)) - mu0)**2, axis=0) / np.nansum(vis, axis=0))**.5
+        sigma0 = np.median(sigma0) / np.pi
     else:
         sigma0, mu0 = sigmu0
     if np.isnan(mu0): # This happens in some pathological cases (e.g. channel 0), return NaN's
