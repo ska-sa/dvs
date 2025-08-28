@@ -249,6 +249,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     
     scan_ant_ix = [a.name for a in ds.ants].index(ant)
     scan_ant = ds.ants[scan_ant_ix]
+    gust_timestamps, gust_wind_speed = katselib.getsensorvalues("%s_enviro_gust_wind_speed"%ant, ds.timestamps)
     avgws_timestamps, avgws = ds.timestamps[:], sliding_window(ds.timestamps, ds.wind_speed, int(1000/(ds.timestamps[1]-ds.timestamps[0])+0.5), np.mean)
     fi_sensor = "%s_ap_indexer_position_raw" if ant.startswith('m') else "%s_dsm_indexerActualPosition" # MeerKAT or MKE Dish
     fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps)
@@ -286,11 +287,13 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         mean_east_wind = np.mean(raw_wind_speed * np.sin(raw_wind_direction))
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
+        # analyse_point_source_scans.py & analyse_interferometric_pointing.py take std(raw_wind_speed) but raw_wind_speed == 5 minute mean wind so that makes little sense! 
+        raw_wind_speed = gust_wind_speed[[(ds.timestamps[0]<=gust_timestamps) & (gust_timestamps<=ds.timestamps[-1])]]
         wind_std = np.std(raw_wind_speed)
         # Extra sensor values
-        wind_1000sec = np.mean(avgws[(np.nanmin(ds.timestamps)<=avgws_timestamps) & (avgws_timestamps<=np.nanmax(ds.timestamps))])
+        wind_1000sec = np.mean(avgws[(ds.timestamps[0]<=avgws_timestamps) & (avgws_timestamps<=ds.timestamps[-1])])
         wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_1000sec # SKA Dish definition, 3*std - mean
-        fi_angle = np.median(fi_angles[(np.nanmin(ds.timestamps)<=fi_timestamps) & (fi_timestamps<=np.nanmax(ds.timestamps))])
+        fi_angle = np.median(fi_angles[(ds.timestamps[0]<=fi_timestamps) & (fi_timestamps<=ds.timestamps[-1])])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
