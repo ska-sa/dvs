@@ -259,16 +259,16 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
         @param spem_enabled: ACU's internal Static Pointing Error Model corrections (default False)
         @param tilt_enabled: ACU's internal inclinometer-based corrections (default True)
         @param temp_enabled: ACU's internal ambient temperature-based corrections (default False)
-        @param force: if True then force tilt to the specified value, else will disable tilt for all except s0121 (default False)
+        @param force: if True then force tilt to the specified value, else will disable tilt for all except e121 & e117 (default False)
         @return: list of names of ants where the SPEM corrections were changed.
     """
     global __tilt_corr_allowed__
     mod_spem, mod_tilt, force_tilt = [], [], []
     # Mapping to match https://github.com/ska-sa/katcamconfig/pull/955/files
-    d_numbers = {"s0000":64, "s0121":65, "s0119":66, "s0118":67, "s0107":68, "s0060":69, "s0105":70, "s0110":71, # MKE
-                 "s0115":72, "s0117":73, "s0116":74, "s0017":75, "s0018":76, "s0020":77, "s0023":78, # MKE
+    d_numbers = {"s0000":64, "e121":65, "e119":66, "e118":67, "e107":68, "e060":69, "e105":70, "e110":71, # MKE
+                 "e115":72, "e117":73, "e116":74, "e017":75, "e018":76, "e020":77, "e023":78, # MKE
                  "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
-    d_tilt_OK = ["s0121","s0117"] # These tilt installations believed to be OK
+    d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
             lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
