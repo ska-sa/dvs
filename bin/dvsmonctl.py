@@ -60,9 +60,9 @@ def match_ku_siggen_freq(cam, override=False):
         print("WARNING: MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
-def trk(*pointables, tgt):
+def trk(pointables, tgt):
     """ Track the specified target in a "manual control session"
-        @param pointables: control objects e.g. cam.ant1, cam.ant2, cam.cbf_1
+        @param pointables: list of control objects e.g. [cam.ant1, cam.ant2, cam.cbf_1]
         @param tgt: target object or description e.g. cam.sources['3C 279']
     """
     tgt = tgt if isinstance(tgt, str) else tgt.description
