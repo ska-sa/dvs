@@ -133,7 +133,7 @@ with verify_and_connect(opts) as kat:
                     if not keep_going:
                         break
                     # Switch the indexer out & back, if requested
-                    cycle_feedindexer(kat, count, opts.switch_indexer_every)
+                    cycle_feedindexer(scan_ants, count, opts.switch_indexer_every, kat.dry_run)
                 
                 # Terminate if nothing currently visible
                 if keep_going and (len(targets_observed) == targets_before_loop):

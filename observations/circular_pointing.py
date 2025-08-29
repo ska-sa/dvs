@@ -435,4 +435,4 @@ if __name__=="__main__":
                     cycle+=1
 
                     # Switch the indexer out & back, if requested
-                    cycle_feedindexer(kat, cycle, opts.switch_indexer_every)
+                    cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run)

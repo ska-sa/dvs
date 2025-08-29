@@ -292,9 +292,10 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
     return mod_spem
 
 
-def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
+def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False):
     """ Switch the indexer out & back, if requested. This implementation currently only works for MKE/SKA Dish!
         
+        @param ants: a katcorelib ant_array with the antennas to change indexer for.
         @param cycle: the number of the current cycle, assumed to start from 0.
         @param switch_indexer_every_nth_cycle: indexer will be moved on cycle==0 and thereafter at intervals as per this argument. 
     """
@@ -303,7 +304,7 @@ def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
     if (switch_indexer_every_nth_cycle > 0):
         # TODO: This mapping is for MKE - TBC for SKA Dishes
         indexer_positions, indices = ["B1","B5c","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
-        for ant in cam.ants:
+        for ant in ants:
             try:
                 index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
                 break
@@ -324,13 +325,13 @@ def cycle_feedindexer(cam, cycle, switch_indexer_every_nth_cycle):
         try:
             index = indexer_sequence[i_cycle]
             user_logger.info("Switching Feed Indexer to index %s"%index)
-            if not cam.dry_run:
-                cam.ants.req.dsh_SetIndexerPosition(index)
+            if not dry_run:
+                ants.req.dsh_SetIndexerPosition(index)
             time.sleep(30)
         finally: # Switch back to the nominal position. This also ensures that we "clean up"
             user_logger.info("Switching Feed Indexer back to index %s"%index0)
-            if not cam.dry_run:
-                cam.ants.req.dsh_SetIndexerPosition(index0)
+            if not dry_run:
+                ants.req.dsh_SetIndexerPosition(index0)
             time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible errors if indexer is slow
 
 
