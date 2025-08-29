@@ -134,7 +134,6 @@ with verify_and_connect(opts) as kat:
                 ant.req.ap_enable_point_error_tiltmeter(False)
             for ant in ska_ants:
                 TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
-            #kat.ants.req.dsm_DisablePointingCorrections() # Both ACU static and ACU tilt, only effective for SKA dishes
             hack_SetPointingCorrections(ska_ants, tilt_enabled=False)
 
         for n in range(opts.repeats):
