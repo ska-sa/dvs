@@ -271,7 +271,7 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
     d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
-            lmc_root = "10.96.%d.100:10000/mid_dsh_%s"%(d_numbers[a.name], a.name[1:])
+            lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
             dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
             dsm.tempPointCorrEnabled = temp_enabled
             dsm.staticPointCorrEnabled = spem_enabled
@@ -358,6 +358,38 @@ def start_nd_switching(sub, n_on, n_off, T_start='now'):
     ants.req.dig_noise_source(T_start, on_fraction, sdp_dt*(n_on+n_off))
     return T_start, on_fraction, sdp_dt*(n_on+n_off)
             
+    # # TODO: review this alternative implementation by Marcel Gouws from April 2020.
+    # session, TELSTATE_WAIT_TIME, ND_PATTERN_LEAD_TIME = None, 10, 5
+    # # Try to get dump period
+    # user_logger.info("Noise diode setup. Waiting for telstate info...")
+    # try:
+    #     # Wait for telstate dictionary keys to appear
+    #     session.telstate.wait_key('sdp_l0_int_time', timeout=TELSTATE_WAIT_TIME)
+    #     session.telstate.wait_key('sdp_l0_sync_time', timeout=TELSTATE_WAIT_TIME)
+    #     session.telstate.wait_key('sdp_l0_first_timestamp', timeout=TELSTATE_WAIT_TIME)
+    #     # Dump period - available after INIT.
+    #     dump_period = session.telstate['sdp_l0_int_time']  
+    #     # First timestamp - available after capture start.
+    #     t0 = session.telstate['sdp_l0_sync_time'] + session.telstate['sdp_l0_first_timestamp']
+    #     # Adjusting timestamp to be time at start of first dump
+    #     t0 -= dump_period/2.0
+    #     # Print synchronisation parameters
+    #     user_logger.info("SDP dump period: {} sec".format(dump_period))
+    #     user_logger.info("First SDP timestamp: {} sec, current timestamp: {} sec".format(t0, time.time()))    
+    #     # Enable noise diode
+    #     cycle_length = (n_on+n_off)*dump_period 
+    #     n_dumps_from_t0 = np.ceil((time.time() + ND_PATTERN_LEAD_TIME - t0)/dump_period)
+    #     timestamp = t0 + n_dumps_from_t0*dump_period
+    #     session.ants.req.dig_noise_source(timestamp, on_fraction, cycle_length)
+    #     # Wait for noise diode activation before proceeding
+    #     wait_time = timestamp - time.time()
+    #     if wait_time>0:
+    #         user_logger.info("Sleeping {} sec for noise diode activation".format(wait_time))
+    #         time.sleep(wait_time)
+    #     user_logger.info('Noise diode firing enabled.')
+    # except:
+    #     user_logger.info("Telstate read error. Noise diode synchronisation parameters not set.")
+
 
 def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
