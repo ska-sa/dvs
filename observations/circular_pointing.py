@@ -382,8 +382,8 @@ if __name__=="__main__":
                         cs=[com[::-1] for com in compositeslew[::-1]]
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
-                    lasttime = time.time()
                     session.activity("track") # Scan labels for all below - 'track' is counter-intuitive but is also used by holography_scan.py
+                    lasttime = time.time()
                     for iarm in range(len(cx)):# arm index
                         user_logger.info("Performing scan arm %d of %d.", iarm + 1, len(cx))
                         user_logger.info("Using Scan antennas: %s %s",
@@ -404,7 +404,6 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         for iant,track_ant in enumerate(track_ants):#also include always_scan_ants in track_ant list
                             if track_ant.name not in always_scan_ants_names:
                                 continue
@@ -415,6 +414,8 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
+                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        
                         # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
                         for it in range(len(armx)):
