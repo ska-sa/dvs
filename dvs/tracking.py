@@ -288,7 +288,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         # analyse_point_source_scans.py & analyse_interferometric_pointing.py take std(raw_wind_speed) but raw_wind_speed == 5 minute mean wind so that makes little sense! 
-        raw_wind_speed = gust_wind_speed[[(ds.timestamps[0]<=gust_timestamps) & (gust_timestamps<=ds.timestamps[-1])]]
+        raw_wind_speed = gust_wind_speed[(ds.timestamps[0]<=gust_timestamps) & (gust_timestamps<=ds.timestamps[-1])]
         wind_std = np.std(raw_wind_speed)
         # Extra sensor values
         wind_1000sec = np.mean(avgws[(ds.timestamps[0]<=avgws_timestamps) & (avgws_timestamps<=ds.timestamps[-1])])
