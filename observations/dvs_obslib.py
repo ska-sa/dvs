@@ -236,7 +236,7 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     __tilt_corr_allowed__ = allow_tiltcorrections
     
     # Find the antennas that expose this functionality:
-    d_ants = hack_SetPointingCorrections(cam.ants, spem_enabled=False)
+    d_ants = hack_SetPointingCorrections(cam.ants)
     # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
     for ant in cam.ants:
         if (ant.name in d_ants):
@@ -245,20 +245,15 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
             ant.req.mode("POINT")
     time.sleep(5)
     # Now disable ACU SPEM corrections (for as long as it only uses POINT mode for controlled motion)
-    hack_SetPointingCorrections(cam.ants, spem_enabled=False)
+    hack_SetPointingCorrections(cam.ants)
 
 
-def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, temp_enabled=False, force=False):
-    """ Enable/Disable SPEM and or Tilt corrections on the specified dishes.
+def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
+    """ Disable SPEM & Temperature corrections, and en/disable Tilt corrections on the specified dishes.
         This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
         
-        Default rules for tilt corrections: disable tilt corrections on all (except MKE121) because they are not
-         calibrated / implemented correctly as of 16/05/2025.
-        
         @param ants: list of instances of CAM Receptor/Dish Proxy.
-        @param spem_enabled: ACU's internal Static Pointing Error Model corrections (default False)
         @param tilt_enabled: ACU's internal inclinometer-based corrections (default True)
-        @param temp_enabled: ACU's internal ambient temperature-based corrections (default False)
         @param force: if True then force tilt to the specified value, else will disable tilt for all except e121 & e117 (default False)
         @return: list of names of ants where the SPEM corrections were changed.
     """
@@ -270,17 +265,18 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
                  "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
     d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
     for a in ants:
-        a.req.dsm_DisablePointingCorrections()
-        mod_spem.append(a.name)
-        if __tilt_corr_allowed__ and tilt_enabled and (force or (a.name in d_tilt_OK)):
-            if (a.name in d_numbers.keys()):
-                lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
-                dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-                dsm.tiltPointCorrEnabled = True
-                if (a.name not in d_tilt_OK):
-                    force_tilt.append(a.name)
-                else:
-                    mod_tilt.append(a.name)
+        if (a.name in d_numbers.keys()):
+            a.req.dsm_DisablePointingCorrections()
+            mod_spem.append(a.name)
+            if __tilt_corr_allowed__ and tilt_enabled and (force or (a.name in d_tilt_OK)):
+                if (a.name in d_numbers.keys()):
+                    lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
+                    dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+                    dsm.tiltPointCorrEnabled = True
+                    if (a.name not in d_tilt_OK):
+                        force_tilt.append(a.name)
+                    else:
+                        mod_tilt.append(a.name)
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: Temperature Corrections %s on %s" % ("Enabled" if temp_enabled else "Disabled", ",".join(mod_spem)))
         user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
