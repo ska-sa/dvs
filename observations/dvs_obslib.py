@@ -270,18 +270,17 @@ def hack_SetPointingCorrections(ants, spem_enabled=False, tilt_enabled=True, tem
                  "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
     d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
     for a in ants:
-        if (a.name in d_numbers.keys()):
-            lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
-            dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-            dsm.tempPointCorrEnabled = temp_enabled
-            dsm.staticPointCorrEnabled = spem_enabled
-            mod_spem.append(a.name)
-            if (not __tilt_corr_allowed__) or ((a.name not in d_tilt_OK) and not force): # Default rule for disabling
-                dsm.tiltPointCorrEnabled = False
-                force_tilt.append(a.name)
-            else:
-                dsm.tiltPointCorrEnabled = tilt_enabled
-                mod_tilt.append(a.name)
+        a.req.dsm_DisablePointingCorrections()
+        mod_spem.append(a.name)
+        if __tilt_corr_allowed__ and tilt_enabled and (force or (a.name in d_tilt_OK)):
+            if (a.name in d_numbers.keys()):
+                lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
+                dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+                dsm.tiltPointCorrEnabled = True
+                if (a.name not in d_tilt_OK):
+                    force_tilt.append(a.name)
+                else:
+                    mod_tilt.append(a.name)
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: Temperature Corrections %s on %s" % ("Enabled" if temp_enabled else "Disabled", ",".join(mod_spem)))
         user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
