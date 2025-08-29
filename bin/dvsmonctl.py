@@ -60,6 +60,23 @@ def match_ku_siggen_freq(cam, override=False):
         print("WARNING: MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
+def trk(*pointables, tgt):
+    """ Track the specified target in a "manual control session"
+        @param pointables: control objects e.g. cam.ant1, cam.ant2, cam.cbf_1
+        @param tgt: target object or description e.g. cam.sources['3C 279']
+    """
+    tgt = tgt if isinstance(tgt, str) else tgt.description
+    for proxy in pointables:
+        proxy.req.target(tgt)
+    for proxy in pointables:
+        if hasattr(proxy.req, 'mode'):
+            proxy.req.mode("POINT")
+    # HACK for MKE Dishes as of 08/2025
+    for proxy in pointables:
+        if hasattr(proxy.req, 'dsm_DisablePointingCorrections'):
+            proxy.req.dsm_DisablePointingCorrections()
+     
+
 def geo_cat(cam, savefn="/home/kat/usersnfs/aph/geo.txt", download="geo,intelsat"):
     """ Download the current CelesTrak TLEs and combine it into one catalogue file.
         Then instantiates a katpoint catalogue from this file, using the current session's reference antenna.
