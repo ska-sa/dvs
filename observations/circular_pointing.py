@@ -389,13 +389,6 @@ if __name__=="__main__":
                         user_logger.info("Using Scan antennas: %s %s",
                                          ' '.join(always_scan_ants_names),' '.join([ant.name for ant in scan_ants if ant.name not in always_scan_ants_names]))
                         armx, army, arms = cx[iarm], cy[iarm], cs[iarm]
-                        if False: # (iarm == 0) and ((target != prev_target) or (opts.cycle_tracktime > 0)): # WIP: Add a trajectory from bore sight to start of arm
-                            nt = int((armx[0]**2 + army[0]**2)**.5 / (opts.scanspeed*session.dump_period) + 0.5) # Number of points for this trajectory
-                            if (nt > 0):
-                                armx = np.r_[np.linspace(0,armx[0],nt)[:-1], armx]
-                                army = np.r_[np.linspace(0,army[0],nt)[:-1], army]
-                                arms = np.r_[np.zeros((nt,))[:-1], arms]
-                        
                         for iant,scan_ant in enumerate(scan_ants):
                             session.ants = scan_ants_array[iant]
                             target.antenna = scan_observers[iant]
@@ -432,8 +425,9 @@ if __name__=="__main__":
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
-                    user_logger.info("Safe to interrupt script now if necessary")
                     cycle+=1
 
                     # Switch the indexer out & back, if requested
                     cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run)
+                    
+                    user_logger.info("Safe to interrupt script now if necessary")
