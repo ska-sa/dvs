@@ -367,10 +367,10 @@ if __name__=="__main__":
                     
                     # Perform the cycle_track if requested 
                     if (target != prev_target) or (opts.cycle_tracktime > 0):
-                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
-                        session.track(target, duration=opts.cycle_tracktime, announce=False)#radec target
+                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
+                        session.track(target, duration=opts.cycle_tracktime, announce=False) # Slew if necessary, then track_ants keep tracking
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
@@ -407,7 +407,7 @@ if __name__=="__main__":
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
                                 session.load_scan(scan_data[:,0],scan_data[:,1],scan_data[:,2])
-                        if not kat.dry_run: hack_SetPointingCorrections(all_ants) # HACK: change to & from load_scan causes OHB's ACU to re-enable ACU corrections
+                        if (iarm == 0) and not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
                         
                         # Retrospectively add scan labels
                         lastisslew=None#so that first sample's state is also recorded
@@ -425,9 +425,8 @@ if __name__=="__main__":
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
+                    user_logger.info("Safe to interrupt script now if necessary")
+                    
                     cycle+=1
-
                     # Switch the indexer out & back, if requested
                     cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run)
-                    
-                    user_logger.info("Safe to interrupt script now if necessary")
