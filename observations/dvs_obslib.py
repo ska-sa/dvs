@@ -235,11 +235,9 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     # Change the default behaviour of hack_SetPointingCorrections
     __tilt_corr_allowed__ = allow_tiltcorrections
     
-    # Find the antennas that expose this functionality:
-    d_ants = hack_SetPointingCorrections(cam.ants)
-    # Now ensure those antennas have transitioned to the "Operating" mode, by POINT
+    # Ensure the MKE antennas have transitioned to the "Operating" mode, by POINT
     for ant in cam.ants:
-        if (ant.name in d_ants):
+        if hasattr(ant.req, 'dsm_DisablePointingCorrections'):
             az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
             ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
             ant.req.mode("POINT")
@@ -255,7 +253,6 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
         @param ants: list of instances of CAM Receptor/Dish Proxy.
         @param tilt_enabled: ACU's internal inclinometer-based corrections (default True)
         @param force: if True then force tilt to the specified value, else will disable tilt for all except e121 & e117 (default False)
-        @return: list of names of ants where the SPEM corrections were changed.
     """
     global __tilt_corr_allowed__
     mod_spem, mod_tilt, force_tilt = [], [], []
@@ -266,25 +263,33 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
     d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
     for a in ants:
         if (a.name in d_numbers.keys()):
-            a.req.dsm_DisablePointingCorrections()
-            mod_spem.append(a.name)
-            if __tilt_corr_allowed__ and tilt_enabled and (force or (a.name in d_tilt_OK)):
-                if (a.name in d_numbers.keys()):
-                    lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
-                    dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
-                    dsm.tiltPointCorrEnabled = True
-                    if (a.name not in d_tilt_OK):
-                        force_tilt.append(a.name)
-                    else:
-                        mod_tilt.append(a.name)
+            lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
+            dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+            # Enforce our rules for TILT
+            tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in d_tilt_OK))
+            if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
+                mod_tilt.append(a.name)
+                dsm.tiltPointCorrEnabled = False
+            elif tilt_corr and not dsm.tiltPointCorrEnabled:
+                force_tilt.append(a.name)
+                dsm.tiltPointCorrEnabled = True
+            ## SPEM & TEMP must always be disabled
+            #if dsm.staticPointCorrEnabled:
+            #    mod_spem.append(a)
+            ## These asynchronous writes just don't work for me, and cause unnecessary logs & interruptions?(!)
+            ## so rather zero the ACU SPEM and only toggle tilt above if necessary
+            #dsm.write_attributes([("tiltPointCorrEnabled", tilt_corr),
+            #                      ("staticPointCorrEnabled", False), ("tempPointCorrEnabled", False)
+            #                      ], wait=True)
     if (len(mod_spem) > 0):
-        user_logger.info("APPLIED HACK: Temperature Corrections %s on %s" % ("Enabled" if temp_enabled else "Disabled", ",".join(mod_spem)))
-        user_logger.info("APPLIED HACK: SPEM Corrections %s on %s" % ("Enabled" if spem_enabled else "Disabled", ",".join(mod_spem)))
-    if (len(force_tilt) > 0):
-        user_logger.info("APPLIED HACK: Tilt Corrections Disabled on %s" % (",".join(force_tilt)))
+        user_logger.info("APPLIED HACK: Disabled SPEM & TEMP Corrections on %s" % ",".join([_.name for _ in set(mod_spem)-set(mod_tilt)]))
     if (len(mod_tilt) > 0):
-        user_logger.info("APPLIED HACK: Tilt Corrections %s on %s" % ("Enabled" if tilt_enabled else "Disabled", ",".join(mod_tilt)))
-    return mod_spem
+        user_logger.info("APPLIED HACK: Disabled Tilt Corrections on %s" % ",".join(mod_tilt))
+    if (len(force_tilt) > 0):
+        user_logger.info("APPLIED HACK: Enabled Tilt Corrections on %s" % ",".join(force_tilt))
+    # Wait once, for all changes, rather than waiting for changes for individual dishes
+    if (len(mod_spem+mod_tilt+force_tilt) > 0):
+        time.sleep(3)
 
 
 def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False):
@@ -304,7 +309,8 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
                 index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
                 break
             except:
-                pass
+                if dry_run:
+                    index0 = 0 
         assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
         indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
         index0 = indices[index0]
