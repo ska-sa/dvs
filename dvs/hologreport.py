@@ -277,7 +277,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         swap = lambda prod, idx: {'H':'V', 'V':'H'}[prod[0]]+prod[1] if (idx==0) else prod[0]+{'H':'V', 'V':'H'}[prod[1]]
         for idx in polswap:
             dataset.pols_to_use = [swap(p,idx) for p in dataset.pols_to_use]
-    
+    dishdiameter = [a.diameter for a in dataset.h5.ants if a.name == scanant][0] # Must be mechanical geometry, not "effective"
     dMHz = max(dMHz, abs(dataset.h5.channel_freqs[1]-dataset.h5.channel_freqs[0])/2/1e6)
     flags_hrs = [] if (flags_hrs is None) else flags_hrs
     
@@ -295,7 +295,6 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         out.sun_rel_deg = ([katsemat.wrap(sun_azel[0]-az_deg, 360), sun_azel[1]-out.el_deg]) if (sun_azel[1] > -5) else (np.nan, np.nan) # (az,el) mean angle relative to bore sight
         
         # Feed Indexer angles
-        scanant = dataset.radialscan_allantenna[dataset.scanantennas[0]]
         a = []
         # TODO: consider changing below to katdal's equivalent mechanism
         if (telescope.upper() == "MEERKAT"):
@@ -333,12 +332,11 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # NB: flip the sign of 'mm' to get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
         #      katholog registers +mm (+dEl) when antenna points above target, while measuring the lower part of the pattern, which is -mm for predicted patterns.
         dataset.mm = -dataset.mm
-        # MdV 06/2025: flipping the data using dataset.mm=-dataset.mm : you should use ApertureMap(...,parabolaoffsetdev=[0,-15/2]) instead of the default parabolaoffsetdev=None which becomes [0,15/2] (for offset dishes).
-        #              Fortunately this makes the correspondence to the raytracing a little bit better at the lower edge, but unfortunately it makes the LCP V pol look a bit more different from the H pol in the upper region.
-        try:
-            flip['parabolaoffsetdev'] = DISHPARAMS['parabolaoffsetdev']
-        except:
-            pass
+        # MdV 06/2025: flipping the data using dataset.mm=-dataset.mm : you should use ApertureMap(...,parabolaoffsetdev=[0,-15/2]) instead of the
+        #              default parabolaoffsetdev=None. Fortunately this makes the correspondence to the raytracing a little bit better
+        #              at the lower edge, but unfortunately it makes the LCP V pol look a bit more different from the H pol in the upper region.
+        if telescope.lower().startswith("meerkat") or telescope.lower().startswith("ska"):
+            flip['parabolaoffsetdev'] = DISHPARAMS.get('parabolaoffsetdev', [0, -dishdiameter/2.]) # katholog.Dataset defaults to [0,dishdiameter/2] for offset dishes
         
         # Measured patterns are 'as-received patterns' i.e. include the polarisation state of the beacon. Instead of correcting
         # these, the adopted approach is to generate predicted (beam & aperture) patterns to match the measured patterns.
