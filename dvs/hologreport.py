@@ -941,7 +941,7 @@ def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True)
     return errorbeam
 
 def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing='fourier', eb_extent=(-0.2,0.2), coords="SKA", debug=False, makepdf=True, pdfprefix="", **devkwargs):
-    """ Makes standard plots and prints information for the supplied holography result sets.
+    """ Makes standard plots and prints information for the supplied holography result set.
         
         @param measured: the result set to report on [ResultSet]
         @param predicted: predicted patterns to de-embed from measured (default None) [ResultSet]
@@ -1172,6 +1172,12 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 pp.report_fig(max(plt.get_fignums()))
     finally:
         pp.close()
+    
+    if debug:
+        if (_predicted_ is None):
+            plot_apmapdiffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+        else:
+            plot_apmapdiffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
     
     return results
 
