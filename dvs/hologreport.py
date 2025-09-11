@@ -1128,17 +1128,17 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             
             # Reference patterns for this frequency, if any
             if (_predicted_ is not None):
-                beam,apmapH,apmapV = _predicted_[-3:]
+                beamp,apmapHp,apmapVp = _predicted_[-3:]
                 plt.figure(figsize=(14,18))
                 plt.suptitle("Reference patterns @ %.1fMHz"%_predicted_[1])
-                plt.subplot(4,2,1); beam.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gx")
-                plt.subplot(4,2,2); beam.plot("Dx", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dx")
-                plt.subplot(4,2,3); beam.plot("Dy", doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Dy")
-                plt.subplot(4,2,4); beam.plot("Gy", clim=(0,-60), doclf=False); plt.xlim(-beam.extent/2., beam.extent/2.); plt.ylim(-beam.extent/2., beam.extent/2.); plt.title("Gy")
-                plt.subplot(4,2,5); apmapH.plot('amp', doclf=False); plt.title("Aperture amplitude x")
-                plt.subplot(4,2,6); apmapV.plot('amp', doclf=False); plt.title("Aperture amplitude y")
-                plt.subplot(4,2,7); apmapH.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation x")
-                plt.subplot(4,2,8); apmapV.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation y")
+                plt.subplot(4,2,1); beamp.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Gx")
+                plt.subplot(4,2,2); beamp.plot("Dx", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dx")
+                plt.subplot(4,2,3); beamp.plot("Dy", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dy")
+                plt.subplot(4,2,4); beamp.plot("Gy", clim=(0,-60), doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Gy")
+                plt.subplot(4,2,5); apmapHp.plot('amp', doclf=False); plt.title("Aperture amplitude x")
+                plt.subplot(4,2,6); apmapVp.plot('amp', doclf=False); plt.title("Aperture amplitude y")
+                plt.subplot(4,2,7); apmapHp.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation x")
+                plt.subplot(4,2,8); apmapVp.plot('nopointingdev', doclf=False, **devkwargs); plt.title("Aperture path length deviation y")
                 pp.report_fig(max(plt.get_fignums()))
             
             if (ci == 0): # Only a single cycle, so reduce the len_1 lists to scalar values
@@ -1173,7 +1173,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     finally:
         pp.close()
     
-    if debug:
+    if (debug == 0): # Hack to differentiate 0 from False
         if (_predicted_ is None):
             plot_apmapdiffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
         else:
