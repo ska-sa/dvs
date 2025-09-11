@@ -124,7 +124,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         @param DISHPARAMS: {telescope, xyzoffsets, xmag, focallength} to project the patterns to the physical geometry.
         @param el_deg: elevation for simulated distortion, 45deg is essentially undistorted.
         @param kwargs: passed to katdal.Dataset e.g. 'clipextent'
-        @return: (BeamCube, ApertureMap{H}, ApertureMap{V}) - each matching the dimensions of freqMHz
+        @return: (BeamCube, ApertureMap{H}, ApertureMap{V}) - each matching the dimensions of freqMHz. NB: BeamCube "x"=H-pol, "y"=V-pol
     """
     if (len(np.atleast_1d(freqMHz)) > 1):
         beams, apmapsH, apmapsV = [], [], []
@@ -157,11 +157,12 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     #      Now moved to 'load_data()' to rather get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
     #dataset.mm = -dataset.mm
     
+    # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
     beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
     if (beacon_pol is not None):
         beacon_pol = e_bn(beacon_pol) if (beacon_pol in ["RCP","LCP"]) else beacon_pol
-        fcH = dict(feedcombine=[beacon_pol[0],beacon_pol[1],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
-        fcV = dict(feedcombine=[0,0,beacon_pol[-2],beacon_pol[-1]]) # feedcombine: [Gx, Dx, Dy, Gy]
+        fcH = dict(feedcombine=[beacon_pol[1],beacon_pol[0],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
+        fcV = dict(feedcombine=[0,0,beacon_pol[1],beacon_pol[0]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (incl. measured - see 'load_data()')
         _H = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcH)
@@ -171,11 +172,10 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     else:
         fcH = dict(feed="H")
         fcV = dict(feed="V")
-
     apmapH = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcH,flip) for k,v in d.items()})
     apmapV = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcV,flip) for k,v in d.items()})
     
-    if (telescope == "MeerKAT"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
+    if (telescope.lower() == "meerkat"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
         for apmap in [apmapH,apmapV]:
             apmap.unwrapmaskmap = apmap.unwrapmaskmap[::-1,:]; apmap.analyse()
     
@@ -187,23 +187,22 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
 
 def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
     """ Generates the linear E-field components for a polarised signal arriving from space,
-        according to the convention that the satellite's +V points towards the NCP, and the observed
-        tilt angle from the surface of the Earth in the northern hemisphere is positive in a
-        clockwise sense. Tilt angles either from e.g. https://www.satbeams.com/footprints?beam=8511 
-        or pass in (sat lon, extra tilt) to have it calculated.
+        according to the convention that the source's +Vertical points towards the NCP, and the observed
+        tilt angle from the surface of the Earth in the northern hemisphere is positive in an
+        anti-clockwise sense. Satellite tilt angles either from e.g. https://www.satbeams.com/footprints
+        or provide (sat lon, extra tilt) to have it calculated.
         
-        IAU +X and +Y are in the plane of the sky toward the North and East, respectively, with position angle
-        increasing from North through the East so that Y lags X when receiving RCP, i.e. [eX, eY] = [1, -1j].
+        IAU +X is in the plane containing the meridian toward the North, with position angle increasing
+        from North through the East so that Y lags X when receiving RCP, i.e. [eX, eY] = [1, -1j].
         For an AzEl mount pointed at Zenith with Az=South we see that +V -> North == +X and +H -> East == +Y
         provides a mapping that is consistent with the IAU convention.
-        This function follows the IAU mapping!
              
-        Test cases for northern observer:
-            V@0deg should be [1,0]; H@0deg should be [0,1]
-            H@90deg should equal V@0deg
-        Test cases for southern observer:
-            V@0deg should be [-1,0]; H@0deg should be [0,-1]
-            H@90deg should equal V@0deg
+        Following the IAU mapping, test cases for a northern observer are:
+            V@0deg tilt should be [1,0]; H@0deg should be [0,1]
+            H@90deg tilt should equal V@0deg
+        Test cases for a southern observer:
+            V@0deg tilt should be [-1,0]; H@0deg should be [0,1] (not a typo!)
+            H@90deg tilt should equal V@0deg
         
         @param pol: may be one of 'RCP'|'LCP'|'H'|'V'
         @param tilt_deg: the angle by which the satellite's V plane is tilted East of the observer's meridian,
@@ -227,7 +226,7 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
     if (obs_lat >= 0): # Northern hemisphere angle (+V towards NCP, +H towards East, +tilt angle rotates H to V)
         pass
     else: # Southern Hemisphere angle (+V towards NCP is observed as -V, +H is observed as -H)
-        tilt_deg = tilt_deg + 180
+        tilt_deg = 180 - tilt_deg
     
     return [np.cos(tilt_deg*D2R), -np.sin(tilt_deg*D2R)]
 
@@ -247,7 +246,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         @param flag_slew: True to ensure "slew" activities are always flagged out, otherwise may include "slew" if quality is OK (default False).
         @param flags_hrs: explicit time-based flagging, as lists of (hrs_start,hrs_end) with 'hrs' the time since the start of the measurement (default None)
         @param kwargs: passed to katdal.Dataset e.g. 'timingoffset', 'clipextent', 'select_loadscan_group'
-        @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles.
+        @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles. NB: beams "x"=H-pol, "y"=V-pol
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
     """
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
@@ -341,6 +340,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # Measured patterns are 'as-received patterns' i.e. include the polarisation state of the beacon. Instead of correcting
         # these, the adopted approach is to generate predicted (beam & aperture) patterns to match the measured patterns.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
+        # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
         b_buf.append(katholog.BeamCube(dataset, scanantennaname=scanant, freqMHz=f_MHz, dMHz=dMHz, applypointing=applypointing, interpmethod='scipy', xyzoffsets=xyzoffsets, gridsize=gridsize))
         aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
         aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
