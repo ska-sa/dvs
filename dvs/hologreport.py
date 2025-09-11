@@ -1288,8 +1288,8 @@ def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None,
         @param vlim: limit the range of values of 'what' displayed, either None or (min,max) (default None).
         @return: the figure's axes (always a 2D list)
     """
-    apmaps0 = np.atleast_1d(apmap0)
-    apmaps1 = np.atleast_1d(apmap1)
+    apmaps0 = np.atleast_1d(np.squeeze(apmap0))
+    apmaps1 = np.atleast_1d(np.squeeze(apmap1))
     fig, axs = plt.subplots(len(apmaps0),2, figsize=(6*2,5*len(apmaps0)))
     axs = [axs] if (len(np.shape(axs))==1) else axs # Undo auto squeeze
     fig.suptitle("%s [%s]"%(title, what))
