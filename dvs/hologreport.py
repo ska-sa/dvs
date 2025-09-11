@@ -1173,11 +1173,10 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     finally:
         pp.close()
     
-    if (debug == 0): # Hack to differentiate 0 from False
-        if (_predicted_ is None):
-            plot_apmapdiffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
-        else:
-            plot_apmapdiffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+    if (_predicted_ is None):
+        plot_apmapdiffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+    else:
+        plot_apmapdiffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
     
     return results
 
