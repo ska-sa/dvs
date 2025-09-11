@@ -1301,9 +1301,13 @@ def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None,
     fig.suptitle("%s [%s]"%(title, what))
     unit = "mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl")
     
-    for ax_,apmap0,apmap1 in zip(axs,apmaps0,apmaps1):
-        t0, t1 = np.mean(apmap0.dataset.rawtime[apmap0.dataset.time_range]), np.mean(apmap1.dataset.rawtime[apmap1.dataset.time_range])
-        ax_[1].set_title("%.f - %.f"%(t0, t1), x=0)
+    for i,(ax_,apmap0,apmap1) in enumerate(zip(axs,apmaps0,apmaps1)):
+        try:
+            subtitle = "%.f - %.f" % (apmap0.dataset.env_times[1], apmap1.dataset.env_times[1])
+        except: # Some maps don't have datasets attached
+            subtitle = "#%d - #d" % (i, i)
+        ax_[1].set_title(subtitle, x=0)
+        
         diff = apmap0.__getattribute__(what) - apmap1.__getattribute__(what)
         if masked:
             diff[apmap0.maskmap * apmap1.maskmap == 1] = np.nan
