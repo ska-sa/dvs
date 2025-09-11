@@ -1305,7 +1305,7 @@ def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None,
         try:
             subtitle = "%.f - %.f" % (apmap0.dataset.env_times[1], apmap1.dataset.env_times[1])
         except: # Some maps don't have datasets attached
-            subtitle = "#%d - #d" % (i, i)
+            subtitle = "#%d - #%d" % (i, i)
         ax_[1].set_title(subtitle, x=0)
         
         diff = apmap0.__getattribute__(what) - apmap1.__getattribute__(what)
