@@ -1101,7 +1101,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     p_beam = _predicted_[-3]
                     # TODO: zernike & polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
                     if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
-                        model = (p_beam.Gx[0]+p_beam.Gy[0]) if (abs(beam.extent/p_beam.extent-1)<0.2) else None
+                        model = (p_beam.Gx[0]+p_beam.Gy[0]) if (abs(beam.extent/p_beam.extent-1)<0.3) else None
                     smoothbeam(beam, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                     if (ci == 0):
                         smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
@@ -1228,7 +1228,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                             if (beampolydegree and beamsmoothing):
                                 # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
                                 if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
-                                    model = (pbm.Gx[0]+pbm.Gy[0]) if (abs(bm.extent/pbm.extent-1)<0.2) else None
+                                    model = (pbm.Gx[0]+pbm.Gy[0]) if (abs(bm.extent/pbm.extent-1)<0.3) else None
                                 smoothbeam(bm, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
