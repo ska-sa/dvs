@@ -12,12 +12,11 @@
         DISHPARAMS.update(xyzoffsets=[0.0, 1.49, -3.52]) # Phase reference position of the feed, katholog coordinates
         recs = [ResultSet(1630887121, f_MHz=[11452.2197], beacon_pol=["RCP"], clipextent=1.8, tags=["note 1"])]
         load_records(recs, "s0000", DISHPARAMS=DISHPARAMS, flag_slew=True, inspect_DT=True, timingoffset=0.1)
-        generate_results(recs, predicted, beampolydegree=28, beamsmoothing="zernike", SNR_min=30, makepdfs=True, pdfprefix="ku")
+        generate_results(recs, predicted, eb_extent=(-0.3,0.3), SNR_min=30, makepdfs=True, pdfprefix="ku")
     
     @author aph@ska.ac.za
 """
 import numpy as np
-import scipy.optimize as sop
 import scipy.signal as sig
 from collections import namedtuple
 import itertools as iter
@@ -1168,9 +1167,10 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         plt.suptitle("Signal Path Statistics")
         pp.report_fig(max(plt.get_fignums()))
         
-        results = HologResults(el_deg, measured.f_MHz, np.asarray(feedoffsetsH), np.asarray(feedoffsetsV),
-                               np.asarray(refl_phase_effH), np.asarray(refl_phase_effV),
-                               np.asarray(rmsH), np.asarray(rmsV), np.asarray(errbeamH), np.asarray(errbeamV),
+        results = HologResults(el_deg, measured.f_MHz, np.ma.masked_array(feedoffsetsH, fill_value=np.nan), np.ma.masked_array(feedoffsetsV, fill_value=np.nan),
+                               np.ma.masked_array(refl_phase_effH, fill_value=np.nan), np.ma.masked_array(refl_phase_effV, fill_value=np.nan),
+                               np.ma.masked_array(rmsH, fill_value=np.nan), np.ma.masked_array(rmsV, fill_value=np.nan),
+                               np.ma.masked_array(errbeamH, fill_value=np.nan), np.ma.masked_array(errbeamV, fill_value=np.nan),
                                dict(time_hod=time_hod,deg_per_sec=deg_per_sec,feedindexer_deg=feedindexer_deg,enviro=enviro))
         
         if (ci > 0): # Multiple cycles
@@ -1372,14 +1372,12 @@ def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=
                 print("INFO: %d @ %.fMHz has extreme degree of linear polarisation, masking out H-pol feedoffsets & errorbeam"%(rec.fid,rec.f_MHz[i]))
                 maskH[-1][:] = True
         
-        # Convert fields to masked arrays
+        # Set the masks 
         maskH, maskV = np.squeeze(maskH), np.squeeze(maskV) # Now matches first one/two dimensions of feedoffsets & errbeam
-        maskH3, maskV3 = np.stack([maskH]*3, axis=-1), np.stack([maskV]*3, axis=-1) # Now matches all dimensions of feedoffsets
-        maskH4, maskV4 = np.stack([maskH]*4, axis=-1), np.stack([maskV]*4, axis=-1) # Now matches all dimensions of errbeam
-        r = r._replace(feedoffsetsH=np.ma.masked_array(r.feedoffsetsH, maskH3, fill_value=np.nan),
-                       feedoffsetsV=np.ma.masked_array(r.feedoffsetsV, maskV3, fill_value=np.nan),
-                       errbeamH=np.ma.masked_array(r.errbeamH, maskH4, fill_value=np.nan),
-                       errbeamV=np.ma.masked_array(r.errbeamV, maskV4, fill_value=np.nan))
+        r.feedoffsetsH.mask, r.feedoffsetsV.mask = np.stack([maskH]*3, axis=-1), np.stack([maskV]*3, axis=-1) # Now matches all dimensions of feedoffsets
+        r.errbeamH.mask, r.errbeamV.mask = np.stack([maskH]*4, axis=-1), np.stack([maskV]*4, axis=-1) # Now matches all dimensions of errbeam
+        r.rpeffH.mask, r.rpeffV.mask = np.stack([maskH]*3, axis=-1), np.stack([maskV]*3, axis=-1) # Now matches all dimensions of rpeff
+        r.rmsH.mask, r.rmsV.mask = np.stack([maskH], axis=-1), np.stack([maskV], axis=-1) # Now matches all dimensions of rms
         
         results[rec.fid if (rec.cycles is None) else "%d %s"%(rec.fid,rec.cycles)] = [r]
         for t in rec.tags:
