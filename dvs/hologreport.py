@@ -1483,31 +1483,29 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
         rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
-            # Filter on environment
+            # Filter on environment - potentially cycles > 1
             accept_enviro = [enviro_filter(e) for e in np.atleast_1d(r.info["enviro"])]
+            pick_enviro = lambda cd: cd if (len(np.shape(r.feedoffsetsH))<=2) else np.compress(accept_enviro, cd, axis=0)
             if np.any(accept_enviro):
                 # Filter on frequency
                 for fi,f in enumerate(r.f_MHz):
                     if accept_MHz(f):
-                        # TODO: also apply 'accept_enviro' for cases where there are multiple cycles
                         f_MHz.append(r.f_MHz[fi])
-                        feedoffsetsH.append(r.feedoffsetsH[fi])
-                        feedoffsetsV.append(r.feedoffsetsV[fi])
-                        rpeffH.append(r.rpeffH[fi])
-                        rpeffV.append(r.rpeffV[fi])
-                        rpeffV.append(r.rpeffV[fi])
-                        rmsH.append(r.rmsH[fi])
-                        rmsV.append(r.rmsV[fi])
-                        errbeamH.append(r.errbeamH[fi])
-                        errbeamV.append(r.errbeamV[fi])
+                        feedoffsetsH.append(pick_enviro(r.feedoffsetsH[fi]))
+                        feedoffsetsV.append(pick_enviro(r.feedoffsetsV[fi]))
+                        rpeffH.append(pick_enviro(r.rpeffH[fi]))
+                        rpeffV.append(pick_enviro(r.rpeffV[fi]))
+                        rmsH.append(pick_enviro(r.rmsH[fi]))
+                        rmsV.append(pick_enviro(r.rmsV[fi]))
+                        errbeamH.append(pick_enviro(r.errbeamH[fi]))
+                        errbeamV.append(pick_enviro(r.errbeamV[fi]))
             if (len(f_MHz) > 0):
-                hr = HologResults(el_deg=r.el_deg,f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
+                hr = HologResults(el_deg=pick_enviro(r.el_deg),f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
                                   rpeffH=np.ma.masked_array(rpeffH),rpeffV=np.ma.masked_array(rpeffV),
                                   rmsH=np.ma.masked_array(rmsH),rmsV=np.ma.masked_array(rmsV),errbeamH=np.ma.masked_array(errbeamH),errbeamV=np.ma.masked_array(errbeamV),
                                   info={k:[] for k in r.info.keys()})
                 for k in r.info.keys():
-                    # TODO: also apply 'accept_enviro' for cases where there are multiple cycles
-                    hr.info[k].append(r.info[k])
+                    hr.info[k].append(pick_enviro(r.info[k]))
                 filtered[tag].append(hr)
                 
         if (len(filtered[tag]) == 0):
