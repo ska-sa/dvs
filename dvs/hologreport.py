@@ -230,6 +230,14 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
     
     return [np.cos(tilt_deg*D2R), -np.sin(tilt_deg*D2R)]
 
+# TODO: remove this HACK after figuring out why it appears that LCP and RCP are swapped (MKE119 Ku-band data 02/2025).
+#  Is it the data, or the definitions in hologreport?
+_e_bn_ = e_bn
+def e_bn_LRRLHACK(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
+    pol = {"RCP":"LCP", "LCP":"RCP"}.get(pol, pol)
+    return _e_bn_(pol, tilt_deg, obs_lon, obs_lat)
+e_bn = e_bn_LRRLHACK
+
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
               loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
@@ -1092,7 +1100,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 if (_predicted_ is not None):
                     p_beam = _predicted_[-3]
                     # TODO: zernike & polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                    if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
+                        model = (p_beam.Gx[0]+p_beam.Gy[0]) if (abs(beam.extent/p_beam.extent-1)<0.2) else None
+                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                     if (ci == 0):
                         smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                         # Only figures for the first cycle
@@ -1216,7 +1226,10 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                             if (c == 0): ax.set_ylabel("%s-pol"%("HV"[pol]))
                             bm = beams[r*C+c] # Just for first frequency
                             if (beampolydegree and beamsmoothing):
-                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                                # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
+                                if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
+                                    model = (pbm.Gx[0]+pbm.Gy[0]) if (abs(bm.extent/pbm.extent-1)<0.2) else None
+                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
                             eb = geterrorbeam(meas, modl, ext_(bm)/ext_(pbm), contourdB=contourdB)
