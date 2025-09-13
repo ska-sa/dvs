@@ -1461,19 +1461,23 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
     plot_eff_freq(sets, labels, fspec_MHz=fspec_MHz, figsize=(14,3))
 
 
-def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None):
+def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None, hod_filter=None):
     """ Generate a subset of results originally from 'generate_results()'. Omit all HologResults which also appear against 'exclude_tags'
         or not matching 'f_MHz'.
         
         @param results: {tag:[HologResults]}
         @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
         @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default "*" i.e. all)
-        @param enviro_filter: a function like `lambda enviro: enviro['wind_mps'][0]<10` to select results to keep (default None i.e. no filtering) 
+        @param enviro_filter: a function like `lambda enviro: enviro['wind_mps'][0]<10` to select results to keep (default None i.e. no filtering)
+        @param hod_filter: a function like `lambda hod: hod<4` to select results to keep (default None i.e. no filtering).
+                           NB: the time base is defined when the results are generated - generate_results() or standard_report().
         @return: {tag:[HologResults]} """
     filtered = {}
     
     # Only include results for which accept_MHz returns True
     accept_MHz = lambda MHz: (fincl_MHz == "*" ) or (MHz >= np.min(fincl_MHz) and MHz <= np.max(fincl_MHz))
+    enviro_filter = (lambda _: True) if (enviro_filter is None) else enviro_filter
+    hod_filter = (lambda _: True) if (hod_filter is None) else hod_filter
     
     exclude_tags = [] if exclude_tags is None else exclude_tags
     omit_tagged = list(iter.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
@@ -1484,7 +1488,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
             # Filter on environment - potentially cycles > 1
-            accept_enviro = [enviro_filter(e) for e in np.atleast_1d(r.info["enviro"])]
+            accept_enviro = [enviro_filter(e) and hod_filter(h) for e,h in zip(np.atleast_1d(r.info["enviro"]),np.atleast_1d(r.info["time_hod"]))]
             if np.any(accept_enviro): # Completely remove a set that has no acceptable data
                 # Filter on frequency
                 for fi,f in enumerate(r.f_MHz):
