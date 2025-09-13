@@ -1500,12 +1500,14 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
                         errbeamH.append(pick_enviro(r.errbeamH[fi]))
                         errbeamV.append(pick_enviro(r.errbeamV[fi]))
             if (len(f_MHz) > 0):
-                hr = HologResults(el_deg=pick_enviro(r.el_deg),f_MHz=f_MHz,feedoffsetsH=np.ma.masked_array(feedoffsetsH),feedoffsetsV=np.ma.masked_array(feedoffsetsV),
-                                  rpeffH=np.ma.masked_array(rpeffH),rpeffV=np.ma.masked_array(rpeffV),
-                                  rmsH=np.ma.masked_array(rmsH),rmsV=np.ma.masked_array(rmsV),errbeamH=np.ma.masked_array(errbeamH),errbeamV=np.ma.masked_array(errbeamV),
-                                  info={k:[] for k in r.info.keys()})
+                hr = HologResults(el_deg=pick_enviro(r.el_deg),f_MHz=f_MHz,
+                                  feedoffsetsH=np.ma.masked_array(feedoffsetsH,fill_value=np.nan),feedoffsetsV=np.ma.masked_array(feedoffsetsV,fill_value=np.nan),
+                                  rpeffH=np.ma.masked_array(rpeffH,fill_value=np.nan),rpeffV=np.ma.masked_array(rpeffV,fill_value=np.nan),
+                                  rmsH=np.ma.masked_array(rmsH,fill_value=np.nan),rmsV=np.ma.masked_array(rmsV,fill_value=np.nan),
+                                  errbeamH=np.ma.masked_array(errbeamH,fill_value=np.nan),errbeamV=np.ma.masked_array(errbeamV,fill_value=np.nan),
+                                  info={})
                 for k in r.info.keys():
-                    hr.info[k].append(pick_enviro(r.info[k]))
+                    hr.info[k] = pick_enviro(r.info[k])
                 filtered[tag].append(hr)
                 
         if (len(filtered[tag]) == 0):
