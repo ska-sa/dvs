@@ -1584,7 +1584,9 @@ def calculate_ant_eff(mss, rrs=None, ieee=True, fspec_MHz=None, return_ids=False
         # Masks, if any from rrs
         try:
             r = [v[0] for k,v in rrs.items() if str(k).startswith(str(ms.fid))][0]
-            maskH, maskV = np.any(r.feedoffsetsH.mask,axis=-1), np.any(r.feedoffsetsV.mask, axis=-1) # Use masks from feedoffsets!
+            maskH = maskV = np.full(np.shape(r.feedoffsetsH), False) # Use masks from feedoffsets!
+            maskH = np.any(r.feedoffsetsH.mask or maskH, axis=-1) # In case the mask is a scalar False or True
+            maskV = np.any(r.feedoffsetsV.mask or maskV, axis=-1)
         except: # rrs not in synch with mss!?
             maskH, maskV = np.full(np.shape(amH), False), np.full(np.shape(amV), False)
         # Unroll cycles
