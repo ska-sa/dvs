@@ -1485,27 +1485,32 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
             # Filter on environment - potentially cycles > 1
             accept_enviro = [enviro_filter(e) for e in np.atleast_1d(r.info["enviro"])]
-            pick_enviro = lambda cd: cd if (len(np.shape(r.feedoffsetsH))<=2) else np.compress(accept_enviro, cd, axis=0)
-            if np.any(accept_enviro):
+            if np.any(accept_enviro): # Completely remove a set that has no acceptable data
                 # Filter on frequency
                 for fi,f in enumerate(r.f_MHz):
                     if accept_MHz(f):
                         f_MHz.append(r.f_MHz[fi])
-                        feedoffsetsH.append(pick_enviro(r.feedoffsetsH[fi]))
-                        feedoffsetsV.append(pick_enviro(r.feedoffsetsV[fi]))
-                        rpeffH.append(pick_enviro(r.rpeffH[fi]))
-                        rpeffV.append(pick_enviro(r.rpeffV[fi]))
-                        rmsH.append(pick_enviro(r.rmsH[fi]))
-                        rmsV.append(pick_enviro(r.rmsV[fi]))
-                        errbeamH.append(pick_enviro(r.errbeamH[fi]))
-                        errbeamV.append(pick_enviro(r.errbeamV[fi]))
+                        feedoffsetsH.append(r.feedoffsetsH[fi])
+                        feedoffsetsV.append(r.feedoffsetsV[fi])
+                        rpeffH.append(r.rpeffH[fi])
+                        rpeffV.append(r.rpeffV[fi])
+                        rmsH.append(r.rmsH[fi])
+                        rmsV.append(r.rmsV[fi])
+                        errbeamH.append(r.errbeamH[fi])
+                        errbeamV.append(r.errbeamV[fi])
             if (len(f_MHz) > 0):
-                hr = HologResults(el_deg=pick_enviro(r.el_deg),f_MHz=f_MHz,
-                                  feedoffsetsH=np.ma.masked_array(feedoffsetsH,fill_value=np.nan),feedoffsetsV=np.ma.masked_array(feedoffsetsV,fill_value=np.nan),
-                                  rpeffH=np.ma.masked_array(rpeffH,fill_value=np.nan),rpeffV=np.ma.masked_array(rpeffV,fill_value=np.nan),
-                                  rmsH=np.ma.masked_array(rmsH,fill_value=np.nan),rmsV=np.ma.masked_array(rmsV,fill_value=np.nan),
-                                  errbeamH=np.ma.masked_array(errbeamH,fill_value=np.nan),errbeamV=np.ma.masked_array(errbeamV,fill_value=np.nan),
-                                  info={k:pick_enviro(v) for k,v in r.info.items()})
+                # Rule to broadcast over [freq,(cycles),data]
+                brdcst = lambda a, to_match: np.broadcast_to(a,np.shape(to_match)) if (len(np.shape(to_match))<=2) else np.stack([a]*np.shape(to_match)[-1], axis=-1)
+                if (len(np.shape(r.feedoffsetsH)) > 2): # Expand accept_enviro to [freq,cycles]
+                    accept_enviro = brdcst(accept_enviro, r.feedoffsetsH[:,:,0])
+                def masked(cd):
+                    ma = np.ma.masked_array(cd, fill_value=np.nan) # Keep existing mask
+                    ma.mask |= ~brdcst(accept_enviro, cd) # Add enviro mask
+                    return ma
+                hr = HologResults(el_deg=r.el_deg,f_MHz=f_MHz,feedoffsetsH=masked(feedoffsetsH),feedoffsetsV=masked(feedoffsetsV),
+                                  rpeffH=masked(rpeffH),rpeffV=masked(rpeffV),rmsH=masked(rmsH),rmsV=masked(rmsV),
+                                  errbeamH=masked(errbeamH),errbeamV=masked(errbeamV),
+                                  info={k:v for k,v in r.info.items()})
                 filtered[tag].append(hr)
                 
         if (len(filtered[tag]) == 0):
@@ -1585,10 +1590,10 @@ def calculate_ant_eff(mss, rrs=None, ieee=True, fspec_MHz=None, return_ids=False
         try:
             r = [v[0] for k,v in rrs.items() if str(k).startswith(str(ms.fid))][0]
             maskH = maskV = np.full(np.shape(r.feedoffsetsH), False) # Use masks from feedoffsets!
-            maskH = np.any(r.feedoffsetsH.mask or maskH, axis=-1) # In case the mask is a scalar False or True
-            maskV = np.any(r.feedoffsetsV.mask or maskV, axis=-1)
-        except: # rrs not in synch with mss!?
-            maskH, maskV = np.full(np.shape(amH), False), np.full(np.shape(amV), False)
+            maskH = np.any(r.feedoffsetsH.mask | maskH, axis=-1) # In case the mask is a scalar False or True
+            maskV = np.any(r.feedoffsetsV.mask | maskV, axis=-1)
+        except: # If 'ms' is not present in 'rrs' then its results should be suppressed
+            maskH, maskV = np.full(np.shape(amH), rrs is not None), np.full(np.shape(amV), rrs is not None)
         # Unroll cycles
         if (len(np.shape(amH)) == 2): # freq, cycle
             amH, amV, f = np.concat(amH, axis=0), np.concat(amV, axis=0), np.concat([f]*len(amH[0]), axis=0)
