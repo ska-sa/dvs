@@ -1505,9 +1505,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
                                   rpeffH=np.ma.masked_array(rpeffH,fill_value=np.nan),rpeffV=np.ma.masked_array(rpeffV,fill_value=np.nan),
                                   rmsH=np.ma.masked_array(rmsH,fill_value=np.nan),rmsV=np.ma.masked_array(rmsV,fill_value=np.nan),
                                   errbeamH=np.ma.masked_array(errbeamH,fill_value=np.nan),errbeamV=np.ma.masked_array(errbeamV,fill_value=np.nan),
-                                  info={})
-                for k in r.info.keys():
-                    hr.info[k] = pick_enviro(r.info[k])
+                                  info={k:pick_enviro(v) for k,v in r.info.items()})
                 filtered[tag].append(hr)
                 
         if (len(filtered[tag]) == 0):
