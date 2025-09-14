@@ -22,12 +22,14 @@
 2200, 2290 # S-band downlink
 2220, 2250 # WiFi & Bluetooth
 2400, 2485
+2490, 2500
 3130, 3170 # Aircraft RNAV?
 3400, 3700
 # Ku-band (GEOS, Starlink, OneWeb) satellite downlink
-10700, 12253 # End at beacon for INTELSAT 25 (IS-25)
-12255, 12498 # End at beacon for EUTELSAT & INTELSAT
-12503, 12742 # End at beacon for AZERSPACE 2
-12749, 12800 # End of Ku-band downlink
+# Not appropriate to flag out Ku-band GEOS by default - these can be reasonably avoided
+#10700, 12253 # End at beacon for INTELSAT 25 (IS-25)
+#12255, 12498 # End at beacon for EUTELSAT & INTELSAT
+#12503, 12742 # End at beacon for AZERSPACE 2
+#12749, 12800 # End of Ku-band downlink
 13400, 14050 # TDRS
 13500, 13900 # Altimeters e.g. ERS-2, SSO, INVSAT
