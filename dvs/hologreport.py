@@ -208,8 +208,11 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
                         or a tuple (satellite lon [deg E], extra_tilt [deg rotate N to E])
         @param obs_lon, obs_lat: observer's geodetic longitude & latitude [degree] (default: reference coordinate of MeerKAT).
         @return: [e_X, e_Y] components for the specified satellite beacon """
-    if (pol == "RCP"): return [1,-1j]
+    # TODO: remove this HACK after figuring out why it appears that LCP and RCP are swapped (MKE119 Ku-band data 02/2025).
+    #  Is it the data, or the definitions in hologreport?
+    pol = {"RCP":"LCP", "LCP":"RCP"}.get(pol, pol)
     
+    if (pol == "RCP"): return [1,-1j]
     if (pol == "LCP"): return [1, 1j]
     
     D2R = np.pi/180
@@ -228,14 +231,6 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
         tilt_deg = 180 - tilt_deg
     
     return [np.cos(tilt_deg*D2R), -np.sin(tilt_deg*D2R)]
-
-# TODO: remove this HACK after figuring out why it appears that LCP and RCP are swapped (MKE119 Ku-band data 02/2025).
-#  Is it the data, or the definitions in hologreport?
-_e_bn_ = e_bn
-def e_bn_LRRLHACK(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
-    pol = {"RCP":"LCP", "LCP":"RCP"}.get(pol, pol)
-    return _e_bn_(pol, tilt_deg, obs_lon, obs_lat)
-e_bn = e_bn_LRRLHACK
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
@@ -964,7 +959,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         @return: el [deg], freq [MHz], feedoffsetsH_f [mm], feedoffsetsV_f [mm], refl_phase_effH [frac], refl_phase_effV [frac],
                  rmsH [mm], rmsV [mm], errbeamH [frac], errbeamV [frac], info {time_hod,deg_per_sec,feedindexer_deg,enviro:{sun_deg,sun_rel_deg,temp_C,wind_mps,wind_rel_deg,}}
                  Note: feedoffsets are vs freq, refl_phase_eff (as-is) are vs (freq,freq+spec_freqs), rms (as-is) are vs freq,
-                       errbeam are vs (freq,[max,95pct,stddev]).
+                       errbeam are vs (freq,[max,95pct,stddev,smoothing resid]).
     """
     devcmap = devkwargs.pop('cmap', None)
     
@@ -1461,13 +1456,14 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
     plot_eff_freq(sets, labels, fspec_MHz=fspec_MHz, figsize=(14,3))
 
 
-def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None, hod_filter=None):
+def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", enviro_filter=None, hod_filter=None):
     """ Generate a subset of results originally from 'generate_results()'. Omit all HologResults which also appear against 'exclude_tags'
         or not matching 'f_MHz'.
         
         @param results: {tag:[HologResults]}
         @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
         @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default "*" i.e. all)
+        @param elincl_deg: (el_min,el_max) elevation angles [deg] to match (default "*" i.e. all)
         @param enviro_filter: a function like `lambda enviro: enviro['wind_mps'][0]<10` to select results to keep (default None i.e. no filtering)
         @param hod_filter: a function like `lambda hod: hod<4` to select results to keep (default None i.e. no filtering).
                            NB: the time base is defined when the results are generated - generate_results() or standard_report().
@@ -1475,7 +1471,8 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
     filtered = {}
     
     # Only include results for which accept_MHz returns True
-    accept_MHz = lambda MHz: (fincl_MHz == "*" ) or (MHz >= np.min(fincl_MHz) and MHz <= np.max(fincl_MHz))
+    accept_MHz = lambda MHz: (fincl_MHz == "*" ) or (np.min(fincl_MHz) <= MHz and MHz <= np.max(fincl_MHz))
+    accept_el = lambda el: (elincl_deg == "*" ) or (np.min(elincl_deg) <= el and el <= np.max(elincl_deg))
     enviro_filter = (lambda _: True) if (enviro_filter is None) else enviro_filter
     hod_filter = (lambda _: True) if (hod_filter is None) else hod_filter
     
@@ -1488,7 +1485,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", enviro_filter=None
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
             # Filter on environment - potentially cycles > 1
-            accept_enviro = [enviro_filter(e) and hod_filter(h) for e,h in zip(np.atleast_1d(r.info["enviro"]),np.atleast_1d(r.info["time_hod"]))]
+            accept_enviro = [accept_el(el) and enviro_filter(e) and hod_filter(h) for el,e,h in zip(np.atleast_1d(r.el_deg),np.atleast_1d(r.info["enviro"]),np.atleast_1d(r.info["time_hod"]))]
             if np.any(accept_enviro): # Completely remove a set that has no acceptable data
                 # Filter on frequency
                 for fi,f in enumerate(r.f_MHz):
