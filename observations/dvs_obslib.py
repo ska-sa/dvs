@@ -431,13 +431,14 @@ def start_hacked_session(cam, **kwargs):
             user_logger.info('DONE')
             user_logger.info('Ended data capturing session with experiment '
                              'ID %s', session.experiment_id)
-            if session.ants is not None:
+            if (session.ants is not None) and (not session._cam_.dry_run):
                 if session.stow_when_done:
                     user_logger.info('stowing dishes')
-                    if not session._cam_.dry_run: session.ants.req.mode('STOW')
+                    session.ants.req.mode('STOW')
                 else:
                     user_logger.info('stopping dishes')
-                    if not session._cam_.dry_run: session.ants.req.mode('STOP')
+                    session.ants.req.mode('STOP')
+                time.sleep(1) # Especially the Tango-based dishes need this
             user_logger.info('==========================')
     session.end = hacked_end
     
