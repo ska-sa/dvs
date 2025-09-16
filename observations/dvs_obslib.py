@@ -431,7 +431,13 @@ def start_hacked_session(cam, **kwargs):
             user_logger.info('DONE')
             user_logger.info('Ended data capturing session with experiment '
                              'ID %s', session.experiment_id)
-            session.stop_antennas()
+            if session.ants is not None:
+                if session.stow_when_done:
+                    user_logger.info('stowing dishes')
+                    session.ants.req.mode('STOW')
+                else:
+                    user_logger.info('stopping dishes')
+                    session.ants.req.mode('STOP')
             user_logger.info('==========================')
     session.end = hacked_end
     
