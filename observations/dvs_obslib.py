@@ -434,10 +434,10 @@ def start_hacked_session(cam, **kwargs):
             if session.ants is not None:
                 if session.stow_when_done:
                     user_logger.info('stowing dishes')
-                    session.ants.req.mode('STOW')
+                    if not session._cam_.dry_run: session.ants.req.mode('STOW')
                 else:
                     user_logger.info('stopping dishes')
-                    session.ants.req.mode('STOP')
+                    if not session._cam_.dry_run: session.ants.req.mode('STOP')
             user_logger.info('==========================')
     session.end = hacked_end
     
