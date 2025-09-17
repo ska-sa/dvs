@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """ A basic sequence using load_scan mechanism to steer the antennas - without any data capturing.
-    @author: aph@sarao.ac.za """
+    @author: aph@sarao.ac.za
+"""
 
 import time
 import numpy as np
