@@ -113,7 +113,7 @@ with verify_and_connect(opts) as kat:
             
             # Load in segments to avoid potential limitations and allow feedback
             for i in range(0, len(scan_data)//1000+1, 1):
-                segment = slice(i*1000, min((i+1)*1000,len(scan_data)+1))
+                segment = slice(i*1000, min((i+1)*1000,len(scan_data))+1) # End with next segment's starting point ensures the ACU never sees a discontinuity
                 t_t, t_az, t_el = scan_data[segment,0], scan_data[segment,1], scan_data[segment,2]
                 user_logger.info("Loading segment %d: timestamps %.2f - %.2f", i, t_t[0], t_t[-1])
                 if not kat.dry_run:
@@ -126,3 +126,6 @@ with verify_and_connect(opts) as kat:
             if (cycle > 1) and kat.dry_run:
                 user_logger.info("Testing only two cycles for dry-run")
                 break
+        
+        # Ensure last cycle is completed before terminating the script
+        time.sleep(max(0, next_start-time.time()))
