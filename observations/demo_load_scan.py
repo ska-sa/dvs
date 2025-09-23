@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 """ A basic sequence using load_scan mechanism to steer the antennas - without any data capturing.
     @author: aph@sarao.ac.za
 """
@@ -99,7 +99,8 @@ with verify_and_connect(opts) as kat:
             
             # Scan pattern for this cycle. It's a demo, so simply use the exact same az, el for all antennas
             scan_data, cycle_expected_duration = gen_scan(next_start, scan_pattern, min_elevation=opts.horizon)
-            user_logger.info("Current scan estimated to complete at UT %s (duration %.1f minutes)", time.ctime(next_start+cycle_expected_duration+time.timezone), cycle_expected_duration/60.)
+            next_start = scan_data[0,0]
+            user_logger.info("Current scan estimated to complete at %s UTC (duration %.1f minutes)", time.ctime(next_start+cycle_expected_duration+time.timezone), cycle_expected_duration/60.)
             
             # Slew / unwrap to get to start position
             _, t_az, t_el = scan_data[0]
@@ -107,11 +108,11 @@ with verify_and_connect(opts) as kat:
             azeltarget = katpoint.Target('azimuthunwrap,azel,%s,%s'%(t_az, t_el))
             session.track(azeltarget, duration=0, announce=False)
             
-            user_logger.info("Starting scan at %s, in %g seconds time" % (opts.T0, T0-time.time()))
-            time.sleep(max(0, T0-time.time() - opts.prepopulatetime))
+            user_logger.info("Starting scan at %s UTC, in %g seconds time" % (time.ctime(next_start+time.timezone), next_start-time.time()))
+            time.sleep(max(0, next_start-time.time() - opts.prepopulatetime))
             
-            user_logger.info("Commencing scan.")
-            for i in range(0, len(scan_data)//1000+1, 1): # Load in segments to avoid potential limitations and allow feedback
+            # Load in segments to avoid potential limitations and allow feedback
+            for i in range(0, len(scan_data)//1000+1, 1):
                 segment = slice(i*1000, min((i+1)*1000,len(scan_data)+1))
                 t_t, t_az, t_el = scan_data[segment,0], scan_data[segment,1], scan_data[segment,2]
                 user_logger.info("Loading segment %d: timestamps %.2f - %.2f", i, t_t[0], t_t[-1])
