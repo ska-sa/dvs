@@ -208,10 +208,6 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
                         or a tuple (satellite lon [deg E], extra_tilt [deg rotate N to E])
         @param obs_lon, obs_lat: observer's geodetic longitude & latitude [degree] (default: reference coordinate of MeerKAT).
         @return: [e_X, e_Y] components for the specified satellite beacon """
-    # TODO: remove this HACK after figuring out why it appears that LCP and RCP are swapped (MKE119 Ku-band data 02/2025).
-    #  Is it the data, or the definitions in hologreport?
-    pol = {"RCP":"LCP", "LCP":"RCP"}.get(pol, pol)
-    
     if (pol == "RCP"): return [1,-1j]
     if (pol == "LCP"): return [1, 1j]
     
@@ -1358,8 +1354,8 @@ def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=
             # Extend mask based on per-pol indicators
             maskH.append(mask); maskV.append(copy.copy(mask))
             # If 'linH' or 'linV' is True then the opposite polarisation will likely have spurious results, esp. feedoffsets!
-            linH = (pol not in [None,"RCP","LCP"]) and (abs(pol[0]) > mask_xlin*abs(pol[1]))
-            linV = (pol not in [None,"RCP","LCP"]) and (abs(pol[1]) > mask_xlin*abs(pol[0]))
+            linH = (pol not in [None,"RCP","LCP"]) and (abs(pol[1]) > mask_xlin*abs(pol[0]))
+            linV = (pol not in [None,"RCP","LCP"]) and (abs(pol[0]) > mask_xlin*abs(pol[1]))
             if linH:
                 print("INFO: %d @ %.fMHz has extreme degree of linear polarisation, masking out V-pol feedoffsets & errorbeam"%(rec.fid,rec.f_MHz[i]))
                 maskV[-1][:] = True
