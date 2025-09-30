@@ -722,7 +722,7 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
             if ("H" not in hide): ax.plot(el, foH, 'C%do'%p, label="%s_f H"%q)
             if ("V" not in hide): ax.plot(el, foV, 'C%d^'%p, label="%s_f V"%q)
             if (fit != None): # Fit offsets vs. elevation angle
-                offsets = np.concatenate([foH, foV])
+                offsets = np.ma.concatenate([foH, foV])
                 if ("H" in hide): offsets[:len(foH)] = np.nan
                 if ("V" in hide): offsets[-len(foV):] = np.nan
                 _el = np.concatenate([el, el])
