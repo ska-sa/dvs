@@ -1445,7 +1445,7 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
     
     # Make plots
     plot_offsets_el(sets, labels, figsize=(14,3), fit="theil-sen")
-    plot_errbeam_el(sets, labels, figsize=(14,3), extra="RMS")
+    plot_errbeam_el(sets, labels, figsize=(14,3), extra="95pct")
     for eff_ix in range(-len(fspec_MHz),0):
         plot_eff_el(sets, labels, fspec_MHz=fspec_MHz, eff_ix=eff_ix, figsize=(14,3))
     plot_eff_freq(sets, labels, fspec_MHz=fspec_MHz, figsize=(14,3))
