@@ -577,7 +577,7 @@ def _plan_layout_(RS, labels, separate_freqs):
     return layout
 
 
-def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix=-1, EBextra="RMS", figsize=(14,4)):
+def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix=-1, EBextra="95pct", figsize=(14,4)):
     """ Generates a figure of the following metrics vs. hour of day for cycles:
         * sun distance from bore sight, wind speed
         * sun & wind attack angles relative to bore sight
@@ -590,6 +590,7 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
         @param separate_freqs: True to have unique measurement frequencies in different panels (default True)
         @param fspec_MHz: the frequencies corresponding to the last columns in phase_eff [MHz]
         @param eff_ix: selects which efficiency results to plot (as a negative index into 'fspec_MHz') (default -1) """
+    _eb_ = {"95pct":1, "stddev":2, "resid":3}[EBextra]
     layout = _plan_layout_([[_unsqueeze_(r) for r in rs] for rs in RS], labels, separate_freqs)
     
     axes = np.atleast_1d(plt.subplots(5*len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*5*len(layout)))[1])
@@ -645,12 +646,11 @@ def plot_vs_hod(RS, labels, separate_freqs=True, fspec_MHz=(15000,20000), eff_ix
             ax.set_title("%.1fMHz"%(r.f_MHz[f]))
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.legend(["X_f H","Y_f H","Z_f H","X_f V","Y_f V","Z_f V"]); ax.grid(True)
         # Error beam
-        _eb_ = 1 if (EBextra=="RMS") else 2
         ax = axes[5*i+3]
         for f,r,mi in zip(fs,rs,mask_ix):
             ax.errorbar(r.info["time_hod"], r.errbeamH[f,:,0]*100, yerr=r.errbeamH[f,:,3]*100, fmt='C0o') # max
             ax.errorbar(r.info["time_hod"], r.errbeamV[f,:,0]*100, yerr=r.errbeamV[f,:,3]*100, fmt='C1^')
-            ax.plot(r.info["time_hod"], r.errbeamH[f,:,_eb_]*100, 'C0_') # RMS or stddev
+            ax.plot(r.info["time_hod"], r.errbeamH[f,:,_eb_]*100, 'C0_')
             ax.plot(r.info["time_hod"], r.errbeamV[f,:,_eb_]*100, 'C1|')
             if (len(mi)>0): # Overplot the masked out points to give an idea how much EB is affected by masking
                 ax.plot(np.take(r.info["time_hod"],mi), np.take(r.errbeamH.data[f,:,0]*100,mi), 'ko', alpha=0.3)
@@ -682,18 +682,18 @@ def _flatten_(twod, invmask=False): # Concatenates arrays (even zero-dimensional
         ll = [np.ma.masked_where(~r.mask, r.data) if hasattr(r, "mask") else r for r in ll]
     return np.ma.concatenate(ll, axis=0)
 
-def plot_errbeam_el(RS, labels, extra="RMS", figsize=(14,4)): 
+def plot_errbeam_el(RS, labels, extra="95pct", figsize=(14,4)): 
     """ Generates a figure of error beam vs elevation angle
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results """
-    _eb_ = 1 if (extra=="RMS") else 2
+    _eb_ = {"95pct":1, "stddev":2, "resid":3}[extra]
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
     for ax,(fs,rs,lbl) in zip(axes,layout):
         el = _flatten_([r.el_deg for r in rs])
         ax.errorbar(el, _flatten_([r.errbeamH[f,...,0]*100 for f,r in zip(fs,rs)]), yerr=_flatten_([r.errbeamH[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C0o', label="H") # max
-        ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C0_') # RMS or stddev
+        ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C0_')
         ax.errorbar(el, _flatten_([r.errbeamV[f,...,0]*100 for f,r in zip(fs,rs)]), yerr=_flatten_([r.errbeamV[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C1^', label="V")
         ax.plot(el, _flatten_([r.errbeamV[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C1|')
         ax.set_ylabel("Error beam (max & %s) [%%]\n%s"%(extra,lbl)); ax.set_ylim(0,10); ax.grid(True)
