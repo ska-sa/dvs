@@ -11,8 +11,7 @@
 """
 
 import numpy as np
-import pickle
-from .util import open_dataset
+from .util import open_dataset, get_fft_shift_and_gains
 from pylab import figure, subplots, plot, psd, imshow, colorbar, legend, xlabel, ylabel, subplot, ylim, title, suptitle
 import pylab as plt
 
@@ -403,71 +402,6 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     suptitle(_suptitle3_)
     
     return ret
-
-
-def get_fft_shift_and_gains(h5, channel=123, verbose=False):
-    # in v4, fft_shift sensor values are stored per timestamp, but these never change
-    try: # v4 after 2019?
-        fft_shift = h5.sensor['wide_antenna_channelised_voltage_fft_shift'][0]
-    except:
-        try: # v4 up to 2019?
-            fft_shift = h5.sensor['i0_antenna_channelised_voltage_fft_shift'][0]
-        except: # v3 -- but these are always just the defaults?
-            try:
-                fft_shift = h5.file['TelescopeState'].attrs['cbf_fft_shift']
-            except: # < v3
-                fft_shift = "UNKNOWN"
-    
-    # Load requant gains from metadata. for timestamp[0] of each scan, assuming it never changes during a scan
-    eq_gains = []
-    for scan in h5.scans():
-        if (len(h5.timestamps) < 2): continue # Some buggy observations have such tracks -- applied in troubleshoot() too
-        eq_gains.append(dict(zip(["%sh"%a.name for a in h5.ants]+["%sv"%a.name for a in h5.ants],
-                                 [-1 for a in h5.ants]+[-1 for a in h5.ants])))
-        for port in eq_gains[-1].keys():
-            try: # v4 after 2019?
-                eq_gains[-1][port] = h5.sensor['wide_antenna_channelised_voltage_%s_eq'%port][0][channel]
-            except:
-                try: # v4 up to 2019?
-                    eq_gains[-1][port] = h5.sensor['i0_antenna_channelised_voltage_%s_eq'%port][0][channel]
-                except: # v3 -- but these are always just the defaults?
-                    ports = [k for k in h5.sensor.keys() if "cbf_eq_coef" in k]
-                    eq_gains[-1][port] = str(pickle.loads(h5.file[ports[0]][0][1]))
-    
-    band = "UNKNOWN"
-    atten = {} # Attenuation is not stored in the dataset, need to get it from the sensor database
-    # Find the sensor portal, for sensors that are not in the dataset
-    ant = h5.ants[0]
-    for store in ['portal.mkat-rts.karoo.kat.ac.za', 'portal.mkat.karoo.kat.ac.za']:
-        try:
-            h5.sensor.store = store
-            h5.sensor.get(ant.name+"_state")[:]    
-        except:
-            h5.sensor.store = None
-        else:
-            break
-    if h5.sensor.store:
-        subarray = "subarray_%d" % (h5.sensor["Observation/subarray_index"][0] + 1)
-        band = h5.sensor.get(subarray+"_band")[0]
-        try:
-            atten_sensor = {"u":"dig_u_band_rfcu_%spol_attenuation",
-                            "l":"dig_l_band_rfcu_%spol_attenuation",
-                            "s":"rsc_rxs_signalprocessors_sp%s_attenuation",
-                            "x":"dig_x_band_rfcu_%spol_attenuation"}[band]
-            atten_hv = ["01","02"] if (band=="s") else ["h","v"]
-            for ant in h5.ants:
-                for pol in atten_hv:
-                    atten[ant.name+pol] = h5.sensor.get(ant.name+"_"+atten_sensor%pol)[0]
-        except Exception as e:
-            print("WARNING: Encountered an error while retrieving attenuation values - continuing.", type(e), e)
-        
-    if verbose:
-        print("Band: %s" % band)
-        print("CBF FFT shift:%s %s" % (fft_shift, "" if isinstance(fft_shift,str) else bin(fft_shift)))
-        print("CBF requantization (equalization) gains:\n%s" % eq_gains)
-        print("RF attenuation:\n%s" % atten)
-    
-    return fft_shift, eq_gains, atten
 
 
 def troubleshoot(h5, ant, scans="track"):

@@ -3,8 +3,9 @@
     
     @author: aph@sarao.ac.za
 """
-import katdal, os, subprocess, shutil
+import katdal
 import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
+import os, subprocess, shutil, pickle
 import numpy as np
 from analysis import katselib as ksl
 from analysis import katsemat as ksm
@@ -132,6 +133,78 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     dataset.cache_manager = ctx_wrapper(dataset)
     
     return dataset
+
+
+def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
+    """ Determines the RF attenuation, F-engine "fft_shift" and "equalisation gains" that were applied during
+        the observation that generated the dataset.
+        
+        @param dataset: a katdal.Dataset object
+        @param verbose: True to print out the results (default False).
+        @return: (fft_shift, [eq_gains_scan0, ... eq_gains_scanN], atten) - eq_gains and atten as dictionaries indexed by antenna name & polarisation.
+    """
+    # in v4, fft_shift sensor values are stored per timestamp, but these never change
+    try: # v4 after 2019?
+        fft_shift = dataset.sensor['wide_antenna_channelised_voltage_fft_shift'][0]
+    except:
+        try: # v4 up to 2019?
+            fft_shift = dataset.sensor['i0_antenna_channelised_voltage_fft_shift'][0]
+        except: # v3 -- but these are always just the defaults?
+            try:
+                fft_shift = dataset.file['TelescopeState'].attrs['cbf_fft_shift']
+            except: # < v3
+                fft_shift = "UNKNOWN"
+    
+    # Load requant gains from metadata. for timestamp[0] of each scan, assuming it never changes during a scan
+    eq_gains = []
+    for scan in dataset.scans():
+        if (len(dataset.timestamps) < 2): continue # Some buggy observations have such tracks -- applied in troubleshoot() too
+        eq_gains.append(dict(zip(["%sh"%a.name for a in dataset.ants]+["%sv"%a.name for a in dataset.ants],
+                                 [-1 for a in dataset.ants]+[-1 for a in dataset.ants])))
+        for port in eq_gains[-1].keys():
+            try: # v4 after 2019?
+                eq_gains[-1][port] = dataset.sensor['wide_antenna_channelised_voltage_%s_eq'%port][0][channel]
+            except:
+                try: # v4 up to 2019?
+                    eq_gains[-1][port] = dataset.sensor['i0_antenna_channelised_voltage_%s_eq'%port][0][channel]
+                except: # v3 -- but these are always just the defaults?
+                    ports = [k for k in dataset.sensor.keys() if "cbf_eq_coef" in k]
+                    eq_gains[-1][port] = str(pickle.loads(dataset.file[ports[0]][0][1]))
+    
+    band = "UNKNOWN"
+    atten = {} # Attenuation is not stored in the dataset, need to get it from the sensor database
+    # Find the sensor portal, for sensors that are not in the dataset
+    ant = dataset.ants[0]
+    for store in ['portal.mkat-rts.karoo.kat.ac.za', 'portal.mkat.karoo.kat.ac.za']:
+        try:
+            dataset.sensor.store = store
+            dataset.sensor.get(ant.name+"_state")[:]    
+        except:
+            dataset.sensor.store = None
+        else:
+            break
+    if dataset.sensor.store:
+        subarray = "subarray_%d" % (dataset.sensor["Observation/subarray_index"][0] + 1)
+        band = dataset.sensor.get(subarray+"_band")[0]
+        try:
+            atten_sensor = {"u":"dig_u_band_rfcu_%spol_attenuation",
+                            "l":"dig_l_band_rfcu_%spol_attenuation",
+                            "s":"rsc_rxs_signalprocessors_sp%s_attenuation",
+                            "x":"dig_x_band_rfcu_%spol_attenuation"}[band]
+            atten_hv = ["01","02"] if (band=="s") else ["h","v"]
+            for ant in dataset.ants:
+                for pol in atten_hv:
+                    atten[ant.name+pol] = dataset.sensor.get(ant.name+"_"+atten_sensor%pol)[0]
+        except Exception as e:
+            print("WARNING: Encountered an error while retrieving attenuation values - continuing.", type(e), e)
+        
+    if verbose:
+        print("Band: %s" % band)
+        print("CBF FFT shift:%s %s" % (fft_shift, "" if isinstance(fft_shift,str) else bin(fft_shift)))
+        print("CBF requantization (equalization) gains:\n%s" % eq_gains)
+        print("RF attenuation:\n%s" % atten)
+    
+    return fft_shift, eq_gains, atten
 
 
 def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
