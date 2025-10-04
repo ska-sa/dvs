@@ -95,7 +95,7 @@ def smooth_fourier(image, fitdBlevel, model=None, fill_value=np.nan):
     return filtered
 
 def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False):
-    """ @param degree: for 'fourier' this may be a model to use for the kernel """
+    """ @param degree: for 'zernike' this is the max radial order to use, for 'fourier' this may be a model of the kernel to use """
     if (kind.lower()=="zernike"): # Best fits when using all data (ignoring fitdBlevel) except in cases with very large-scale structure (sidelobes!)
         beam.mGx = np.array([fitzernike(g, None, degree) for g in beam.Gx])
         beam.mGy = np.array([fitzernike(g, None, degree) for g in beam.Gy])
@@ -902,9 +902,9 @@ def HOD(rawtime, tzoffset):
 
 
 def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True): # Minor elaboration from katholog.hologreport.geterrorbeam()
-    """ Computes the errorr beam as measuredG_n**2-modelG_n**2, where _n implies normalization to the peak amplitude.
+    """ Computes the error beam as measuredG_n**2-modelG_n**2, where _n implies normalization to the peak amplitude.
     
-        @param meaduredG, modelG: far field amplitude maps, centred on identical grids.
+        @param meaduredG, modelG: far field amplitude maps, centered on identical grids.
         @param meas_extent: the ratio of measured extent to model extent (default 1).
         @param contourdB: error beam below this level (on modelG_n) is set to NaN (default -20).
         @param centered: False to refine the centering of the measured map after zoom (default True).
@@ -1089,22 +1089,28 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 # Error beam within specified contour
                 if (_predicted_ is not None):
                     p_beam = _predicted_[-3]
-                    # TODO: zernike & polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                    if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
-                        model = (p_beam.Gx[0]+p_beam.Gy[0]) if (abs(beam.extent/p_beam.extent-1)<0.3) else None
-                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
-                    if (ci == 0):
-                        smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
-                        # Only figures for the first cycle
+                    if (ci == 0): # Once-off preparations
+                        # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
+                        if (abs(p_beam.extent/beam.extent-1) > 0.05): # Zoom the model pattern in/out to match the measured extent
+                            _predicted_ = [_ for _ in _predicted_]
+                            p_beam = _predicted_[-3] = copy.copy(p_beam)
+                            p_beam.Gx = np.array([katsemat.cropped_zoom(g, p_beam.extent/beam.extent-1, 0,0) for g in p_beam.Gx])
+                            p_beam.Gy = np.array([katsemat.cropped_zoom(g, p_beam.extent/beam.extent-1, 0,0) for g in p_beam.Gy])
+                            p_beam.extent = beam.extent
+                            p_beam.margin = beam.margin
+                        if (beamsmoothing=='fourier'):
+                            beampolydegree = (p_beam.Gx[0]+p_beam.Gy[0])
+                        smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
+                        
                         axes = plt.subplots(1,2, figsize=(14,8))[1]
                         plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                      "\nError Beam")
+                    smoothbeam(beam, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
                     sHV = []
                     resid = lambda G,mG: np.nanstd(np.abs(G)-np.abs(mG))
                     for ax,(lbl,meas,sigma,modl,res) in zip(axes,[("H",beam.mGx[0],resid(beam.Gx[0],beam.mGx[0]),p_beam.mGx[0],errbeamH[-1]),
                                                                   ("V",beam.mGy[0],resid(beam.Gy[0],beam.mGy[0]),p_beam.mGy[0],errbeamV[-1])]):
-                        ext_ = lambda bm: bm.extent/(300.0/bm.freqgrid[0]) # Normalized to HPBW*D
-                        errorbeam = geterrorbeam(meas, modl, ext_(beam)/ext_(p_beam), contourdB=contourdB)
+                        errorbeam = geterrorbeam(meas, modl, contourdB=contourdB)
                         max_eb, fs_eb, std_eb = np.nanmax(np.abs(errorbeam)), np.nanpercentile(np.abs(errorbeam),95), np.nanstd(errorbeam)
                         nn_eb = sigma/np.nanmax(np.abs(meas)) # 1sigma measurement noise in the same scale as errorbeam
                         sHV.append("%s-pol < %.1f[%.1f]%% (95pct %.1f%%, std %.1f%%)"%(lbl, max_eb*100, nn_eb*100, fs_eb*100, std_eb*100))
@@ -1201,9 +1207,17 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                 continue
             _predicted_ = [(abs(f-f_MHz),f,p,b) for f,p,b in zip(predicted.f_MHz,predicted.beacon_pol,predicted.beams) if (p==rec.beacon_pol[0]) and (abs(f-f_MHz)<=DF)]
             pbm = sorted(_predicted_)[0][-1] # Sorted by df, ascending
-            if (beampolydegree and beamsmoothing):
-                # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                smoothbeam(pbm, fitdBlevel=contourdB-3, degree=None if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+            if (beamsmoothing and (beampolydegree is not None)):
+                # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
+                if (abs(pbm.extent/beams[0].extent-1) > 0.05): # Zoom the model pattern in/out to match the measured extent
+                    pbm = copy.copy(pbm)
+                    pbm.Gx = np.array([katsemat.cropped_zoom(g, pbm.extent/beams[0].extent-1, 0,0) for g in pbm.Gx])
+                    pbm.Gy = np.array([katsemat.cropped_zoom(g, pbm.extent/beams[0].extent-1, 0,0) for g in pbm.Gy])
+                    pbm.extent = beams[0].extent
+                    pbm.margin = beams[0].margin
+                if (beamsmoothing=='fourier'):
+                    beampolydegree = (pbm.Gx[0]+pbm.Gy[0])
+                smoothbeam(pbm, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
             C = min(len(beams), ncols)
             R = int(len(beams)/float(ncols) + 0.9999) # Columns & rows per pol
             axes = plt.subplots(2*R, ncols, figsize=(18,2*R*18./ncols))[1]
@@ -1216,14 +1230,10 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                             if (pol == 0): ax.set_title("%.1f [LT]"%HOD(beams[r*C+c].time_avg, tzoffset=tzoffset))
                             if (c == 0): ax.set_ylabel("%s-pol"%("HV"[pol]))
                             bm = beams[r*C+c] # Just for first frequency
-                            if (beampolydegree and beamsmoothing):
-                                # TODO: polynomial smoothing must be done AFTER re-scaling - which currently happens inside geterrorbeam!
-                                if (beamsmoothing=='fourier'): # HACK: In the mean time, use degree=None for 'fourier' if extents are different!
-                                    model = (pbm.Gx[0]+pbm.Gy[0]) if (abs(bm.extent/pbm.extent-1)<0.3) else None
-                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=model if (beamsmoothing=='fourier') else beampolydegree, kind=beamsmoothing)
+                            if (beamsmoothing and (beampolydegree is not None)):
+                                smoothbeam(bm, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
-                            ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
-                            eb = geterrorbeam(meas, modl, ext_(bm)/ext_(pbm), contourdB=contourdB)
+                            eb = geterrorbeam(meas, modl, contourdB=contourdB)
                             ax.imshow(eb, origin='lower', extent=[min(bm.extent,pbm.extent)/2.*i for i in [-1,1,-1,1]], clim=clim, cmap=cmap)
                             ax.set_xlim(*extent); ax.set_ylim(*extent)
                 except IndexError: # End of cycles for this pol, continue to next
