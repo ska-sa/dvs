@@ -254,7 +254,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # Unfortunately the following is not usable for katdal datasets
         # dataset.visibilities = [dataset.visibilities[i] for i in [2,3,0,1]] # ['(V)H','(V)V','(H)H','(H)V'] -> ['(H)H','(H)V','(V)H','(V)V']
         # Either change dataset.pols_to_use or equivalently overload dataset.getvisslice() & swap the order of its outputs.
-        # dataset.pols_to_use is e.g. ['HH','HV','VH','VV'], antenna order is (scan,track); the code maps this in **fixed order** to [xx, xy, yx, yy]
+        # dataset.pols_to_use is e.g. ['HH','HV','VH','VV'], antenna order is (track,scan); the code maps this in **fixed order** to [xx, xy, yx, yy]
         
         # Determine the IDs of antennas where the pol must be swapped
         try: # Old pattern - comma-separated list of antenna order indices
@@ -264,15 +264,16 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
                 polswap = [_.strip() for _ in polswap.split(",")]
             except:
                 pass
-        assert (len(dataset.radialscan_allantenna) == 2) or (polswap == [dataset.trackantennas[0]]), \
-               "Polarisation swap in a multi-antenna dataset can only be corrected for the reference antenna!"
+        assert (len(dataset.radialscan_allantenna) == 2) or (polswap == [scanant]), \
+               "Polarisation swap in a multi-antenna dataset may only be corrected for the scan antenna!"
         # Convert list of antenna IDs to order in products
-        polswap = [0 if (a!=dataset.trackantennas[0]) else 1 for a in polswap]
+        polswap = [0 if (a != scanant) else 1 for a in polswap]
 
         # Swap the order used by all loading & processing
         swap = lambda prod, idx: {'H':'V', 'V':'H'}[prod[0]]+prod[1] if (idx==0) else prod[0]+{'H':'V', 'V':'H'}[prod[1]]
         for idx in polswap:
             dataset.pols_to_use = [swap(p,idx) for p in dataset.pols_to_use]
+    print("Using polarisation order", dataset.pols_to_use)
     dishdiameter = [a.diameter for a in dataset.h5.ants if a.name == scanant][0] # Must be mechanical geometry, not "effective"
     dMHz = max(dMHz, abs(dataset.h5.channel_freqs[1]-dataset.h5.channel_freqs[0])/2/1e6)
     flags_hrs = [] if (flags_hrs is None) else flags_hrs
