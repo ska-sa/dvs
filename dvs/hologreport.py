@@ -1117,7 +1117,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                         sHV.append("%s-pol < %.1f[%.1f]%% (95pct %.1f%%, std %.1f%%)"%(lbl, max_eb*100, nn_eb*100, fs_eb*100, std_eb*100))
                         res.append([max_eb, fs_eb, std_eb, nn_eb])
                         if (ci == 0): # Only figures for the first cycle
-                            im = ax.imshow(errorbeam, origin='lower', extent=[min(beam.extent,p_beam.extent)/2.*i for i in [-1,1,-1,1]]) # Square
+                            im = ax.imshow(errorbeam, origin='lower', extent=[lim(list(beam.margin)+list(p_beam.margin)) for lim in [min,max,min,max]]) # Square
                             ax.contour(p_beam.margin, p_beam.margin, 20*np.log10(np.abs(modl)), np.linspace(contourdB,-3,3), colors='k', alpha=0.2) # Un-distorted pattern
                             ax.contour(beam.margin, beam.margin, 20*np.log10(np.abs(meas)), np.linspace(contourdB,-3,3), colors='y', alpha=0.3) # Distorted pattern
                             ax.set_title("Error Beam %s-pol [frac]"%lbl)
@@ -1236,7 +1236,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                                 smoothbeam(bm, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
                             meas, modl = (bm.mGx[0], pbm.mGx[0]) if (pol == 0) else (bm.mGy[0], pbm.mGy[0])
                             eb = geterrorbeam(meas, modl, contourdB=contourdB)
-                            ax.imshow(eb, origin='lower', extent=[min(bm.extent,pbm.extent)/2.*i for i in [-1,1,-1,1]], clim=clim, cmap=cmap)
+                            ax.imshow(eb, origin='lower', extent=[lim(list(bm.margin)+list(pbm.margin)) for lim in [min,max,min,max]], clim=clim, cmap=cmap)
                             ax.set_xlim(*extent); ax.set_ylim(*extent)
                 except IndexError: # End of cycles for this pol, continue to next
                     continue
