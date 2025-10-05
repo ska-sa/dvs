@@ -1091,11 +1091,12 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     p_beam = _predicted_[-3]
                     if (ci == 0): # Once-off preparations
                         # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
-                        if (abs(p_beam.extent/beam.extent-1) > 0.05): # Zoom the model pattern in/out to match the measured extent
+                        ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
+                        if (abs(ext_(p_beam)/ext_(beam)-1) > 0.01): # Zoom the model pattern in/out to match the measured extent
                             _predicted_ = [_ for _ in _predicted_]
                             p_beam = _predicted_[-3] = copy.copy(p_beam)
-                            p_beam.Gx = np.array([katsemat.cropped_zoom(g, p_beam.extent/beam.extent-1, 0,0) for g in p_beam.Gx])
-                            p_beam.Gy = np.array([katsemat.cropped_zoom(g, p_beam.extent/beam.extent-1, 0,0) for g in p_beam.Gy])
+                            p_beam.Gx = np.array([katsemat.cropped_zoom(g, ext_(p_beam)/ext_(beam)-1, 0,0) for g in p_beam.Gx])
+                            p_beam.Gy = np.array([katsemat.cropped_zoom(g, ext_(p_beam)/ext_(beam)-1, 0,0) for g in p_beam.Gy])
                             p_beam.extent = beam.extent
                             p_beam.margin = beam.margin
                         if (beamsmoothing=='fourier'):
@@ -1209,10 +1210,11 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
             pbm = sorted(_predicted_)[0][-1] # Sorted by df, ascending
             if (beamsmoothing and (beampolydegree is not None)):
                 # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
-                if (abs(pbm.extent/beams[0].extent-1) > 0.05): # Zoom the model pattern in/out to match the measured extent
+                ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
+                if (abs(ext_(pbm)/ext_(beams[0])-1) > 0.01): # Zoom the model pattern in/out to match the measured extent
                     pbm = copy.copy(pbm)
-                    pbm.Gx = np.array([katsemat.cropped_zoom(g, pbm.extent/beams[0].extent-1, 0,0) for g in pbm.Gx])
-                    pbm.Gy = np.array([katsemat.cropped_zoom(g, pbm.extent/beams[0].extent-1, 0,0) for g in pbm.Gy])
+                    pbm.Gx = np.array([katsemat.cropped_zoom(g, ext_(pbm)/ext_(beams[0])-1, 0,0) for g in pbm.Gx])
+                    pbm.Gy = np.array([katsemat.cropped_zoom(g, ext_(pbm)/ext_(beams[0])-1, 0,0) for g in pbm.Gy])
                     pbm.extent = beams[0].extent
                     pbm.margin = beams[0].margin
                 if (beamsmoothing=='fourier'):
