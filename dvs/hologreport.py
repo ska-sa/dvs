@@ -146,7 +146,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
             dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff[-1:]), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
-    # Conjugation changes the direction of travel (+z); then invert the 'll' axis to maintain IEEE definition of RCP.
+    # Conjugation changes the direction of travel (+z); invert the ll coordinate & sign of H-pol (only feedcombine?) to maintain IEEE definition of RCP.
     dataset.visibilities = [np.conj(v) for v in dataset.visibilities]
     dataset.ll = -dataset.ll # This is required to preserve the sign definition of circular pol (flips aperture pattern horizontally).
     
@@ -163,6 +163,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         fcV = dict(feed="V")
     else:
         beacon_pol = e_bn(beacon_pol) if (beacon_pol in ["RCP","LCP"]) else beacon_pol
+        beacon_pol[1] = -beacon_pol[1] # This is necessary to match -ll above
         fcH = dict(feedcombine=[beacon_pol[1],beacon_pol[0],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
         fcV = dict(feedcombine=[0,0,beacon_pol[1],beacon_pol[0]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
