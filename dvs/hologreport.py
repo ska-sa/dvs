@@ -157,7 +157,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     #dataset.mm = -dataset.mm
     
     # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
-    if (beacon_pol is not None):
+    if (beacon_pol is None):
         beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
         fcH = dict(feed="H")
         fcV = dict(feed="V")
