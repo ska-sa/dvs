@@ -157,20 +157,20 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     #dataset.mm = -dataset.mm
     
     # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
-    beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
     if (beacon_pol is not None):
+        beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize)
+        fcH = dict(feed="H")
+        fcV = dict(feed="V")
+    else:
         beacon_pol = e_bn(beacon_pol) if (beacon_pol in ["RCP","LCP"]) else beacon_pol
         fcH = dict(feedcombine=[beacon_pol[1],beacon_pol[0],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
         fcV = dict(feedcombine=[0,0,beacon_pol[1],beacon_pol[0]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (incl. measured - see 'load_data()')
-        _H = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcH)
+        beamcube = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcH)
         _V = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcV)
-        beamcube.Gx = _H.Gx; beamcube.Gy = _V.Gy
-        beamcube.Dx = 0*_H.Dx; beamcube.Dy = 0*_V.Dy # We use feedcombine to get beam(XX) = G + D so then the D terms must be zeroed to avoid potential double accounting  
-    else:
-        fcH = dict(feed="H")
-        fcV = dict(feed="V")
+        beamcube.Gy = _V.Gy; beamcube.Dy = _V.Dy
+        beamcube.Dx *= 0; beamcube.Dy *= 0 # feedcombine only yields Gx or Gy (Gx=Dx=Dy=Gy=feedcombine{vis}) so D terms are wrong
     apmapH = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcH,flip) for k,v in d.items()})
     apmapV = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcV,flip) for k,v in d.items()})
     
