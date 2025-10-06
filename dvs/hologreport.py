@@ -30,11 +30,6 @@ import zernike
 import pylab as plt
 
 
-FID2FN = {} # Override fid -> filename
-TIME_OFFSETS = {} # Base timingoffset to load data with, e.g. where global synch failed.
-fid2fn = lambda fid: FID2FN.get(fid, "http://archive-gw-1.kat.ac.za/%d/%d_sdp_l0.full.rdb"%(fid,fid))
-
-
 
 def fitzernike(pattern, fitdBlevel, n, normalized=True, fill_value=np.nan):
     """ Fit a Zernike polynomial model to a 2D map.
@@ -494,10 +489,10 @@ def BDF(apmap, D, f, k=0.36):
 
 
 # Data structure for processed datasets
-_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","tags"]) # Work-around for defaults keyword not available in current version of python
-ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,tags=None: _ResultSet_(
+_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","timingoffset","tags"]) # Work-around for defaults keyword not available in current version of python
+ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,timingoffset=0,tags=None: _ResultSet_(
                 fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
-                clipextent,cycles,overlap_cycles,flags_hrs,polswap,[] if tags==None else tags)
+                clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if tags==None else tags)
 
 def load_records(holo_recs, scanant, DISHPARAMS, clipextent=None, is_loadscan=False, timingoffset=0, inspect_DT=False, flush=False, **load_kwargs):
     """ Loads the datasets into the records' results fields. Uses global TIME_OFFSETS.
@@ -510,10 +505,8 @@ def load_records(holo_recs, scanant, DISHPARAMS, clipextent=None, is_loadscan=Fa
         @param flush: True to re-load the data for the records, False to skip if already loaded (default False).
     """
     print("WARNING: load_records() is deprecated, use load_data() directly!")
-    global TIME_OFFSETS
     for rec in holo_recs:
         filename = fid2fn(rec.fid)
-        T0 = TIME_OFFSETS.get(rec.fid, 0)
         clip = rec.clipextent if (clipextent is None) else clipextent
         if flush:
             del rec.beams[:], rec.apmapsH[:], rec.apmapsV[:]
@@ -521,14 +514,14 @@ def load_records(holo_recs, scanant, DISHPARAMS, clipextent=None, is_loadscan=Fa
             cycles = dict(overlap_cycles=rec.overlap_cycles)
             load_cycles = rec.cycles if ((rec.cycles is None) or not isinstance(rec.cycles, int)) else [rec.cycles]
             cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = load_cycles
-            b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0+timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)
+            b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=rec.timingoffset+timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)
             if isinstance(rec.cycles, int):
                 b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
             rec.beams.extend(b); rec.apmapsH.extend(aH); rec.apmapsV.extend(aV)
             if inspect_DT:
                 cycle0 = 0 if (load_cycles is None) else load_cycles[0]
                 cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = [cycle0]
-                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=T0, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)[0]
+                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=rec.timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)[0]
                 plt.figure(figsize=(12,6))
                 plt.subplot(1,2,1); np.atleast_1d(b0[0])[0].plot("Gx", doclf=False); plt.title("%d: timingoffset = 0"%rec.fid) # First frequency, first cycle
                 plt.subplot(1,2,2); np.atleast_1d(b[0])[0].plot("Gx", doclf=False); plt.title("timingoffset = %g"%timingoffset)
