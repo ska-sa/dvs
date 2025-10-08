@@ -141,12 +141,11 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
             dataset = katholog.Dataset("%s/MK_GDSatcom_%d%s.mat"%(root,freqMHz,ff[-1:]), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     except IOError:
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
+    # Don't flip any dimension in ApertureMap as that obstructs understanding - flips relate to polarisation!
+    flip = dict(flipx=False,flipy=False,flipz=False)
     # Conjugation changes the direction of travel (+z); invert the ll coordinate & sign of H-pol (only feedcombine?) to maintain IEEE definition of RCP.
     dataset.visibilities = [np.conj(v) for v in dataset.visibilities]
     dataset.ll = -dataset.ll # This is required to preserve the sign definition of circular pol (flips aperture pattern horizontally).
-    
-    # Don't flip any dimension in ApertureMap as that obstructs understanding - flips relate to polarisation!
-    flip = dict(flipx=False,flipy=False,flipz=False)
     # NB: This "legacy flip" used to change katholog's definition of '+mm' for predicted patterns to match '+mm' for measured patterns.
     #      Now moved to 'load_data()' to rather get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
     #dataset.mm = -dataset.mm
