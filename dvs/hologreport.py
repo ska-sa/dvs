@@ -143,9 +143,11 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         dataset = katholog.Dataset("%s/%s_%d_%d%s.mat"%(root,band,el_deg,freqMHz,ff), telescope, freq_MHz=freqMHz, method='raw', **kwargs)
     # Don't flip any dimension in ApertureMap as that obstructs understanding - flips relate to polarisation!
     flip = dict(flipx=False,flipy=False,flipz=False)
-    # Conjugation changes the direction of travel (+z); invert the ll coordinate & sign of H-pol (only feedcombine?) to maintain IEEE definition of RCP.
+    # Predicted patterns are generated in "transmit" sense - must convert to "receive" to be comparable to measured patterns. 
+    # Antenna reciprocity is a manifestation of time reversal symmetry - everything remains unchanged except the sign of time!
+    # Conjugation inverts the sign of time (-j*omega*t -> +j*omega*t), which reverses the sense of circular polarisation!
     dataset.visibilities = [np.conj(v) for v in dataset.visibilities]
-    dataset.ll = -dataset.ll # This is required to preserve the sign definition of circular pol (flips aperture pattern horizontally).
+    dataset.ll = -dataset.ll # Flip pattern horizontally to match reversed direction of travel. Along with sign flip of e_H this preserves the sense of circular pol
     # NB: This "legacy flip" used to change katholog's definition of '+mm' for predicted patterns to match '+mm' for measured patterns.
     #      Now moved to 'load_data()' to rather get definition of '+mm' for measured patterns to match '+mm' for predicted patterns.
     #dataset.mm = -dataset.mm
@@ -156,8 +158,8 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         fcH = dict(feed="H")
         fcV = dict(feed="V")
     else:
-        beacon_pol = e_bn(beacon_pol) if (beacon_pol in ["RCP","LCP"]) else beacon_pol
-        beacon_pol = (beacon_pol[0], -beacon_pol[1]) # Flip the sign of H to match -ll above
+        beacon_pol = e_bn(beacon_pol, tilt_deg=0, obs_lat=1) # Convert labels to vector components
+        beacon_pol = (beacon_pol[0], -beacon_pol[1]) # Flip the sign of e_H to match -ll above
         fcH = dict(feedcombine=[beacon_pol[1],beacon_pol[0],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
         fcV = dict(feedcombine=[0,0,beacon_pol[1],beacon_pol[0]]) # feedcombine: [Gx, Dx, Dy, Gy]
         # Modify Gx & Gy to match measured, since measured patterns include the polarisation state of the beacon.
@@ -203,7 +205,10 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
                         or a tuple (satellite lon [deg E], extra_tilt [deg])
         @param obs_lon, obs_lat: observer's geodetic longitude & latitude [degree] (default: reference coordinate of MeerKAT).
         @return: [e_X, e_Y] components for the specified satellite beacon """
-    X,Y = {"RCP":[1,-1j], "LCP":[1, 1j], "V":[1, 0], "H":[0, 1]}.get(pol, pol)
+    try:
+        X,Y = {"RCP":[1,-1j], "LCP":[1, 1j], "V":[1, 0], "H":[0, 1]}[pol]
+    except:
+        X,Y = pol
     
     D2R = np.pi/180
     
