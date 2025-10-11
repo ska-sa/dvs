@@ -350,7 +350,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     
     loadscan_cycles = loadscan_cycles if (loadscan_cycles) else kwargs.get("select_loadscan_cycle",None)
     if (loadscan_cycles): # Identify & load ALL specified "loadscan"-type cycles
-        print('Using specified cycles:', loadscan_cycles)
+        print('Using specified cycles:', loadscan_cycles, ', combining', overlap_cycles, 'consecutive cycles')
         loadscan_cycles = np.atleast_1d(loadscan_cycles)
         beams, apmapsH, apmapsV = [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)]
         for ic, select_loadscan_cycle in enumerate(loadscan_cycles):
@@ -402,7 +402,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     for f_MHz in np.atleast_1d(freqMHz):
         _load_cycle_(f_MHz, beams, apmapsH, apmapsV)
     
-    if (telescope == "MeerKAT"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
+    if telescope.lower().startswith("meerkat"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
         for apmap in apmapsH+apmapsV:
             apmap.unwrapmaskmap = apmap.unwrapmaskmap[::-1,:]; apmap.analyse()
     
@@ -498,40 +498,35 @@ ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=N
                 fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
                 clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if tags==None else tags)
 
-def load_records(holo_recs, scanant, DISHPARAMS, clipextent=None, is_loadscan=False, timingoffset=0, inspect_DT=False, flush=False, **load_kwargs):
-    """ Loads the datasets into the records' results fields. Uses global TIME_OFFSETS.
-        Results are loaded into holo_recs(ResultSet).beams, apmapsH & apmapsV and have the same shape as (ResultSet).cycles.
+
+def check_timingoffset(fn, freqMHz, ant, timingoffset=0, dMHz=0.1, extent=0.8, cycle=0, telescopename="SKA"):
+    """ Plot beam patterns to allow inspection for 'timingoffset'. This presents as scalloping around the
+        contours.
+        ADVICE: only proceed with a timingoffset if it makes an obvious difference in these patterns.
         
-        @param holo_recs: a list of 'ResultSet's
-        @param clipextent: override the value defined in the records' 'clipextent' attribute (default None)
-        @param timingoffset: combined with global 'TIME_OFFSETS' & passed to 'load_data()'
-        @param inspect_DT: True to load data also with timingoffset=0 to generate a debug plot (default False)
-        @param flush: True to re-load the data for the records, False to skip if already loaded (default False).
+        @param fn: filename/URL to the dataset
+        @param freqMHz: the 
+        @param ant: the scan antenna in the dataset to plot patterns for
+        @param timingoffset: time offset to apply, or list of offsets (default 0)
+        @param cycle: index of the particular cycle to load, if there are multiple cycles defined (default 0)
+        @param dMHz: bandwidth to load [MHz] (default 0.1)
+        @param extent: range of x & y to plot [deg] (default 0.8)
     """
-    print("WARNING: load_records() is deprecated, use load_data() directly!")
-    for rec in holo_recs:
-        filename = fid2fn(rec.fid)
-        clip = rec.clipextent if (clipextent is None) else clipextent
-        if flush:
-            del rec.beams[:], rec.apmapsH[:], rec.apmapsV[:]
-        if (len(rec.beams) == 0): # Don't overwrite previous results
-            cycles = dict(overlap_cycles=rec.overlap_cycles)
-            load_cycles = rec.cycles if ((rec.cycles is None) or not isinstance(rec.cycles, int)) else [rec.cycles]
-            cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = load_cycles
-            b, aH, aV = load_data(filename, rec.f_MHz, scanant, DISHPARAMS=DISHPARAMS, timingoffset=rec.timingoffset+timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)
-            if isinstance(rec.cycles, int):
-                b, aH, aV = np.asarray(b)[:,0], np.asarray(aH)[:,0], np.asarray(aV)[:,0] # Leave the first dimension, which is frequency
-            rec.beams.extend(b); rec.apmapsH.extend(aH); rec.apmapsV.extend(aV)
-            if inspect_DT:
-                cycle0 = 0 if (load_cycles is None) else load_cycles[0]
-                cycles['loadscan_cycles' if is_loadscan else 'load_cycles'] = [cycle0]
-                b0 = load_data(filename, rec.f_MHz[0], scanant, DISHPARAMS=DISHPARAMS, timingoffset=rec.timingoffset, polswap=rec.polswap, clipextent=clip, **cycles, **load_kwargs)[0]
-                plt.figure(figsize=(12,6))
-                plt.subplot(1,2,1); np.atleast_1d(b0[0])[0].plot("Gx", doclf=False); plt.title("%d: timingoffset = 0"%rec.fid) # First frequency, first cycle
-                plt.subplot(1,2,2); np.atleast_1d(b[0])[0].plot("Gx", doclf=False); plt.title("timingoffset = %g"%timingoffset)
-        else:
-            print(filename)
-        print(rec)
+    timingoffsets = np.atleast_1d(timingoffset)
+    ds = [katholog.Dataset(fn, telescopename, scanantname=ant, method='gainrawabs', timingoffset=t_o) for t_o in timingoffsets]
+    for d in ds:
+        d.flagdata(cycle=cycle, group=0)
+    N = len(ds)
+    fid = fn.split('/')[-1]
+    lim = (-extent/2, extent/2)
+    for f in np.atleast_1d(freqMHz):
+        plt.figure(figsize=(8*len(ds),3+len(ds)))
+        for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
+            b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
+            plt.subplot(1,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %d\nGx timingoffset=%g"%(fid,f,cycle,t_o))
+            plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
+            plt.subplot(1,2*N,2*n+2); b.plot('Gy', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("\nGy")
+            plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gy[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
 
 
 # Data structure for results generated by 'standard_report()'
@@ -966,7 +961,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     try:
         pp.capture_stdout(echo=True)
         print("Target: %s  [dataset %s]"%(b0.dataset.target.name, measured.fid))
-        print("Processing tags: %s"%measured.tags)
+        print("Processing tags: %s"%measured.tags, "timingoffset=%gsec"%measured.timingoffset)
         
         for f_MHz, beacon_pol, beams, apmapsH, apmapsV in zip(measured.f_MHz, measured.beacon_pol, measured.beams, measured.apmapsH, measured.apmapsV):
             print("\n"+ "-"*20 + " %.1fMHz"%f_MHz)
@@ -993,6 +988,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 _apmapH, _apmapV = apmapH, apmapV # Un-modified copies, in case they get modified below
                 # If predicted maps provided, generate copies of measured maps that are corrected by predicted maps
                 if (_predicted_ is not None):
+                    print("Compensating for feed pattern, assuming polarisation basis %s:"%beacon_pol)
                     p_apmapH, p_apmapV = _predicted_[-2:]
                     scale = apmapH.freqMHz/p_apmapH.freqMHz # First order scaling, if DF is small
                     apmapH = re_analyse(apmapH, feedphasemap=p_apmapH.unwrappedphasemap*scale) # Takes care of aperture phase AND squint
@@ -1135,7 +1131,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             if (_predicted_ is not None):
                 beamp,apmapHp,apmapVp = _predicted_[-3:]
                 plt.figure(figsize=(14,18))
-                plt.suptitle("Reference patterns @ %.1fMHz"%_predicted_[1])
+                plt.suptitle("Reference patterns @ %.1fMHz, polarisation basis %s"%(_predicted_[1],beacon_pol))
                 plt.subplot(4,2,1); beamp.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Gx")
                 plt.subplot(4,2,2); beamp.plot("Dx", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dx")
                 plt.subplot(4,2,3); beamp.plot("Dy", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dy")
@@ -1385,6 +1381,8 @@ def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=
             rr = results.get(t,[])
             rr.append(r)
             results[t] = rr
+        
+        print("\n")
     return results
 
 collect_reports = generate_results # DEPRECATED!
