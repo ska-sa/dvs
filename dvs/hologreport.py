@@ -246,6 +246,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles. NB: beams "x"=H-pol, "y"=V-pol
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
     """
+    # TODO: implement overlap_cycles for loadscan!?
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method='gainrawabs', timingoffset=timingoffset, **kwargs)
     dataset.band = dataset.h5.spectral_windows[0].band # Cache this value for later reference
@@ -522,6 +523,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, dMHz=0.1, extent=0.8, c
     for f in np.atleast_1d(freqMHz):
         plt.figure(figsize=(8*len(ds),3+len(ds)))
         for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
+            # TODO: also report boresight SNR
             b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
             plt.subplot(1,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %d\nGx timingoffset=%g"%(fid,f,cycle,t_o))
             plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
@@ -1085,12 +1087,14 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     p_beam = _predicted_[-3]
                     if (ci == 0): # Once-off preparations
                         # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
-                        ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
-                        if (abs(ext_(p_beam)/ext_(beam)-1) > 0.01): # Zoom the model pattern in/out to match the measured extent
+                        scale = (p_beam.extent/(300/p_beam.freqgrid[0])) / (beam.extent/(300/beam.freqgrid[0])) # Normalized to HPBW*D
+                        if (abs(scale-1) > 0.005): # Zoom the model pattern in/out to match the measured extent
                             _predicted_ = [_ for _ in _predicted_]
                             p_beam = _predicted_[-3] = copy.copy(p_beam)
-                            p_beam.Gx = np.array([katsemat.cropped_zoom(g, ext_(p_beam)/ext_(beam)-1, 0,0) for g in p_beam.Gx])
-                            p_beam.Gy = np.array([katsemat.cropped_zoom(g, ext_(p_beam)/ext_(beam)-1, 0,0) for g in p_beam.Gy])
+                            # Imaginary part of beam patterns get very distorted by splines!
+                            zoom = lambda pat, frac: katsemat.cropped_zoom(np.real(pat), frac, 0,0, order=2) + 1j*katsemat.cropped_zoom(np.imag(pat), frac, 0,0, order=0)
+                            p_beam.Gx = np.array([zoom(g, scale-1) for g in p_beam.Gx])
+                            p_beam.Gy = np.array([zoom(g, scale-1) for g in p_beam.Gy])
                             p_beam.extent = beam.extent
                             p_beam.margin = beam.margin
                         if (beamsmoothing=='fourier'):
@@ -1204,11 +1208,13 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
             pbm = sorted(_predicted_)[0][-1] # Sorted by df, ascending
             if (beamsmoothing and (beampolydegree is not None)):
                 # Smoothing may introduce artifacts that depend on scale - so re-scale predicted model beams to match measured
-                ext_ = lambda bm: bm.extent/(300/bm.freqgrid[0]) # Normalized to HPBW*D
-                if (abs(ext_(pbm)/ext_(beams[0])-1) > 0.01): # Zoom the model pattern in/out to match the measured extent
+                scale = (pbm.extent/(300/pbm.freqgrid[0])) / (beams[0].extent/(300/beams[0].freqgrid[0])) # Normalized to HPBW*D
+                if (abs(scale-1) > 0.005): # Zoom the model pattern in/out to match the measured extent
+                    # Imaginary part of beam patterns get very distorted by splines!
+                    zoom = lambda pat, frac: katsemat.cropped_zoom(np.real(pat), frac, 0,0, order=2) + 1j*katsemat.cropped_zoom(np.imag(pat), frac, 0,0, order=0)
                     pbm = copy.copy(pbm)
-                    pbm.Gx = np.array([katsemat.cropped_zoom(g, ext_(pbm)/ext_(beams[0])-1, 0,0) for g in pbm.Gx])
-                    pbm.Gy = np.array([katsemat.cropped_zoom(g, ext_(pbm)/ext_(beams[0])-1, 0,0) for g in pbm.Gy])
+                    pbm.Gx = np.array([zoom(g, scale-1) for g in pbm.Gx])
+                    pbm.Gy = np.array([zoom(g, scale-1) for g in pbm.Gy])
                     pbm.extent = beams[0].extent
                     pbm.margin = beams[0].margin
                 if (beamsmoothing=='fourier'):
