@@ -500,7 +500,7 @@ ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=N
                 clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if tags==None else tags)
 
 
-def check_timingoffset(fn, freqMHz, ant, timingoffset=0, dMHz=0.1, extent=0.8, cycle=0, telescopename="SKA"):
+def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, extent=None, telescopename="SKA"):
     """ Plot beam patterns to allow inspection for 'timingoffset'. This presents as scalloping around the
         contours.
         ADVICE: only proceed with a timingoffset if it makes an obvious difference in these patterns.
@@ -511,24 +511,46 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, dMHz=0.1, extent=0.8, c
         @param timingoffset: time offset to apply, or list of offsets (default 0)
         @param cycle: index of the particular cycle to load, if there are multiple cycles defined (default 0)
         @param dMHz: bandwidth to load [MHz] (default 0.1)
-        @param extent: range of x & y to plot [deg] (default 0.8)
+        @param extent: range of x & y to plot [deg], or None to only plot SNR stats (default None)
     """
     timingoffsets = np.atleast_1d(timingoffset)
     ds = [katholog.Dataset(fn, telescopename, scanantname=ant, method='gainrawabs', timingoffset=t_o) for t_o in timingoffsets]
-    for d in ds:
-        d.flagdata(cycle=cycle, group=0)
+    for dataset in ds:
+        dataset.flagdata(cycle=cycle, group=0)
+        # 'rawonboresight'
+        trackant = dataset.radialscan_allantenna[dataset.trackantennas[0]]
+        polproducts = [("%s%s"%(ant,p[0].lower()), "%s%s"%(trackant,p[1].lower())) for p in dataset.pols_to_use] # Same order used in dataset for products [xx, xy, yx, yy]
+        cpindices = []
+        for p in polproducts: # The correlator's ordering matters and some times it is the other way round
+            cpi = np.all(dataset.h5.corr_products==p,axis=1) | np.all(dataset.h5.corr_products==list(reversed(p)), axis=1)
+            cpindices.append(np.flatnonzero(cpi)[0])
+        polproducts = [p[0]+'-'+p[1] for p in polproducts] # Convert to simpler format for reporting.
+        bore_dumps = (dataset.ll)**2+(dataset.mm)**2 < (dataset.radialscan_sampling)**2
+        dumps = np.full_like(bore_dumps, False)
+        dumps[dataset.time_range] = bore_dumps[dataset.time_range]
+        timestamps = dataset.h5.timestamps[dumps]
+        chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-freqMHz) <= dMHz]
+        rawonaxis = [dataset.h5.vis[dumps,chan,p] for p in cpindices] # (prod, time, freq)
+        dataset.rawonboresight = (timestamps, np.mean(rawonaxis, axis=2), polproducts) # [1]=(prod, time)
+    
     N = len(ds)
     fid = fn.split('/')[-1]
-    lim = (-extent/2, extent/2)
     for f in np.atleast_1d(freqMHz):
-        plt.figure(figsize=(8*len(ds),3+len(ds)))
-        for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
-            # TODO: also report boresight SNR
-            b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
-            plt.subplot(1,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %d\nGx timingoffset=%g"%(fid,f,cycle,t_o))
-            plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
-            plt.subplot(1,2*N,2*n+2); b.plot('Gy', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("\nGy")
-            plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gy[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
+        fig = plt.figure(figsize=(8*len(ds),5+len(ds)))
+        if (extent is not None):
+            lim = (-extent/2, extent/2)
+            for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
+                b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
+                plt.subplot(2,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %d\nGx timingoffset=%g"%(fid,f,cycle,t_o))
+                plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
+                plt.subplot(2,2*N,2*n+2); b.plot('Gy', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("\nGy")
+                plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gy[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
+        
+        snr = np.array([snr_mask(d)[0][0] for d in ds]) # (cycles,products) and we've loaded only one cycle
+        if (len(fig.axes) > 0): plt.subplot(2,1,2)
+        else: plt.title("%s @ %gMHz cycle %d\nSNR vs timingoffsets"%(fid,f,cycle))
+        plt.plot(timingoffsets, snr[...,0], '+-'); plt.legend(["Amplitude SNR"],loc='upper left')
+        plt.gca().twinx().plot(timingoffsets, snr[...,1], 'o--'); plt.legend(["Phase RMS"],loc='upper right')
 
 
 # Data structure for results generated by 'standard_report()'
