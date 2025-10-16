@@ -108,7 +108,7 @@ def smoothbeam(beam, fitdBlevel, degree, kind="zernike", d_terms=False):
         beam.fitpoly(fitdBlevel=fitdBlevel, degree=degree)
 
 
-def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="../models/beam-patterns/ska", applypointing='perfeed', gridsize=512, **kwargs):
+def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="../models/beam-patterns/ska", applypointing='perfeed', gridsize=256, **kwargs):
     """ Loads predicted holography datasets and projected to physical geometry as specified by 'DISHPARAMS'.
         Simulated patterns are converted from native "transmit" to "receive".
         File naming convention: either MK_GDSatcom_{freqMHz}.mat or {band}_{el_deg}_{freqMHz}.mat
@@ -158,7 +158,7 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         fcH = dict(feed="H")
         fcV = dict(feed="V")
     else:
-        beacon_pol = e_bn(beacon_pol, tilt_deg=0, obs_lat=1) # Convert labels to vector components
+        beacon_pol = e_bn(beacon_pol, obs_lat=1) # Convert labels to vector components (avoid inversion for southern hemisphere) 
         beacon_pol = (beacon_pol[0], -beacon_pol[1]) # Flip the sign of e_H to match -ll above
         fcH = dict(feedcombine=[beacon_pol[1],beacon_pol[0],0,0]) # feedcombine: [Gx, Dx, Dy, Gy]
         fcV = dict(feedcombine=[0,0,beacon_pol[1],beacon_pol[0]]) # feedcombine: [Gx, Dx, Dy, Gy]
@@ -229,7 +229,7 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
-              loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=512, debug=False, **kwargs):
+              loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=256, debug=False, **kwargs):
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
         @param fn: the filename or URL for the dataset.
