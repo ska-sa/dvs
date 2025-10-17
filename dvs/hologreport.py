@@ -536,7 +536,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
     N = len(ds)
     fid = fn.split('/')[-1]
     for f in np.atleast_1d(freqMHz):
-        fig = plt.figure(figsize=(8*len(ds),5+len(ds)))
+        fig = plt.figure(figsize=(8*max(2,len(ds)),5-max(2,len(ds))))
         if (extent is not None):
             lim = (-extent/2, extent/2)
             for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
