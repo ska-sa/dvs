@@ -100,7 +100,7 @@ class start_nocapture_session(object):
     def label(self, *a, **k): # Add timestamped label to HDF5 file. Ignored!
         pass
     
-    def standard_setup(self, *a, **kwargs): # Like start_hacked_session#hacked_setup(), bust the basics that apply to dishes 
+    def standard_setup(self, *a, **kwargs): # Like start_hacked_session#hacked_setup(), but the basics that apply to dishes 
         if (not self.dry_run):
             # Ensure the Ku-band signal generator matches the center frequency of the subarray
             match_ku_siggen_freq(self._cam_)
@@ -216,6 +216,7 @@ def match_ku_siggen_freq(cam, override=False):
 
 
 __tilt_corr_allowed__ = True
+__d_tilt_OK__ = ["e121","e117"] # These tilt installations believed to be OK
 
 def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     """ Temporary hack to disable the MKE ACU static pointing corrections and set tilt corrections according
@@ -252,27 +253,30 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
         
         @param ants: list of instances of CAM Receptor/Dish Proxy.
         @param tilt_enabled: ACU's internal inclinometer-based corrections (default True)
-        @param force: if True then force tilt to the specified value, else will disable tilt for all except e121 & e117 (default False)
+        @param force: if True then force tilt to the specified value, else will disable tilt for all except those in __d_tilt_OK__ (default False)
     """
-    global __tilt_corr_allowed__
+    global __tilt_corr_allowed__, __d_tilt_OK__
     mod_spem, mod_tilt, force_tilt = [], [], []
-    # Mapping to match https://github.com/ska-sa/katcamconfig/pull/955/files
-    d_numbers = {"s0000":64, "e121":65, "e119":66, "e118":67, "e107":68, "e060":69, "e105":70, "e110":71, # MKE
-                 "e115":72, "e117":73, "e116":74, "e017":75, "e018":76, "e020":77, "e023":78, # MKE
-                 "s0063":90, "s0001":91, "s0100":92, "s0036":93} # SKA - TBC
-    d_tilt_OK = ["e121","e117"] # These tilt installations believed to be OK
+    
     for a in ants:
-        if (a.name in d_numbers.keys()):
-            lmc_root = "10.96.%d.100:10000/mid_dsh_0%s"%(d_numbers[a.name], a.name[1:])
-            dsm = tango.DeviceProxy(lmc_root+'/lmc/ds_manager')
+        if hasattr(a.sensor, "dsm_tango_address"):
+            dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
             # Enforce our rules for TILT
-            tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in d_tilt_OK))
-            if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
-                mod_tilt.append(a.name)
-                dsm.tiltPointCorrEnabled = False
-            elif tilt_corr and not dsm.tiltPointCorrEnabled:
-                force_tilt.append(a.name)
-                dsm.tiltPointCorrEnabled = True
+            tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
+            if hasattr(dsm, "tiltPointCorrEnabled"):
+                if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
+                    mod_tilt.append(a.name)
+                    dsm.tiltPointCorrEnabled = False
+                elif tilt_corr and not dsm.tiltPointCorrEnabled:
+                    force_tilt.append(a.name)
+                    dsm.tiltPointCorrEnabled = True
+            elif hasattr(dsm, "tiltOnInput"):
+                if dsm.tiltOnInput and not tilt_corr: # It should be off but is on
+                    mod_tilt.append(a.name)
+                    dsm.tiltOnInput = False
+                elif tilt_corr and not dsm.tiltOnInput:
+                    force_tilt.append(a.name)
+                    dsm.tiltOnInput = True
             ## SPEM & TEMP must always be disabled
             #if dsm.staticPointCorrEnabled:
             #    mod_spem.append(a)
@@ -281,6 +285,7 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
             #dsm.write_attributes([("tiltPointCorrEnabled", tilt_corr),
             #                      ("staticPointCorrEnabled", False), ("tempPointCorrEnabled", False)
             #                      ], wait=True)
+    
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: Disabled SPEM & TEMP Corrections on %s" % ",".join([_.name for _ in set(mod_spem)-set(mod_tilt)]))
     if (len(mod_tilt) > 0):
