@@ -132,15 +132,15 @@ with verify_and_connect(opts) as kat:
         if opts.no_corrections and not kat.dry_run: # Disable tilt correction
             for ant in kat.ants:
                 if hasattr(ant.sensor, "ap_point_error_tiltmeter_enabled"):
-                    mkat_ants.append(ant.name)
+                    mkat_ants.append(ant)
                     TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
                     ant.req.ap_enable_point_error_tiltmeter(False)
                 elif hasattr(ant.sensor, "dsm_tiltPointCorrEnabled"):
-                    mke_ants.append(ant.name)
+                    mke_ants.append(ant)
                     TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
                 else:
-                    ska_ants.append(ant.name)
-                    TILT_state[ant.name] = False
+                    ska_ants.append(ant)
+                    TILT_state[ant.name] = ant.sensor.dsm_tiltOnInput.get_value()
             hack_SetPointingCorrections(mke_ants+ska_ants, tilt_enabled=False)
 
         for n in range(opts.repeats):
