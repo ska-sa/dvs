@@ -35,6 +35,8 @@ parser.add_option('--min-separation', type="float", default=1.0,
                   help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
 parser.add_option('--sunmoon-separation', type="float", default=10,
                   help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
+parser.add_option('--max-elevation', type="float", default=90,
+                  help="Maximum elevation angle for targets, in degrees (default=%default)")
 
 # Set default value for any option (both standard and experiment-specific options)
 parser.set_defaults(description='Target track', nd_params='off')
@@ -75,6 +77,10 @@ with verify_and_connect(opts) as kat:
                 sequence_of_targets = plan_targets(targets, time.time(), t_observe=opts.track_duration,
                                                    antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             for n, target in enumerate(sequence_of_targets):
+                # Enforce upper elevation limit
+                az, el = np.degrees(target.azel(timestamp=time.time()))
+                if (el > opts.max_elevation):
+                    continue
                 # Cut the track short if time ran out
                 duration = opts.track_duration
                 if opts.max_duration is not None:
