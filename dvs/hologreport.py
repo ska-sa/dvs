@@ -536,8 +536,8 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
     N = len(ds)
     fid = fn.split('/')[-1]
     for f in np.atleast_1d(freqMHz):
-        fig = plt.figure(figsize=(8*max(2,len(ds)),5-max(2,len(ds))))
         if (extent is not None):
+            fig = plt.figure(figsize=(8*max(2,len(ds)),7-max(2,len(ds))))
             lim = (-extent/2, extent/2)
             for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
                 b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
@@ -545,6 +545,8 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
                 plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
                 plt.subplot(2,2*N,2*n+2); b.plot('Gy', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("\nGy")
                 plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gy[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
+        else:
+            fig = plt.figure(figsize=(8*max(2,len(ds)),5-max(2,len(ds))))
         
         snr = np.array([snr_mask(d)[0][0] for d in ds]) # (cycles,products) and we've loaded only one cycle
         if (len(fig.axes) > 0): plt.subplot(2,1,2)
