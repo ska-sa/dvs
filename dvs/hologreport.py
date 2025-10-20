@@ -513,6 +513,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
         @param dMHz: bandwidth to load [MHz] (default 0.1)
         @param extent: range of x & y to plot [deg], or None to only plot SNR stats (default None)
     """
+    freqMHz = np.atleast_1d(freqMHz)
     timingoffsets = np.atleast_1d(timingoffset)
     ds = [katholog.Dataset(fn, telescopename, scanantname=ant, method='gainrawabs', timingoffset=t_o) for t_o in timingoffsets]
     for dataset in ds:
@@ -529,15 +530,15 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
         dumps = np.full_like(bore_dumps, False)
         dumps[dataset.time_range] = bore_dumps[dataset.time_range]
         timestamps = dataset.h5.timestamps[dumps]
-        chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-freqMHz) <= dMHz]
+        chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-freqMHz[0]) <= dMHz]
         rawonaxis = [dataset.h5.vis[dumps,chan,p] for p in cpindices] # (prod, time, freq)
         dataset.rawonboresight = (timestamps, np.mean(rawonaxis, axis=2), polproducts) # [1]=(prod, time)
     
     N = len(ds)
     fid = fn.split('/')[-1]
-    for f in np.atleast_1d(freqMHz):
+    for f in freqMHz:
         if (extent is not None):
-            fig = plt.figure(figsize=(8*max(2,len(ds)),7-min(2,len(ds))))
+            fig = plt.figure(figsize=(8*max(2,len(ds)),10-min(2,len(ds))))
             lim = (-extent/2, extent/2)
             for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
                 b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
