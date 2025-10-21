@@ -259,7 +259,7 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
     mod_spem, mod_tilt, force_tilt = [], [], []
     
     for a in ants:
-        if hasattr(a.sensor, "dsm_tango_address"):
+        if a.name.startswith("e"): # Only relevant for MKE dishes
             dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
             # Enforce our rules for TILT
             tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
