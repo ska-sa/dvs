@@ -3,6 +3,7 @@
 # Typically used for SingleDish pointing model fits and gain curve calculation.
 
 import time
+import numpy as np
 
 from katcorelib import standard_script_options, verify_and_connect, start_session, ant_array, user_logger
 from dvs_obslib import plan_targets, filter_separation, collect_targets, standard_script_options, start_hacked_session as start_session # Override previous import
@@ -25,6 +26,8 @@ parser.add_option('--min-separation', type="float", default=1.0,
                   help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
 parser.add_option('--sunmoon-separation', type="float", default=10,
                   help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
+parser.add_option('--max-elevation', type="float", default=90,
+                  help="Maximum elevation angle for targets, in degrees (default=%default)")
 parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
 parser.add_option('--switch-indexer-every', type="int", default=-1,
@@ -109,6 +112,10 @@ with verify_and_connect(opts) as kat:
                 raster_duration *= max([len(_["scan_in_az"]) for _ in raster_params])
                 for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
+                    # Enforce upper elevation limit
+                    az, el = np.degrees(target.azel(timestamp=time.time()))
+                    if (el > opts.max_elevation):
+                        continue
                     try:
                         if (len(scan_ants) < len(all_ants)): # All ants initially track the target, but only scan_ants will perform the raster
                             session.track(target, duration=0, announce=False)
