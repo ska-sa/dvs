@@ -184,7 +184,9 @@ if __name__=="__main__":
                       help="Minimum separation angle to enforce between any two targets, in degrees (default=%default)")
     parser.add_option('--sunmoon-separation', type="float", default=10,
                       help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
-    
+    parser.add_option('--max-elevation', type="float", default=90,
+                  help="Maximum elevation angle for targets, in degrees (default=%default)")
+
     parser.add_option('--cluster-radius', type="float", default=0,
                       help="Group targets into clusters with this great circle dimension, in degrees (default=%default)")
     
@@ -313,7 +315,7 @@ if __name__=="__main__":
                     fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
                         targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
-                                               cluster_radius=opts.cluster_radius, antenna=track_ants[0], el_limit_deg=opts.horizon)[0]
+                                               cluster_radius=opts.cluster_radius, antenna=scan_ants[0], el_limit_deg=opts.horizon)[0]
                         fresh_plan = True
                     if (len(targets) == 0):
                         user_logger.warning("No targets defined!")
@@ -342,7 +344,7 @@ if __name__=="__main__":
                     target_histindex=0
                     targetinfotext=[]
                     for testtarget in targets:
-                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=90.,
+                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,
                                                                                                 cycle_tracktime=opts.cycle_tracktime,sampletime=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor)
                         targetinfotext.append('%s (elev %.1f%s)'%(testtarget.name,meanelev,'' if suitable else ', unsuitable'))
                         if suitable:
