@@ -132,6 +132,9 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
     
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     
+    ndftproc = kwargs.pop("ndftproc", None)
+    ndftproc = 64 if (ndftproc is None) else ndftproc
+    
     ff = freqMHz - int(freqMHz)
     ff = "" if (ff==0) else "_%d"%(ff*10)
     try:
@@ -168,8 +171,8 @@ def load_predicted(freqMHz, beacon_pol, DISHPARAMS, el_deg=45, band="Ku", root="
         _V = katholog.BeamCube(dataset, xyzoffsets=xyzoffsets, applypointing=applypointing, interpmethod='scipy', gridsize=gridsize, **fcV)
         beamcube.Gy = _V.Gy; beamcube.Dy = _V.Dy
         beamcube.Dx *= 0; beamcube.Dy *= 0 # feedcombine only yields Gx or Gy (Gx=Dx=Dy=Gy=feedcombine{vis}) so D terms are wrong
-    apmapH = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcH,flip) for k,v in d.items()})
-    apmapV = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, **{k:v for d in (fcV,flip) for k,v in d.items()})
+    apmapH = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, **{k:v for d in (fcH,flip) for k,v in d.items()})
+    apmapV = katholog.ApertureMap(dataset, xyzoffsets=xyzoffsets, feedoffset=None, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, **{k:v for d in (fcV,flip) for k,v in d.items()})
     
     if (telescope.lower() == "meerkat"): # Only for MeerKAT: correct the orientation of the mask, which has hard-coded flip for MeerKAT (email 8/09/2021)
         for apmap in [apmapH,apmapV]:
@@ -248,6 +251,9 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     """
     # TODO: implement overlap_cycles for loadscan!?
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
+    ndftproc = kwargs.pop("ndftproc", None)
+    ndftproc = 64 if (ndftproc is None) else ndftproc
+    
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method='gainrawabs', timingoffset=timingoffset, **kwargs)
     dataset.band = dataset.h5.spectral_windows[0].band # Cache this value for later reference
     polswap = None if (polswap == False) else polswap # Backward compatibility
@@ -341,8 +347,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
         # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
         b_buf.append(katholog.BeamCube(dataset, scanantennaname=scanant, freqMHz=f_MHz, dMHz=dMHz, applypointing=applypointing, interpmethod='scipy', xyzoffsets=xyzoffsets, gridsize=gridsize))
-        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
-        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, voronoimaxweight=1.1, **flip))
+        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
+        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
