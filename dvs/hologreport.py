@@ -249,7 +249,6 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles. NB: beams "x"=H-pol, "y"=V-pol
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
     """
-    # TODO: implement overlap_cycles for loadscan!?
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     ndftproc = kwargs.pop("ndftproc", None)
     ndftproc = 64 if (ndftproc is None) else ndftproc
@@ -363,6 +362,11 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         for ic, select_loadscan_cycle in enumerate(loadscan_cycles):
             print('--------------------------------------------\nProcessing cycle %d (%d of %d)\n'%(select_loadscan_cycle, ic+1,len(loadscan_cycles)))
             dataset.flagdata(cycle=select_loadscan_cycle, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
+            if (overlap_cycles > 0):
+                t_c0 = dataset.rawtime[dataset.time_range]-dataset.rawtime[0]
+                dataset.flagdata(cycle=select_loadscan_cycle+overlap_cycles, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
+                t_c1 = dataset.rawtime[dataset.time_range]-dataset.rawtime[0]
+                dataset.flagdata(flagslew=flag_slew, flags_hrs=flags_hrs, timestart_hrs=t_c0[0]/3600, timeduration_hrs=(t_c1[-1]-t_c0[0])/3600, **selectkwargs)
             for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                 _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
         
