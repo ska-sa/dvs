@@ -54,7 +54,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
         hack_SetPointingCorrections(ants, tilt_enabled=False) # TODO: hack necessary 11/2024 because ACU re-enables it
     
     if not dry_run:
-        time.sleep(2) # Avoid triggering before the antennas have started moving
+        time.sleep(5) # Avoid triggering before the antennas have started moving
         try: # Wait until we are at the expected end point
             try: # Wait for the shortest possible time required
                 ants.wait('lock', True, timeout=T_duration+100)
@@ -67,6 +67,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
             user_logger.info("Timed out while waiting to reach end point. %s"%e)
         
         ants.req.mode('STOP')
+        time.sleep(2) # SKA Dish specifically needs this to avoid interfering with the "reverse" sequence
     else:
         user_logger.info("Reached the end position.")
     
