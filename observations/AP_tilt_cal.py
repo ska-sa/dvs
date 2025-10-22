@@ -39,6 +39,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     
     if not dry_run:
         ants.req.mode('STOP')
+        time.sleep(1)
         ants.req.target_azel(azim, elev)
         ants.req.scan(-azim_range/2, -elev_range/2, azim_range/2, elev_range/2, T_duration, 'plate-carree')
         ants.req.mode('POINT') # Go to start of scan
@@ -67,7 +68,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
             user_logger.info("Timed out while waiting to reach end point. %s"%e)
         
         ants.req.mode('STOP')
-        time.sleep(2) # SKA Dish specifically needs this to avoid interfering with the "reverse" sequence
+        time.sleep(1)
     else:
         user_logger.info("Reached the end position.")
     
