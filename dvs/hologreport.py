@@ -981,7 +981,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         @param contourdB: contour within which to determine the 'error beam', in dB below peak (default -20).
         @param beampolydegree: degree of polynomial to smooth the beams with (default 28 for zernike out to radius ~7*HPBW; increase by 2 for each additional HPBW added to radius).
         @param beamsmoothing: 'fourier' (default) to smooth the beams "in the aperture plane", 'zernike' to smooth the beam using zernike polynomials
-                               anything else for regular polynomial fitting. KNOWN ISSUE: zernike & poly smoothing are only correct if measured & predicted extents match!
+                               anything else for regular polynomial fitting.
         @param coords: "SKA" for feed offsets in SKA coordinate system, instead of the standard katholog convention (default "SKA")
         @param devkwargs: passed to apmap.plot('dev') e.g. 'clim'. May also include 'cmap' to override
                           the colormap for 'dev' maps only.
