@@ -527,7 +527,10 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
     timingoffsets = np.atleast_1d(timingoffset)
     ds = [katholog.Dataset(fn, telescopename, scanantname=ant, method='gainrawabs', timingoffset=t_o) for t_o in timingoffsets]
     for dataset in ds:
-        dataset.flagdata(cycle=cycle, group=0)
+        try:
+            dataset.flagdata(cycle=cycle, group=0)
+        except: # Possibly old style dataset, without 'group'
+            dataset.flagdata(timestart_hrs=0, timeduration_hrs=1e3)
         # 'rawonboresight'
         trackant = dataset.radialscan_allantenna[dataset.trackantennas[0]]
         polproducts = [("%s%s"%(ant,p[0].lower()), "%s%s"%(trackant,p[1].lower())) for p in dataset.pols_to_use] # Same order used in dataset for products [xx, xy, yx, yy]
