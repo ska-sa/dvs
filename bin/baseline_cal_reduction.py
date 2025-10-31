@@ -37,8 +37,8 @@ parser.add_option('-s', '--max-sigma', type='float', default=0.2,
 parser.add_option("-t", "--time-offset", type='float', default=0.0,
                   help="Time offset to add to DBE timestamps, in seconds (default = %default)")
 parser.add_option('-x', '--exclude', default='', help="Comma-separated list of sources to exclude from fit")
-parser.add_option("--max-track", type='float', default=np.inf,
-                  help="Maximum time duration to clip 'tracks' to - to improve uniformity, in seconds (default = %default)")
+parser.add_option("--discard-tracklength", type='float', default=np.inf,
+                  help="'tracks' longer than this are discarded; duration in seconds (default = %default)")
 parser.add_option('--fit-niao', action="store_true", default=False,
                   help="Also fit Non-Intersecting Axes Offset, instead of keeping it constant (default=%default)")
 parser.add_option('--polswap', type='choice', choices=['None', 'ref', 'ants'], default='None',
@@ -146,13 +146,16 @@ for bl, (indA, indB) in enumerate(baseline_inds):
 augmented_targetdir, group_delay, sigma_delay = [], [], []
 scan_targets, scan_mid_az, scan_mid_el, scan_timestamps, scan_phase = [], [], [], [], []
 for scan_ind, state, target in data.scans():
-    ts = data.timestamps[:np.min([data.shape[0],opts.max_track])]
+    ts = data.timestamps[:]
     num_ts = len(ts)
     if state != 'track':
         log("scan %3d (%4d samples) skipped '%s'" % (scan_ind, num_ts, state))
         continue
     if num_ts < 2:
         log("scan %3d (%4d samples) skipped - too short" % (scan_ind, num_ts))
+        continue
+    if opts.discard_tracklength < (ts[-1]-ts[0]):
+        log("scan %3d (%4d samples) skipped - too LONG to be good?" % (scan_ind, num_ts))
         continue
     if target.name in excluded_targets:
         log("scan %3d (%4d samples) skipped - excluded '%s'" % (scan_ind, num_ts, target.name))
