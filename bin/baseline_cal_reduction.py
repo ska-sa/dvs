@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import katdal
 import scape
 import katpoint
+import dvs
+import sys
 
 # The speed of light in the fibres is lower than in vacuum
 cable_lightspeed = 0.7 * katpoint.lightspeed
@@ -25,6 +27,8 @@ parser.add_option('-a', '--ants',
 parser.add_option("-f", "--freq-chans",
                   help="Range of frequency channels to keep (zero-based inclusive 'first_chan,last_chan', "
                        "default is [0.25*num_chans, 0.75*num_chans))")
+parser.add_option('--rfi-mask', type='string', default=None,
+                  help="Mask file for frequency channels to ignore, default is %default")
 parser.add_option('-p', '--pol', type='choice', choices=['H', 'V'], default='H',
                   help="Polarisation term to use ('H' or 'V'), default is %default")
 parser.add_option('-r', '--ref', dest='ref_ant', help="Reference antenna, default is first antenna in file")
@@ -33,12 +37,18 @@ parser.add_option('-s', '--max-sigma', type='float', default=0.2,
 parser.add_option("-t", "--time-offset", type='float', default=0.0,
                   help="Time offset to add to DBE timestamps, in seconds (default = %default)")
 parser.add_option('-x', '--exclude', default='', help="Comma-separated list of sources to exclude from fit")
+parser.add_option("--max-track", type='float', default=np.inf,
+                  help="Maximum time duration to clip 'tracks' to - to improve uniformity, in seconds (default = %default)")
 parser.add_option('--fit-niao', action="store_true", default=False,
                   help="Also fit Non-Intersecting Axes Offset, instead of keeping it constant (default=%default)")
 parser.add_option('--polswap', type='choice', choices=['None', 'ref', 'ants'], default='None',
                   help="Swap the polarisation of either the reference or fitted antenna (default=%default)")
 parser.add_option('--allow-ambiguous-delays', action="store_true", default=False,
                   help="Don't wrap the measured delays to fit within +-0.5*measurable_range (default=%default)")
+parser.add_option('-v', '--verbose', action="store_true", default=False,
+                  help="True to log info about every single scan in the dataset (default=%default)")
+parser.add_option('--make-plots', action="store_true", default=False,
+                  help="False to only generate text output, True to also make plots (default=%default)")
 (opts, args) = parser.parse_args()
 
 # Quick way to set options for use with cut-and-pasting of script bits
@@ -55,9 +65,13 @@ parser.add_option('--allow-ambiguous-delays', action="store_true", default=False
 # args = ['1315991422.h5']
 
 if len(args) < 1:
-    raise RuntimeError('Please specify HDF5 data file(s) to use as arguments of the script')
+    raise RuntimeError('Please specify katdal data file(s) to use as arguments of the script')
 
 katpoint.logger.setLevel(30)
+def log(*args, **kwargs):
+    if opts.verbose:
+        print(*args, **kwargs)
+
 
 print("\nLoading and processing data...\n")
 data = katdal.open(args, ref_ant=opts.ref_ant, time_offset=opts.time_offset)
@@ -74,9 +88,13 @@ active_pol = opts.pol.lower()
 if (opts.polswap != 'None'):
     active_pol = active_pol + {'h':'v', 'v':'h'}[active_pol]
     active_pol = active_pol if (opts.polswap == 'ref') else active_pol[::-1]
-data.select(channels=chan_range, corrprods='cross', pol=active_pol)
+data.select(channels=chan_range, corrprods='cross', pol=active_pol, flags="data_lost")
 if opts.ants is not None:
     data.select(ants=opts.ants, reset='')
+if opts.rfi_mask:
+    rfi_mask = dvs.util.load_rfi_static_mask(opts.rfi_mask, data.freqs)
+else:
+    rfi_mask = np.full(np.shape(data.channel_freqs), False)
 ref_ant_ind = [ant.name for ant in data.ants].index(data.ref_ant)
 inputs = [ant.name + (active_pol[0] if ant.name==data.ref_ant else active_pol[-1]) for ant in data.ants]
 baseline_inds = [(inputs.index(inpA), inputs.index(inpB)) for inpA, inpB in data.corr_products]
@@ -128,19 +146,20 @@ for bl, (indA, indB) in enumerate(baseline_inds):
 augmented_targetdir, group_delay, sigma_delay = [], [], []
 scan_targets, scan_mid_az, scan_mid_el, scan_timestamps, scan_phase = [], [], [], [], []
 for scan_ind, state, target in data.scans():
-    num_ts = data.shape[0]
+    ts = data.timestamps[:np.min([data.shape[0],opts.max_track])]
+    num_ts = len(ts)
     if state != 'track':
-        print("scan %3d (%4d samples) skipped '%s'" % (scan_ind, num_ts, state))
+        log("scan %3d (%4d samples) skipped '%s'" % (scan_ind, num_ts, state))
         continue
     if num_ts < 2:
-        print("scan %3d (%4d samples) skipped - too short" % (scan_ind, num_ts))
+        log("scan %3d (%4d samples) skipped - too short" % (scan_ind, num_ts))
         continue
     if target.name in excluded_targets:
-        print("scan %3d (%4d samples) skipped - excluded '%s'" % (scan_ind, num_ts, target.name))
+        log("scan %3d (%4d samples) skipped - excluded '%s'" % (scan_ind, num_ts, target.name))
         continue
     # Extract visibilities for scan as an array of shape (T, F, B)
-    vis = data.vis[:]
-    ts = data.timestamps[:]
+    vis = data.vis[:num_ts]
+    vis[data.flags[:num_ts]] = np.nan
     # Obtain unit vectors pointing from array antenna to target for each timestamp in scan
     az, el = target.azel(ts, array_ant)
     targetdir = np.array(katpoint.azel_to_enu(az, el))
@@ -182,7 +201,7 @@ for scan_ind, state, target in data.scans():
         chanmask = slice(max(0,chanmask[0]-c0), max(0,chanmask[-1]-c0))
         delay = delay[:,chanmask,:]
     except Exception as e:
-        pass # print("No special mask for ", e)
+        delay = delay[:,~rfi_mask[1:],:] # Phase is calculated from np.diff(), which discards one edge channel
     delay_stats_mu, delay_stats_sigma = scape.stats.periodic_mu_sigma(delay, axis=1, period=delay_period)
     # The estimated mean group delay is the average of N-1 per-channel differences. Since this is less
     # variable than the per-channel data itself, we have to divide the data sigma by sqrt(N-1).
@@ -194,7 +213,7 @@ for scan_ind, state, target in data.scans():
     for bl, (inp1, inp2) in enumerate(data.corr_products):
         delay_stats_mu[:, bl] -= delay_corrections[inp2][:, 0] - delay_corrections[inp1][:, 0]
         # Add the static delays back in to undo their correction
-        delay_stats_mu[:, bl] += np.array([_.get(inp2, 0.0) - _.get(inp1, 0.0) for _ in static_delays])
+        delay_stats_mu[:, bl] += np.array([_.get(inp2, 0.0) - _.get(inp1, 0.0) for _ in static_delays[:num_ts]])
     # Rearrange measurements to shape (B T,)
     group_delay.append(delay_stats_mu.T.ravel())
     sigma_delay.append(delay_stats_sigma.T.ravel())
@@ -205,7 +224,7 @@ for scan_ind, state, target in data.scans():
     # Rearrange vis phase to have shape (B F, T), which will form one column in fringe plot
     scan_phase.append(np.angle(vis).T.reshape(-1, num_ts))
     scan_rel_sigma_delay = delay_stats_sigma.mean(axis=0) / max_sigma_delay
-    print("scan %3d (%4d samples) %s '%s'" % \
+    log("scan %3d (%4d samples) %s '%s'" % \
           (scan_ind, num_ts, ' '.join([('%.3f' % rel_sigma) for rel_sigma in scan_rel_sigma_delay]), target.name))
 if not augmented_targetdir:
     raise RuntimeError('No usable scans found (are you tracking any targets?)')
@@ -299,6 +318,9 @@ for n, ant in enumerate(data.ants):
     print("NIAO (m):            %7.3f +- %.5f (was %7.3f)%s" % \
           (niao[n], sigma_niao[n], old_niao[n],
            ' *' if np.abs(niao[n] - old_niao[n]) > 3 * sigma_niao[n] else ''))
+
+if not opts.make_plots:
+    sys.exit()
 
 scan_lengths = [len(ts) for ts in scan_timestamps]
 scan_bl_starts = num_bls * np.cumsum([0] + scan_lengths)[:-1]
