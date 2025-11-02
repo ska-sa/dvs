@@ -20,6 +20,7 @@
     @author: aph@sarao.ac.za
 '''
 import katuilib, time
+import numpy as np
 # configure_cam('all') # TODO: must run this manually in interactive console
 
 
@@ -37,6 +38,42 @@ def reset_ACU(cam_ant):
     dsm.ResetTrackTableBuffer(); time.sleep(1)
     dsm.ResetTrackTable(); time.sleep(1)
     dsm.SetStandbyFPMode()
+
+def _ska_tango_cmd_(ant, sub, cmd_args, attr_value):
+    """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param sub: either 'dsh', 'dsm' or 'spfc'
+        @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
+        @param attr_value: (name, value) for the attribute, or None
+    """
+    addr = eval("ant.sensor.%s_tango_address.get_value()"%sub)
+    if (cmd_args is not None):
+        cmd_args = np.atleast_1d(cmd_args)
+        cmd, args = cmd_args[0], cmd_args[1:]
+        cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
+        if (cmd_args.lower() == "restartserver()"):
+            !ssh kat@10.97.8.2 "python -c \"import tango; tango.DeviceProxy(tango.DeviceProxy('{addr}').adm_name()).{cmd_args}\""
+        else:
+            !ssh kat@10.97.8.2 "python -c \"import tango; print(tango.DeviceProxy('{addr}').{cmd_args})\""
+    if (attr_value is not None):
+        attr_value = np.atleast_1d(attr_value)
+        attr, value = attr_value[0], attr_value[1:]
+        attr_value = attr + ("" if (len(value) == 0) else "=%s"%value[0])
+        !ssh kat@10.97.8.2 "python -c \"import tango; dsm=tango.DeviceProxy('{addr}'); dsm.{attr_value}; print(dsm.{attr})\""
+def x_dsh(ant, cmd_args=None, attr_value=None):
+    """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
+        @param attr_value: (name, value) for the attribute (default None)
+    """
+    _ska_tango_cmd_(ant, 'dsh', cmd_args, attr_value)
+def x_dsm(ant, cmd_args=None, attr_value=None):
+    """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
+        @param attr_value: (name, value) for the attribute (default None)
+    """
+    _ska_tango_cmd_(ant, 'dsm', cmd_args, attr_value)
 
 
 def match_ku_siggen_freq(cam, override=False):
