@@ -506,7 +506,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         HPBW is derived from the dataset itself, and where no feasible values are found, the specified HPBW (whether numeric or a function)
         is used to fill in the gaps. 
         
-        @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on
+        @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on, None for 'all'
         @param HPBW: 'lambda f: x' or 1d array [rad] to override fitted widths from the dataset (default None)
         @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
@@ -520,6 +520,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
                  N_bore is the final window length to employ around bore sight & nulls.
     """
     t = np.arange(len(ds.timestamps)) # [samples]
+    cleanchans = ds.channels if (cleanchans is None) else cleanchans
     
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
