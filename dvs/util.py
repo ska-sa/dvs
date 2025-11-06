@@ -87,14 +87,14 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
             dataset = cbid2url(dataset)
     except ValueError:
         pass
-    dsname = dataset if isinstance(dataset, str) else dataset.name
+    dsname = dataset if isinstance(dataset, str) else dataset.url
     cbid = int(dsname.split("/")[-2]) # ASSUMES "*cbid/cbid_l0_.ext"
     
     # Take care of activity boundary time mismatches
     try:
         _time_offset = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
         if (1738674000 < cbid): # From 4/02/2025 ~13h00 UTC, the Receptor & Dish proxies have the same lead time offset
-            t_o = 5 # github link TBD
+            t_o = 5 # https://github.com/ska-sa/katmisc/blob/release/karoocamv30/katmisc/app/dish_proxy/katproxy/proxy/mke_dsh_model.py#L39
             katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
         elif ref_ant:
             if ref_ant.startswith("s"):
