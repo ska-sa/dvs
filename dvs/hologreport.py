@@ -504,10 +504,10 @@ def BDF(apmap, D, f, k=0.36):
 
 
 # Data structure for processed datasets
-_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","timingoffset","tags"]) # Work-around for defaults keyword not available in current version of python
-ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,timingoffset=0,tags=None: _ResultSet_(
-                fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
-                clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if tags==None else tags)
+_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","timingoffset","ignoreantennas","tags"]) # Work-around for defaults keyword not available in current version of python
+ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,timingoffset=0,ignoreantennas=None,tags=None: \
+                _ResultSet_(fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
+                clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if ignoreantennas is None else ignoreantennas,[] if tags==None else tags)
 
 
 def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, extent=None, telescopename="SKA"):
