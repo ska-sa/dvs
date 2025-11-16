@@ -564,7 +564,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
         
         snr = np.array([snr_mask(d)[0][0] for d in ds]) # (cycles,products) and we've loaded only one cycle
         if (len(fig.axes) > 0): plt.subplot(2,1,2)
-        else: plt.title("%s @ %gMHz cycle %d\nSNR vs timingoffsets"%(fid,f,cycle))
+        else: plt.title("%s @ %gMHz cycle %s\nSNR vs timingoffsets"%(fid,f,cycle))
         plt.plot(timingoffsets, snr[...,0], '+-'); plt.legend(["Amplitude SNR"],loc='upper left')
         plt.gca().twinx().plot(timingoffsets, snr[...,1], 'o--'); plt.legend(["Phase RMS"],loc='upper right')
 
@@ -742,6 +742,7 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
         @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
         @return: (X,Y,Z) offsets at each `elspec_deg` (or None)"""
     layout = _plan_layout_(RS, labels, separate_freqs=False)
+    elspec_deg = np.atleast_1d(elspec_deg) if elspec_deg else None
     offsets_el = None if (elspec_deg is None) else []
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
@@ -768,8 +769,7 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
         
         if (len(fits) > 0):
             print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%(f[0],*f[1]) for f in fits])))
-            if (elspec_deg):
-                elspec_deg = np.atleast_1d(elspec_deg)
+            if (elspec_deg is not None):
                 offset = {}
                 for q,fitp,model in fits:
                     offset[q] = [model(el) for el in elspec_deg]
