@@ -768,7 +768,7 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
                 fits.append((q, fitp, model))
         
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%(f[0],*f[1]) for f in fits])))
+            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%(f[0],*(list(f[1])+[0])) for f in fits]))) # Guard against 'single point fit'
             if (elspec_deg is not None):
                 offset = {}
                 for q,fitp,model in fits:
