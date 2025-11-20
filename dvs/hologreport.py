@@ -866,9 +866,7 @@ def plot_signalpathstats(rec, figsize=(14,16)):
     T = dataset.rawtime
     band = dataset.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
     # Mapping of ant,pol to F-engine labels - to get dBFS for all bands
-    portal = "mkat-rts" # TODO Accommodate "mkat" too! Tricky because cbf_1 & cbfmon_1 are on both at the same time...
-    input_labels = katselib.getsensorvalues("cbf_1_input_labels", T, interpolate=None, portal=portal)[1][0].split(",")
-    feng_labels = ["cbfmon_1_wide_fhost%02d_dig_p%d"%(i,p) for i in range(len(input_labels)//2) for p in range(2)]
+    feng_labels = katselib.get_feng_input_labels((T[0],T[-1]))
     for ant in dataset.radialscan_allantenna:
         for i,P in enumerate(["H","V"]):
             if (band != 's'):
@@ -876,7 +874,7 @@ def plot_signalpathstats(rec, figsize=(14,16)):
                 axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
                 axes[0].legend()
             axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
-            v = katselib.getsensorvalues(feng_labels[input_labels.index(ant+P.lower())]+"_rms_dbfs", T, portal=portal)[1]
+            v = katselib.getsensorvalues(feng_labels[ant+P.lower()]+"_rms_dbfs", T)[1]
             axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
             axes[1].set_ylabel("ADC RF input power [dBFS]"); axes[1].grid(True); axes[1].legend()
     
