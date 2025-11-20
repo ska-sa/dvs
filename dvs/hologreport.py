@@ -856,9 +856,10 @@ def plot_eff_freq(RS, labels, fspec_MHz=(15000,20000), figsize=(14,4)):
     ax.set_xlabel("Frequency [MHz]")#; ax.legend() # TODO: fix ordering above to avoid legend cloning
 
 
-def plot_signalpathstats(rec, figsize=(14,16)):
+def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
     """ Plots status of overload & ADC RF power, for all selected antennas & all selected timestamps.
         @param rec: a ResultSet that's already beean loaded.
+        @param f_MHz: optionally specify any subset of rec.f_MHz (default None)
     """
     axes = plt.subplots(4,1, sharex=True, figsize=(figsize[0],figsize[1]))[1]
     # Plot some extra info from sensor logs
@@ -881,6 +882,8 @@ def plot_signalpathstats(rec, figsize=(14,16)):
     # Plot boresight visibilities
     labels = [] # Collect labels to avoid repetition if there's more than one cycle
     for freq_MHz,beams in zip(rec.f_MHz, rec.beams): # The desired data is attached to the 'beams'
+        if (f_MHz is not None) and (freq_MHz not in np.atleast_1d(f_MHz)): # Skip if not in subset of interest
+            continue
         for beam in np.atleast_1d(beams):
             ts, rb, prod = beam.rawonboresight
             for p,x in enumerate(rb):
