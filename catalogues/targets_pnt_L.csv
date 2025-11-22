@@ -26,7 +26,7 @@ J0318+1628 | E0318+162 | CTA21,radec gaincal,03:18:57.8,16:28:32.7,(318. 43000. 
 
 J0319+4130 | *Per A | Perseus A | NGC 1275 | 3C 84,           radec, 03:19:48.16,  +41:30:42.1,  (400.0 2000.0 1.398),                                           mas        VLBI 2.3/8.4 GHz,   150.58, -13.26,     13,  v=5264,  LIRG; Sy 1.5; FRI; cD  I; X       ok?  strong core & jet inside 10' radio halo; BLLAC;                  
 
-# J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79,  -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,                 240.16, -56.69,   148,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes
+#J0322-3712 | For A | Fornax A | NGC 1316 | PKS 0320-37,      radec, 03:22:41.79,  -37:12:29.5,  (1200.0 2000.0 2.097),                                          7.5x7.5    LV,                 240.16, -56.69,   148,  v=1760,  LINER; S0              I; X       no   lobes ~ 1 deg; core low flux density; FRI core FRII lobes - variable offsets fitted on SKADish at 3.1GHz
 
 J034632-342252 | PKS 0344-34,radec,03: 46: 30.58,-34: 22: 46.2,,CRATES
 
@@ -46,7 +46,7 @@ J0437+2940 | 3C 123,                                         radec, 04:37:04.38,
 
 J0440-4333 | PKS 0438-43,                                    radec, 04:40:17.18,  -43:33:08.6,  (1410.0 8400.0 -4.82850957757 3.82855552335 -0.639544506483),   mas        VLBI 2.3/8.4 GHz,   248.41, -41.57,      6,  z=2.86,  QSO                    IRAS deep  ok   ~compact; 2-comp              
 
-J0519-4546 | Pic A | Pictor A | PKS 0518-45,                 radec, 05:19:49.72,  -45:46:43.9,  (635.0 5009.0 -1.265 3.036 -0.653),                             1.25x1.25  MOST,               251.60, -34.63,     69,  z=0.04,  LINER; S0 pec          X          no   ~6'; strong double lobes; FRII                 
+# J0519-4546 | Pic A | Pictor A | PKS 0518-45,                 radec, 05:19:49.72,  -45:46:43.9,  (635.0 5009.0 -1.265 3.036 -0.653),                             1.25x1.25  MOST,               251.60, -34.63,     69,  z=0.04,  LINER; S0 pec          X          no   ~6'; strong double lobes; FRII - variable offsets fitted on SKADish at 3.1GHz
 
 J0521+1638 | 3C 138 | PKS 0518+16,                           radec, 05:21:09.89,  +16:38:22.1,  (1410.0 8400.0 -1.32934004351 1.91278744917 -0.376296576679),   mas        VLBI 2.3/8.4 GHz,   187.40, -11.34,      9,  z=0.76,  Sy 1.5; core-dom       X          ok   compact <1"; CSS src; pol; triple-comp; no flux var: flux calib   
 
