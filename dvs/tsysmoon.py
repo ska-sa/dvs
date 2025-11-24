@@ -53,10 +53,11 @@ def plot_Tsys_eta_A(freq,Tsys,eta_A,TAc,Ku=False,Tsys_std=None,ant = '', file_ba
         if Tsys_std[pol] is not None :
             plt.errorbar(freq/1e6,Tsys[pol],Tsys_std[pol],color = 'b',linestyle = '.',label='Measurement')
         T_e = Tsys[pol]/eta_A[pol]
+        mask = np.isfinite(T_e)
         plt.plot(freq/1e6,T_e,'b.',label='Measurement: Y-method')
-        plt.axhline(np.mean(T_e),linewidth=2,color='k',label='Mean: Y-method')
+        plt.axhline(np.mean(T_e[mask]),linewidth=2,color='k',label='Mean: Y-method')
         if not(Ku): plt.plot(freq/1e6,TAc[pol]/eta_A[pol],'c.',label='Measurement: ND calibration')
-        plt.ylim(np.percentile(T_e, 1), np.percentile(T_e, 99))
+        plt.ylim(np.percentile(T_e[mask], 1), np.percentile(T_e[mask], 99))
         if plot_speclines and (freq.min() < 2090e6): # MeerKAT UHF & L-band specifications
             D = 13.5
             Ag = np.pi* (D/2)**2 # Antenna geometric area
