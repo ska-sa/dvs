@@ -27,7 +27,7 @@ def to_ephem_date(datetime):
 
 def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
              catfn='catalogues/sources_all.csv', listonly=None,
-             llh0=('-30.713','21.444',1050), llh1=None, enu1=None, tabulate=True, figsize=(20,12), fontsize=8, **kwargs):
+             llh0=('-30.713','21.444',1050), llh1=None, baseline_pt=None, tabulate=True, figsize=(20,12), fontsize=8, **kwargs):
     """ Make a sky plot for the given date, seen from observer's location. Also plot sources visible from catalogue.
         
         @param date: (y,m,d,H,M,S) in UTC, or UTC seconds since epoch.
@@ -36,7 +36,7 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
         @param tabulate: True to print a table of all visible sources (default True)
         @param llh0: lat, lon, height above ellipsoid for nominal observer (default to m000).
         @param llh1: lat, lon, heights above ellipsoid for baseline endpoint, or None (default None)
-        @param enu1: fallback ALTERNATIVE to llh1, as East,North,up [m]
+        @param baseline_pt: fallback ALTERNATIVE to llh1, as (deltaEast,dNorth,dUp)[m]
         @return: the katpoint.Catalogue as set up & filtered for display.
     """
     try:
@@ -77,8 +77,8 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
         ant1 = None
         if (llh1 is not None):
             ant1 = katpoint.Antenna("A1, %s,%s,%.1f, 13.5" % llh1)
-        elif (enu1 is not None): # llh is ignored for delays if enu is given
-            ant1 = katpoint.Antenna(("A1, %s,%s,%.1f, 13.5, " % llh0) + ("%.3f %.3f %.3f 0 0 0" % enu1))
+        elif (baseline_pt is not None): # llh is ignored for delays if enu is given
+            ant1 = katpoint.Antenna(("A1, %s,%s,%.1f, 13.5, " % llh0) + ("%.3f %.3f %.3f 0 0 0" % tuple(baseline_pt)))
         cat.visibility_list(timestamp=ov.date, antenna=refant, antenna2=ant1, flux_freq_MHz=f_MHz)
     
     ax = fig.axes[0] # Plot all filtered sources on first axes == orthographic projection
@@ -113,7 +113,7 @@ def _baseline_endpt_(ant, baseline_pt):
     return baseline_pt
 
 
-def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(1000,0,0), freq=1e9, show_LST=False,
+def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(1000,0,0), f_MHz=1000, show_LST=False,
              catfn='catalogues/sources_all.csv',ant="m000, -30.713, 21.444, 1050.0", **figargs):
     """ Notes rise & set times and plots the elevation trajectory if end_date is given.
         Also prints the geometric delay rate for the baseline as specified. 
@@ -124,8 +124,8 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         @param end_date: if given then will evaluate the target over the period from 'date' up to 'end_date' (default None)
         @param horizon_deg: angle for horizon limit to apply [deg]
         @param baseline_pt: the reference point for a baseline to calculate fringe rate,
-                            either katpoint.Antenna or (dEast,dNorth,dUp)[m] (default (1000,0,0)).
-        @param freq: frequency for calculating fringe rate (default 1e9) [Hz]
+                            either katpoint.Antenna or (deltaEast,dNorth,dUp)[m] (default (1000,0,0)).
+        @param f_MHz: frequency for calculating fringe rate (default 1000) [MHz]
         @param catfn, ant: used if target is simply an identifier string, to construct the Traget object.
         @return: target (a list, if multiple matches)- a katpoint.Target
     """
@@ -185,11 +185,11 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
     
     baseline_pt = _baseline_endpt_(ant, baseline_pt) if (baseline_pt is not None) else None
     
-    print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{freq/1e9:.0f}GHz] | Flux [Jy@{freq/1e9:.0f}GHz]")
+    print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{f_MHz/1000:.1f}GHz] | Flux [Jy@{f_MHz/1000:.1f}GHz]")
     print("-"*80)
     for target in targets:
         _name = target.name
-        _flux = target.flux_density(freq/1e6) if (target.flux_model is not None) else np.nan
+        _flux = target.flux_density(f_MHz) if (target.flux_model is not None) else np.nan
         try:
             _rise = observer.previous_rising(target.body) # observer date is still end_date, if given
             observer.date = date
@@ -202,14 +202,14 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         if baseline_pt is not None:
             delay_rate = target.geometric_delay(baseline_pt, timestamps, ant)[1]
             imax = np.argmax(np.abs(delay_rate))
-            _phrate = delay_rate[imax] * (360*freq) # deg/sec
+            _phrate = delay_rate[imax] * (360*f_MHz*1e6) # deg/sec
         print(f"{_name:>14} | {str(_rise):>18} | {str(_set):>18} | {_phrate:>23.1f} | {_flux:.1f}")
 
     targets = targets[0] if (len(targets) == 1) else targets
     return targets
 
 
-def plot_Tant(RA,DEC, freq_MHz, extent,D_g=13.965,ellip=0,projection=None, label="", hold=True, draw=True, **figargs):
+def plot_Tant(RA,DEC, f_MHz, extent,D_g=13.965,ellip=0,projection=None, label="", hold=True, draw=True, **figargs):
     """
         Plots the sky temperature of the default Global Sky Model, excluding CMB, centred at the specified coordinate(s).
         Also draws contours at 50% & 90% of the peak value within the max extent diameter.
@@ -224,7 +224,7 @@ def plot_Tant(RA,DEC, freq_MHz, extent,D_g=13.965,ellip=0,projection=None, label
     """
     D2R = np.pi/180.
     extent *= D2R # rad
-    gsm, res = katsemodels.get_gsm(freq_MHz) # 2d array, rad
+    gsm, res = katsemodels.get_gsm(f_MHz) # 2d array, rad
     
     if isinstance(RA,tuple): # Convert from (hrs,m,s)(deg,m,s) to float degrees
         RA = (RA[0]+RA[1]/60.+RA[2]/3600.)/24.*360
@@ -238,7 +238,7 @@ def plot_Tant(RA,DEC, freq_MHz, extent,D_g=13.965,ellip=0,projection=None, label
     if (projection is not None):
         cRA, cDEC = katpoint.plane_to_sphere[projection](RA*D2R,DEC*D2R,dr*D2R,dd*D2R)
         cRA, cDEC = cRA/D2R, cDEC/D2R # deg
-    res = max(res, 1.27*(300./freq_MHz)/D_g * 1.29*2) # Approx width between nulls for ^2 pattern (nulls @ HPBW*{1.29,2.14,2.99,...})
+    res = max(res, 1.27*(300./f_MHz)/D_g * 1.29*2) # Approx width between nulls for ^2 pattern (nulls @ HPBW*{1.29,2.14,2.99,...})
     T = katsemodels.mapvalue(gsm,cRA,cDEC,radius=res/2.,beam="^2,null1",ellip=ellip)
     # Orientation of T follows cRA increasing from left to right; cDEC increasing from top to bottom
     
@@ -252,12 +252,12 @@ def plot_Tant(RA,DEC, freq_MHz, extent,D_g=13.965,ellip=0,projection=None, label
         plt.contour(dr[0,:],dd[:,0], T, T0*np.asarray([0.5,0.9])) # RA order above is maintained
         projection = "" if (projection is None) else projection+" "
         plt.xlabel(projection+"RA - %.2f$^\circ$"%RA), plt.ylabel(projection+"DEC - %.2f$^\circ$"%DEC)
-        plt.title(label + " @ %dMHz, %.1f' resolution [Kelvin]"%(freq_MHz,res/D2R*60.))
+        plt.title(label + " @ %dMHz, %.1f' resolution [Kelvin]"%(f_MHz,res/D2R*60.))
     
     return T
 
 
-def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,pointing_errors=[0,1],
+def plot_Tant_drift(parked_target,timestamps,f_MHz=1400,normalize=False,pointing_errors=[0,1],
                         D_g=13.965,Trx=15,ant='m000, -30.713, 21.444, 1050.0',debug=True):
     """ Generates an estimate of the change in antenna temperature over time, if the antenna remains "parked".
     
@@ -278,7 +278,7 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     # PE = Pointing error in "resolution increments"
     boresight_val = lambda map2d, PE=0: map2d[int(map2d.shape[0]+PE)//2, map2d.shape[1]//2]
     
-    extent_deg = 6 * 1.27*(300./freq_MHz)/D_g * 180/np.pi # radius = 3*HPBW, assuming parabolic illumination on circular aperture
+    extent_deg = 6 * 1.27*(300./f_MHz)/D_g * 180/np.pi # radius = 3*HPBW, assuming parabolic illumination on circular aperture
 
     # Trx + GSM + CMB at each HA
     T_0 = [] # No beam integral, even indices have PE=0
@@ -287,13 +287,13 @@ def plot_Tant_drift(parked_target,timestamps,freq_MHz=1400,normalize=False,point
     ND = len(timestamps)//4 if debug else len(timestamps)+1 # Used to generate 4 debug plots, below
     for i,(RA,DEC) in enumerate(zip(HA,DEC)):
         # To debug, make plots at only at every 6th timestamp
-        _T = plot_Tant(RA=RA,DEC=DEC, freq_MHz=freq_MHz,D_g=np.inf, extent=extent_deg,projection="SIN",draw=(i+1)%ND==0,hold=False)
+        _T = plot_Tant(RA=RA,DEC=DEC, f_MHz=f_MHz,D_g=np.inf, extent=extent_deg,projection="SIN",draw=(i+1)%ND==0,hold=False)
         for PE in pointing_errors:
             T_0.append(Trx+boresight_val(_T, PE))
-        _T = plot_Tant(RA=RA,DEC=DEC, freq_MHz=freq_MHz,D_g=D_g, extent=extent_deg,projection="SIN",draw=False)
+        _T = plot_Tant(RA=RA,DEC=DEC, f_MHz=f_MHz,D_g=D_g, extent=extent_deg,projection="SIN",draw=False)
         for PE in pointing_errors:
             T_b.append(Trx+boresight_val(_T, PE))
-        _T = plot_Tant(RA=RA,DEC=DEC, freq_MHz=freq_MHz,D_g=D_g,ellip=0.1, extent=extent_deg,projection="SIN",draw=False)
+        _T = plot_Tant(RA=RA,DEC=DEC, f_MHz=f_MHz,D_g=D_g,ellip=0.1, extent=extent_deg,projection="SIN",draw=False)
         for PE in pointing_errors:
             T_e.append(Trx+boresight_val(_T, PE))
 
