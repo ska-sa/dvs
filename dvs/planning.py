@@ -173,10 +173,14 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         plt.figure(**figargs)
         plt.title("Targets as observed by [%s]" % ant.name)
         dtime = (timestamps-timestamps[0])/3600.
-        for target in targets:
+        for target in list(targets):
             names = target.name + ("|"+"|".join(target.aliases) if target.aliases else "")
             _, el = target.azel(timestamps) # rad
-            plt.plot(dtime, el*180/np.pi, '-', label=names)
+            el *= 180/np.pi
+            if np.any(el>=horizon_deg):
+                plt.plot(dtime, el, '-', label=names)
+            else:
+                targets.remove(target)
         plt.hlines(horizon_deg, dtime[0], dtime[-1], 'k'); plt.ylim(0, 90)
         date0 = LST(date) if show_LST else date
         plt.xlabel(f"Time since {str(date0)} {TC} [hours]"); plt.ylabel("El [deg]")
