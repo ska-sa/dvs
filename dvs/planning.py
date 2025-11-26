@@ -31,6 +31,7 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
     """ Make a sky plot for the given date, seen from observer's location. Also plot sources visible from catalogue.
         
         @param date: (y,m,d,H,M,S) in UTC, or UTC seconds since epoch.
+        @param catfn: filename (or list of filenames) with target descriptions.
         @param listonly: if not None, a list of target names to select from the catalogue (default None).
         @param tabulate: True to print a table of all visible sources (default True)
         @param llh0: lat, lon, height above ellipsoid for nominal observer (default to m000).
@@ -61,10 +62,11 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
 
     # What sources are up?
     cat = katpoint.Catalogue(add_specials=True, antenna=refant)
-    try:
-        cat.add(open(catfn))
-    except ValueError: # Possibly a TLE file
-        cat.add_tle(open(catfn))
+    for fn in np.atleast_1d(catfn):
+        try:
+            cat.add(open(fn))
+        except ValueError: # Possibly a TLE file
+            cat.add_tle(open(fn))
     if listonly:
         listonly = set(listonly)
         cat = katpoint.Catalogue([target for target in cat.targets if not (listonly.isdisjoint(set([target.name]).union(set(target.aliases))))],
@@ -116,7 +118,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
     """ Notes rise & set times and plots the elevation trajectory if end_date is given.
         Also prints the geometric delay rate for the baseline as specified. 
         
-        @param target: a katpoint.Target object as observed by the associated Target.antenna,
+        @param target: one or more katpoint.Target object(s) as observed by the associated Target.antenna,
                        or a name (or multiple 'a|b|..' or '*' for all) to load from the catalogue.
         @param date: (y,m,d,H,M,S) in UTC, or UTC seconds since epoch.
         @param end_date: if given then will evaluate the target over the period from 'date' up to 'end_date' (default None)
@@ -124,7 +126,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         @param baseline_pt: the reference point for a baseline to calculate fringe rate,
                             either katpoint.Antenna or (dEast,dNorth,dUp)[m] (default (1000,0,0)).
         @param freq: frequency for calculating fringe rate (default 1e9) [Hz]
-        @param catfn, ant: defaults to use in case target is simply an identifier string.
+        @param catfn, ant: used if target is simply an identifier string, to construct the Traget object.
         @return: target (a list, if multiple matches)- a katpoint.Target
     """
     date = to_ephem_date(date)
@@ -144,7 +146,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         else:
             targets = cat.targets
     else:
-        targets = [target]
+        targets = np.atleast_1d(target)
     
     ant = targets[0].antenna
     # Make a copy of the observer to avoid modifying it unexpectedly
