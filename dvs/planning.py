@@ -135,7 +135,12 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
     ant = figargs.pop("catant", ant) # Backwards compatibility
     
     if isinstance(target,str):
-        cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=katpoint.Antenna(ant))
+        cat = katpoint.Catalogue(add_specials=True, antenna=katpoint.Antenna(ant))
+        for fn in np.atleast_1d(catfn):
+            try:
+                cat.add(open(fn))
+            except ValueError: # Possibly a TLE file
+                cat.add_tle(open(fn))
         if (target != "*"):
             matches = target.split("|")
             targets = [cat[t] for t in matches if (cat[t] is not None)]
