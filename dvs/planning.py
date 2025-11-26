@@ -183,7 +183,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
         plt.grid(True); plt.legend(fontsize='small')
     
     
-    baseline_pt = _baseline_endpt_(ant, baseline_pt) if (baseline_pt is not None) else None
+    baseline_pt = _baseline_endpt_(ant, tuple(baseline_pt)) if (baseline_pt is not None) else None
     
     print(f"{'Name':>14} | {'Rise':>14} {TC} | {'Set':>14} {TC} | Max Rate [deg/sec@{f_MHz/1000:.1f}GHz] | Flux [Jy@{f_MHz/1000:.1f}GHz]")
     print("-"*80)
