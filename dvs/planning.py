@@ -196,7 +196,7 @@ def describe_target(target, date, end_date=None, horizon_deg=0, baseline_pt=(100
             _set = observer.next_setting(target.body)
             if show_LST:
                 _rise, _set = LST(_rise),  LST(_set)
-        except (ValueError, AttributeError): # ValueError->ephem.AlwaysUpError, AttributeError->StationaryBody has no attribute 'radius'
+        except (ValueError, AttributeError, TypeError): # ValueError->ephem.AlwaysUpError, AttributeError->StationaryBody has no attribute 'radius'
             _rise, _set = np.nan, np.nan
         _phrate = np.nan
         if baseline_pt is not None:
