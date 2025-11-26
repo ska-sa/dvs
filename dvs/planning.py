@@ -60,7 +60,11 @@ def radiosky(date, f_MHz, flux_limit_Jy=None, el_limit_deg=1,
     plt.subplot(1,2,2); hp.cartview(np.log10(ov.observed_gsm), coord="G", unit="log10(K)", hold=True)
 
     # What sources are up?
-    cat = katpoint.Catalogue(open(catfn), add_specials=True, antenna=refant)
+    cat = katpoint.Catalogue(add_specials=True, antenna=refant)
+    try:
+        cat.add(open(catfn))
+    except ValueError: # Possibly a TLE file
+        cat.add_tle(open(catfn))
     if listonly:
         listonly = set(listonly)
         cat = katpoint.Catalogue([target for target in cat.targets if not (listonly.isdisjoint(set([target.name]).union(set(target.aliases))))],
@@ -358,3 +362,173 @@ def sim_observations(schedule, catfn, Tstart, interval=60, el_limit_deg=15, ant=
     plt.hlines(el_limit_deg, np.datetime64(int(Tstart),'s'), np.datetime64(int(start_time),'s'), 'k'); plt.ylim(0, 90)
     plt.xlabel(f"Time [UTC]"); plt.ylabel("El [deg]")
     plt.grid(True); plt.legend(fontsize='small')
+
+
+def plot_fringerate(ant_a, ant_b, rf_freq):
+    """ Make an all-sky fringe pattern for the given baseline.
+        @param ant_a, ant_b: katpoint.Antennas
+        @param rf_freq: [Hz] """
+    # Code copied from katsdpscripts/unmaintained/fringe_check.py
+    
+    baseline_m = ant_a.baseline_toward(ant_b)
+    lat = ant_a.observer.lat
+    
+    # In terms of (az, el)
+    x_range, y_range = np.linspace(-1., 1., 201), np.linspace(-1., 1., 201)
+    x_grid, y_grid = np.meshgrid(x_range, y_range)
+    xx, yy = x_grid.flatten(), y_grid.flatten()
+    outside_circle = xx * xx + yy * yy > 1.0
+    xx[outside_circle] = yy[outside_circle] = np.nan
+    with katpoint.projection.out_of_range_context(treatment='nan'):
+        az, el = katpoint.plane_to_sphere['SIN'](0.0, np.pi / 2.0, xx, yy)
+    
+    source_vec = katpoint.azel_to_enu(az, el)
+    geom_delay = -np.dot(baseline_m, source_vec) / katpoint.lightspeed
+    turns = geom_delay * rf_freq
+    phase = turns - np.floor(turns)
+    
+    plt.figure()
+    plt.imshow(phase.reshape(x_grid.shape), origin='lower',
+               extent=[x_range[0], x_range[-1], y_range[0], y_range[-1]])
+    plt.xlabel('Az')
+    plt.ylabel('El')
+    plt.title('Fringe phase across sky for given baseline')
+    plt.colorbar()
+    
+    # In terms of (ha, dec)
+    # One second resolution on hour angle - picks up fast fringes that way
+    ha_range = np.linspace(-12., 12., 86401)
+    dec_range = np.linspace(-90., katpoint.rad2deg(lat) + 90., 101)
+    ha_grid, dec_grid = np.meshgrid(ha_range, dec_range)
+    hh, dd = ha_grid.flatten(), dec_grid.flatten()
+    
+    def katpoint_hadec_to_enu(ha_rad, dec_rad, lat_rad):
+        """Convert (ha, dec) spherical coordinates to unit vector in ENU coordinates.
+    
+        This converts equatorial spherical coordinates (hour angle and declination)
+        to a unit vector in the corresponding local east-north-up (ENU) coordinate
+        system. The geodetic latitude of the observer is also required.
+    
+        Parameters
+        ----------
+        ha_rad, dec_rad, lat_rad : float or array
+            Hour angle, declination and geodetic latitude, in radians
+    
+        Returns
+        -------
+        e, n, u : float or array
+            East, North, Up coordinates of unit vector
+    
+        """
+        # This used to be in katpoint.conversion, but removed in 2025?
+        sin_ha, cos_ha = np.sin(ha_rad), np.cos(ha_rad)
+        sin_dec, cos_dec = np.sin(dec_rad), np.cos(dec_rad)
+        sin_lat, cos_lat = np.sin(lat_rad), np.cos(lat_rad)
+        return (-cos_dec * sin_ha,
+                cos_lat * sin_dec - sin_lat * cos_dec * cos_ha,
+                sin_lat * sin_dec + cos_lat * cos_dec * cos_ha)    
+    
+    source_vec = katpoint_hadec_to_enu(hh  / 12. * np.pi, katpoint.deg2rad(dd), lat)
+    geom_delay = -np.dot(baseline_m, source_vec) / katpoint.lightspeed
+    geom_delay = geom_delay.reshape(ha_grid.shape)
+    turns = geom_delay * rf_freq
+    phase = turns - np.floor(turns)
+    fringe_rate = np.diff(geom_delay, axis=1) / (np.diff(ha_range) * 3600.) * rf_freq
+    
+    plt.figure()
+    plt.imshow(phase, origin='lower', aspect='auto',
+               extent=[ha_range[0], ha_range[-1], dec_range[0], dec_range[-1]])
+    plt.xlabel('Hour angle (hours)')
+    plt.ylabel('Declination (degrees)')
+    plt.title('Fringe phase across sky for given baseline')
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(turns, origin='lower', aspect='auto',
+               extent=[ha_range[0], ha_range[-1], dec_range[0], dec_range[-1]])
+    plt.xlabel('Hour angle (hours)')
+    plt.ylabel('Declination (degrees)')
+    plt.title('Geometric delay (number of turns) across sky for given baseline')
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(fringe_rate, origin='lower', aspect='auto',
+               extent=[ha_range[0], ha_range[-2], dec_range[0], dec_range[-1]])
+    plt.xlabel('Hour angle (hours)')
+    plt.ylabel('Declination (degrees)')
+    plt.title('Geometric fringe rate (turns / s) across sky for given baseline')
+    plt.colorbar()
+
+
+from scipy import special as sp
+def plot_visibilities(ant_a, ant_b, target, diam, f_c, BW, t_start='2009-12-10 06:19:40'):
+    """ Now predict the visibility magnitude for the Sun across the band
+        @param diam: target angular diameter [rad]
+        @param f_c: band center [Hz]
+        @param BW: bandwidth [Hz]
+    """
+    
+    # Jinc function
+    def jinc(x):
+        j = np.ones(x.shape)
+        # Handle 0/0 at origin
+        nonzero_x = abs(x) > 1e-20
+        j[nonzero_x] = 2 * sp.j1(np.pi * x[nonzero_x]) / (np.pi * x[nonzero_x])
+        return j
+    
+    # Channel frequencies
+    band_center = f_c/1e6
+    channel_bw = BW/1e6 / 512
+    num_chans = 512
+    freqs = band_center - channel_bw * (np.arange(num_chans) - num_chans / 2 + 0.5)
+    channels = range(0,num_chans)
+    # Equivalent wavelength, in m
+    lambdas = katpoint.lightspeed / (freqs[channels] * 1e6)
+    # Timestamps for observation
+    t = np.array([katpoint.Timestamp(t_start)]) + np.linspace(0, 2700., 2700)
+    
+    # Get (u,v,w) coordinates (in meters) as a function of time
+    u, v, w = target.uvw(ant_b, t, ant_a)
+    # Normalised uv distance, in wavelengths
+    uvdist = np.outer(np.sqrt(u ** 2 + v ** 2), 1.0 / lambdas)
+    # Normalised w distance, in wavelengths (= turns of geometric delay) (also add cable delay)
+    wdist = np.outer(w - 20, 1.0 / lambdas)
+    
+    # Calculate normalised coherence function (see Born & Wolf, Section 10.4.2, p. 574-576)
+    coh = jinc(diam * uvdist) * np.exp(1j * 2 * np.pi * wdist)
+    
+    if (target.name=='Sun' and t_start == '2009-12-10 06:19:40'): # Add contribution from sunspot 1034
+        spot_angle = katpoint.deg2rad(160.)
+        sunspot_ripple = np.outer(np.cos(spot_angle) * u + np.sin(spot_angle) * v, 1.0 / lambdas)
+        sunspots = 0.02 * np.exp(1j * 2 * np.pi * 0.96 * 0.5 * diam * sunspot_ripple) + \
+                   0.02 * np.exp(1j * 2 * np.pi * 0.92 * 0.5 * diam * sunspot_ripple)
+        # Contribution from limb-brightening
+        limbs = 0.05 * np.cos(2 * np.pi * 0.9 * 0.5 * diam * np.outer(u, 1.0 / lambdas))
+        # Calculate normalised coherence function (see Born & Wolf, Section 10.4.2, p. 574-576)
+        coh = (jinc(diam * uvdist) + sunspots + limbs) * np.exp(1j * 2 * np.pi * wdist)
+    
+    plt.figure()
+    plt.imshow(np.abs(coh), origin='lower', aspect='auto',
+               extent=[0, channels[-1] - channels[0], t[-1] - t[0], 0.0])
+    plt.colorbar()
+    
+    plt.figure()
+    plt.imshow(np.angle(coh), origin='lower', aspect='auto',
+               extent=[0, channels[-1] - channels[0], t[-1] - t[0], 0.0])
+    plt.colorbar()
+    
+    plt.figure()
+    plt.subplot(311)
+    plt.plot(t - t[0], coh[:, 0].real)
+    plt.subplot(312)
+    plt.plot(t - t[0], coh[:, 100].real)
+    plt.subplot(313)
+    plt.plot(t - t[0], coh[:, 200].real)
+
+    
+# plot_fringerate(katpoint.Antenna("m028, -30:00:00, 21:00:00, 1860, 15"),
+#                 katpoint.Antenna("s0119, -30:00:00, 21:00:00, 1860, 15, %.1f %.1f %1.f"%(-4473.72--51.179, -7484.67--87.170, 49.67-7.636)), 1.7e9)
+plot_visibilities(katpoint.Antenna("m028, -30:00:00, 21:00:00, 1860, 15"),
+                  katpoint.Antenna("s0119, -30:00:00, 21:00:00, 1860, 15, %.1f %.1f %1.f"%(-4473.72--51.179, -7484.67--87.170, 49.67-7.636)),
+                  katpoint.Target("Sun, special"), 0.5*np.pi/180, 1.3e9, .8e9)
+plt.show()
