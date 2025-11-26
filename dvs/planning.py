@@ -524,11 +524,3 @@ def plot_visibilities(ant_a, ant_b, target, diam, f_c, BW, t_start='2009-12-10 0
     plt.plot(t - t[0], coh[:, 100].real)
     plt.subplot(313)
     plt.plot(t - t[0], coh[:, 200].real)
-
-    
-# plot_fringerate(katpoint.Antenna("m028, -30:00:00, 21:00:00, 1860, 15"),
-#                 katpoint.Antenna("s0119, -30:00:00, 21:00:00, 1860, 15, %.1f %.1f %1.f"%(-4473.72--51.179, -7484.67--87.170, 49.67-7.636)), 1.7e9)
-plot_visibilities(katpoint.Antenna("m028, -30:00:00, 21:00:00, 1860, 15"),
-                  katpoint.Antenna("s0119, -30:00:00, 21:00:00, 1860, 15, %.1f %.1f %1.f"%(-4473.72--51.179, -7484.67--87.170, 49.67-7.636)),
-                  katpoint.Target("Sun, special"), 0.5*np.pi/180, 1.3e9, .8e9)
-plt.show()
