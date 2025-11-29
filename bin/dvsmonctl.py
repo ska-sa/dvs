@@ -57,9 +57,9 @@ def _ska_tango_(ant, sub, cmd_args, attr_value):
             addr = "tango.DeviceProxy('%s').adm_name()"%addr
         tango_dp_instr(addr, "dp."+cmd_args)
     if (attr_value is not None):
-        attr, *value = np.atleast_1d(attr_value)
-        set_value = "" if (len(value) == 0) else "=%s"%value[0]
-        tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr,set_value,attr))
+        attr_value = np.atleast_1d(attr_value)
+        set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
+        tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0]))
 def x_dsh(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
