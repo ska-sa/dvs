@@ -6,8 +6,8 @@
     NB: This file is to be deployed on the monctl.mkat-rts server.
     
     Use as follows:
-    
-        import dvsmonctl; configure_cam('all')
+        configure_cam('all')
+        import dvsmonctl
         
         ...
         
@@ -15,13 +15,13 @@
         
         ...
         
-        cat = geo_cat(cam) # Download to /home/kat/usersnfs/aph/geo.txt by default
+        cat = tle_cat(cam) # Downloads to /home/kat/usersnfs/aph/tle.txt by default
 
     @author: aph@sarao.ac.za
 '''
-import katuilib, time
+import katuilib, katpoint, time
 import numpy as np
-# configure_cam('all') # TODO: must run this manually in interactive console
+import urllib.request
 
 
 def reset_ACU(cam_ant):
@@ -39,41 +39,41 @@ def reset_ACU(cam_ant):
     dsm.ResetTrackTable(); time.sleep(1)
     dsm.SetStandbyFPMode()
 
-def _ska_tango_cmd_(ant, sub, cmd_args, attr_value):
+def _ska_tango_(ant, sub, cmd_args, attr_value):
     """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param sub: either 'dsh', 'dsm' or 'spfc'
         @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
         @param attr_value: (name, value) for the attribute, or None
     """
+    import subprocess
     addr = eval("ant.sensor.%s_tango_address.get_value()"%sub)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","import tango; dp=tango.DeviceProxy(%s); %s"%(dp_addr,instr)], shell=False, timeout=1)
     if (cmd_args is not None):
         cmd_args = np.atleast_1d(cmd_args)
         cmd, args = cmd_args[0], cmd_args[1:]
         cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
         if (cmd_args.lower() == "restartserver()"):
-            !ssh kat@10.97.8.2 "python -c \"import tango; tango.DeviceProxy(tango.DeviceProxy('{addr}').adm_name()).{cmd_args}\""
-        else:
-            !ssh kat@10.97.8.2 "python -c \"import tango; print(tango.DeviceProxy('{addr}').{cmd_args})\""
+            addr = "tango.DeviceProxy('%s').adm_name()"%addr
+        tango_dp_instr(addr, "dp."+cmd_args)
     if (attr_value is not None):
-        attr_value = np.atleast_1d(attr_value)
-        attr, value = attr_value[0], attr_value[1:]
-        attr_value = attr + ("" if (len(value) == 0) else "=%s"%value[0])
-        !ssh kat@10.97.8.2 "python -c \"import tango; dsm=tango.DeviceProxy('{addr}'); dsm.{attr_value}; print(dsm.{attr})\""
+        attr, *value = np.atleast_1d(attr_value)
+        set_value = "" if (len(value) == 0) else "=%s"%value[0]
+        tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr,set_value,attr))
 def x_dsh(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
         @param attr_value: (name, value) for the attribute (default None)
     """
-    _ska_tango_cmd_(ant, 'dsh', cmd_args, attr_value)
+    _ska_tango_(ant, 'dsh', cmd_args, attr_value)
 def x_dsm(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
         @param attr_value: (name, value) for the attribute (default None)
     """
-    _ska_tango_cmd_(ant, 'dsm', cmd_args, attr_value)
+    _ska_tango_(ant, 'dsm', cmd_args, attr_value)
 
 
 def match_ku_siggen_freq(cam, override=False):
@@ -114,18 +114,15 @@ def trk(pointables, tgt):
             proxy.req.dsm_DisablePointingCorrections()
      
 
-def geo_cat(cam, savefn="/home/kat/usersnfs/aph/geo.txt", download="geo,intelsat"):
+def tle_cat(cam, tags="geo,intelsat", savefn="/home/kat/usersnfs/aph/tle.txt"):
     """ Download the current CelesTrak TLEs and combine it into one catalogue file.
         Then instantiates a katpoint catalogue from this file, using the current session's reference antenna.
         
+        @param tags: the TLE groups to download as comma-separated list (default "geo,intelsat").
         @param savefn: the name of the file that will contain the downloaded TLEs (all concatenated in sequence)
-        @param download: the TLE groups to download as comma-separated list (degault "geo,intelsat").
         @return: the katpoint.Catalogue 
     """
-    import katpoint
-    import urllib.request
-    
-    groups = download.split(",")
+    groups = tags.split(",")
     urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%groups[0], savefn)
     for group in groups[1:]:
         urllib.request.urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=%s&FORMAT=tle"%group, "/tmp/tle.txt")
@@ -136,3 +133,5 @@ def geo_cat(cam, savefn="/home/kat/usersnfs/aph/geo.txt", download="geo,intelsat
     cat = katpoint.Catalogue(add_specials=False, antenna=cam.sources.antenna)
     cat.add_tle(open(savefn))
     return cat
+
+geo_cat = tle_cat # Alias
