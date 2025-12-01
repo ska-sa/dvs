@@ -48,18 +48,18 @@ def _ska_tango_(ant, sub, cmd_args, attr_value):
     """
     import subprocess
     addr = eval("ant.sensor.%s_tango_address.get_value()"%sub)
-    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","import tango; dp=tango.DeviceProxy(%s); %s"%(dp_addr,instr)], shell=False, timeout=1)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(\"%s\"); %s'"%(dp_addr,instr)], shell=False)
     if (cmd_args is not None):
         cmd_args = np.atleast_1d(cmd_args)
         cmd, args = cmd_args[0], cmd_args[1:]
         cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
         if (cmd_args.lower() == "restartserver()"):
             addr = "tango.DeviceProxy('%s').adm_name()"%addr
-        tango_dp_instr(addr, "dp."+cmd_args)
+        print(tango_dp_instr(addr, "dp."+cmd_args))
     if (attr_value is not None):
         attr_value = np.atleast_1d(attr_value)
         set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
-        tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0]))
+        print(tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
 def x_dsh(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
