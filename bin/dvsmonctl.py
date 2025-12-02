@@ -39,6 +39,35 @@ def reset_ACU(cam_ant):
     dsm.ResetTrackTable(); time.sleep(1)
     dsm.SetStandbyFPMode()
 
+
+def toggle_LNAs(*cam_ants, band=2, also_tempctl=False):
+    """ Toggle the Band's LNA's ON/OFF.
+        @param band: (default 2)
+        @param also_tempctl: if True then also turn the temperature control system ON/OFF (default False) """
+    assert (band == 2), "TODO: this function is currently only for B2"
+    import tango
+    for ant in cam_ants:
+        spfc_addr = ant.sensors.spfc_tango_address.get_value()
+        spfc = tango.DeviceProxy(spfc_addr)
+        if (spfc.b2OperatingState != 3): # "OPERATE"
+            print("ERROR: Band%d is not in OPERATE - turn it on manually, just to be safe!"%band)
+            return
+        
+        current_on = spfc.b2LnaHPowerState | spfc.b2LnaVPowerState
+        if (current_on):
+            print("INFO: Band%d amplifiers are currently ON, now turning them OFF"%band)
+            spfc.b2LnaHPowerState = False
+            spfc.b2LnaVPowerState = False
+            if also_tempctl:
+                spfc.b2LnaPidPowerState = False
+        else: # cam.s0002.req.dsh_SetSPFLnaPowerOn(0) # 0 = the "active band" 
+            print("INFO: Band%d amplifiers are currently OFF, now turning them ON"%band)
+            spfc.b2LnaHPowerState = True
+            spfc.b2LnaVPowerState = True
+            if also_tempctl:
+                spfc.b2LnaPidPowerState = True
+
+
 def _ska_tango_(ant, sub, cmd_args, attr_value):
     """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
         @param ant: control object for dish proxy (e.g. cam.s0001)
@@ -48,18 +77,18 @@ def _ska_tango_(ant, sub, cmd_args, attr_value):
     """
     import subprocess
     addr = eval("ant.sensor.%s_tango_address.get_value()"%sub)
-    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(\"%s\"); %s'"%(dp_addr,instr)], shell=False)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
     if (cmd_args is not None):
         cmd_args = np.atleast_1d(cmd_args)
         cmd, args = cmd_args[0], cmd_args[1:]
         cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
         if (cmd_args.lower() == "restartserver()"):
-            addr = "tango.DeviceProxy('%s').adm_name()"%addr
+            addr = "tango.DeviceProxy(\"%s\").adm_name()"%addr
         print(tango_dp_instr(addr, "dp."+cmd_args))
     if (attr_value is not None):
         attr_value = np.atleast_1d(attr_value)
         set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
-        print(tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
+        print(tango_dp_instr("\"%s\""%addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
 def x_dsh(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
