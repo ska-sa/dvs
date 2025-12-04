@@ -37,6 +37,8 @@ parser.add_option('-s', '--max-sigma', type='float', default=0.2,
 parser.add_option("-t", "--time-offset", type='float', default=0.0,
                   help="Time offset to add to DBE timestamps, in seconds (default = %default)")
 parser.add_option('-x', '--exclude', default='', help="Comma-separated list of sources to exclude from fit")
+parser.add_option("--truncate-tracklength", type='float', default=np.inf,
+                  help="Truncate 'tracks' that are longer than this duration in seconds (default = %default)")
 parser.add_option("--discard-tracklength", type='float', default=np.inf,
                   help="'tracks' longer than this are discarded; duration in seconds (default = %default)")
 parser.add_option('--fit-niao', action="store_true", default=False,
@@ -147,6 +149,8 @@ augmented_targetdir, group_delay, sigma_delay = [], [], []
 scan_targets, scan_mid_az, scan_mid_el, scan_timestamps, scan_phase = [], [], [], [], []
 for scan_ind, state, target in data.scans():
     ts = data.timestamps[:]
+    if np.isfinite(opts.truncate_tracklength):
+        ts = ts[:int(opts.truncate_tracklength/(ts[1]-ts[0])+0.5)]
     num_ts = len(ts)
     if state != 'track':
         log("scan %3d (%4d samples) skipped '%s'" % (scan_ind, num_ts, state))
