@@ -340,7 +340,7 @@ def extract_scan_segments(x):
     return [x[scan_start:(scan_start + num_bls*scan_len)]
             for scan_start, scan_len in zip(scan_bl_starts, scan_lengths)]
 
-plt.figure(1, figsize=(14,5))
+plt.figure(1).set_figwidth(14)
 plt.clf()
 scan_freqinds = [np.arange(num_bls * num_chans)] * len(scan_timestamps)
 segms, labels, lines = scape.plots_basic.plot_segments(scan_timestamps, scan_freqinds, scan_phase, labels=scan_targets)
@@ -352,7 +352,7 @@ for yval in range(0, num_bls * num_chans, num_chans):
     plt.axhline(yval, color='k', lw=2)
 plt.title('Raw visibility phase per baseline')
 
-plt.figure(2, figsize=(14,5))
+plt.figure(2).set_figwidth(14)
 plt.clf()
 resid_ind = [np.arange(scan_start, scan_start + num_bls*scan_len)
              for scan_start, scan_len in zip(scan_bl_starts, scan_lengths)]
@@ -369,7 +369,7 @@ plt.xlabel('Measurements')
 plt.ylabel('Delay error (ns)')
 plt.title('Residual delay errors (blue = old model and red = new model)')
 
-plt.figure(3, figsize=(14,5))
+plt.figure(3).set_figwidth(14)
 plt.clf()
 for n in range(num_bls):
     # Pick 25th or 75th percentile of each residual, whichever is larger
