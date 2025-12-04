@@ -40,13 +40,13 @@ def reset_ACU(cam_ant):
     dsm.SetStandbyFPMode()
 
 
-def toggle_LNAs(*cam_ants, band=2, also_tempctl=False):
+def toggle_LNAs(cam_ant, band=2, also_tempctl=False):
     """ Toggle the Band's LNA's ON/OFF.
         @param band: (default 2)
         @param also_tempctl: if True then also turn the temperature control system ON/OFF (default False) """
     assert (band == 2), "TODO: this function is currently only for B2"
     import tango
-    for ant in cam_ants:
+    for ant in np.atleast_1d(cam_ant):
         spfc_addr = ant.sensors.spfc_tango_address.get_value()
         spfc = tango.DeviceProxy(spfc_addr)
         if (spfc.b2OperatingState != 3): # "OPERATE"
