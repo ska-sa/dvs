@@ -440,6 +440,7 @@ def start_hacked_session(cam, **kwargs):
                 if session.stow_when_done:
                     user_logger.info('stowing dishes')
                     session.ants.req.mode('STOW')
+                    time.sleep(5) # Try this as workaround for MKE ACU's not completing STOW 12/2025
                 else:
                     user_logger.info('stopping dishes')
                     session.ants.req.mode('STOP')
