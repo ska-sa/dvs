@@ -430,21 +430,22 @@ def start_hacked_session(cam, **kwargs):
                 session.ants.req.dig_noise_source('now', 'off')
             user_logger.info("Stopped digitiser-level noise diode switching.")
         # Shut down capturing stream, except for no-capture session
-        if session._cam_.dry_run or (not kwargs.get('no_capture', False)):
+        if (kwargs.get('no_capture', False) == False):
             session._end_(*a, **k)
         else:
             user_logger.info('DONE')
-            user_logger.info('Ended data capturing session with experiment '
+            user_logger.info('Ended "no capture" session with experiment '
                              'ID %s', session.experiment_id)
-            if (session.ants is not None) and (not session._cam_.dry_run):
+            # Stop the antennas and optionally stow them too
+            session.stop_antennas()
+            if (session.ants is not None):
                 if session.stow_when_done:
-                    user_logger.info('stowing dishes')
-                    session.ants.req.mode('STOW')
-                    time.sleep(5) # Try this as workaround for MKE ACU's not completing STOW 12/2025
+                    user_logger.info('Stowing antennas')
+                    if (not session._cam_.dry_run):
+                        session.ants.req.mode('STOW')
                 else:
-                    user_logger.info('stopping dishes')
-                    session.ants.req.mode('STOP')
-                time.sleep(1) # Especially the Tango-based dishes need this
+                    user_logger.info('Stopping antennas')
+            
             user_logger.info('==========================')
     session.end = hacked_end
     
