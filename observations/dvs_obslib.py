@@ -71,6 +71,9 @@ def standard_script_options(usage, description):
     parser.add_option('--no-tiltcorrections', action='store_true',
                       help='Explicitly disable tilt corrections during controlled movement.')
 
+    parser.add_option('--release-auth', action='store_true',
+                      help='Release ACU control authority after the script is completed.')
+
     return parser
 
 
@@ -297,6 +300,17 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
         time.sleep(3)
 
 
+def release_ACU_authority(ants):
+    """ Release control authority on the ACUs """
+    for ant in ants:
+        try:
+            dsm_addr = ant.sensors.dsm_tango_address.get_value()
+            dsm = tango.DeviceProxy(dsm_addr)
+            dsm.ReleaseAuthority()
+        except:
+            pass
+
+
 def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False):
     """ Switch the indexer out & back, if requested. This implementation currently only works for MKE/SKA Dish!
         
@@ -447,6 +461,12 @@ def start_hacked_session(cam, **kwargs):
                     user_logger.info('Stopping antennas')
             
             user_logger.info('==========================')
+        if kwargs.get('release_auth', False):
+            user_logger.info('Releasing ACU authority...')
+            if  not session._cam_.dry_run:
+                time.sleep(20) # MKE STOW takes long to complete
+                release_ACU_authority(session.ants)
+    
     session.end = hacked_end
     
     return session
