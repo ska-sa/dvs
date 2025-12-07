@@ -36,6 +36,7 @@ parser.add_option('-s', '--max-sigma', type='float', default=0.2,
                   help="Threshold on std deviation of normalised group delay, default is %default")
 parser.add_option("-t", "--time-offset", type='float', default=0.0,
                   help="Time offset to add to DBE timestamps, in seconds (default = %default)")
+parser.add_option('--use-only', default='', help="Comma-separated list of sources to use in fit")
 parser.add_option('-x', '--exclude', default='', help="Comma-separated list of sources to exclude from fit")
 parser.add_option("--truncate-tracklength", type='float', default=np.inf,
                   help="Truncate 'tracks' that are longer than this duration in seconds (default = %default)")
@@ -161,7 +162,7 @@ for scan_ind, state, target in data.scans():
     if opts.discard_tracklength < (ts[-1]-ts[0]):
         log("scan %3d (%4d samples) skipped - too LONG to be good?" % (scan_ind, num_ts))
         continue
-    if target.name in excluded_targets:
+    if (target.name in excluded_targets) or ((target.name not in opts.use_only) and (opts.use_only not in ['','*'])):
         log("scan %3d (%4d samples) skipped - excluded '%s'" % (scan_ind, num_ts, target.name))
         continue
     # Extract visibilities for scan as an array of shape (T, F, B)
