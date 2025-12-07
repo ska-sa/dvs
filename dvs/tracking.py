@@ -251,9 +251,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     scan_ant = ds.ants[scan_ant_ix]
     gust_timestamps, gust_wind_speed = katselib.getsensorvalues("%s_enviro_gust_wind_speed"%ant, ds.timestamps)
     avgws_timestamps, avgws = ds.timestamps[:], sliding_window(ds.timestamps, ds.wind_speed, int(1000/(ds.timestamps[1]-ds.timestamps[0])+0.5), np.mean)
-    ant_type = ant.name[0]
-    if (ant_type == 's') and (ds.timestamps[-1] < 1756490000): # Determine whether it's MKE(prior to 28/08/2025) or SKA
-        ant_type = 'e'
+    ant_type = 'e' if ((ant[0] == 's') and (ds.timestamps[-1] < 1756490000)) else ant[0] # Determine whether it's MKE(prior to 28/08/2025) or SKA
     fi_sensor = {'m':"%s_ap_indexer_position_raw",
                  'e':"%s_dsm_indexerActualPosition",
                  's':"%s_dsm_FeedIndexer_Status_p_Enc"}[ant_type]
