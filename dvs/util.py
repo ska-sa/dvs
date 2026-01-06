@@ -95,6 +95,8 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
         _time_offset = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
         if (1738674000 < cbid): # From 4/02/2025 ~13h00 UTC, the Receptor & Dish proxies have the same lead time offset
             t_o = 5 # https://github.com/ska-sa/katmisc/blob/release/karoocamv30/katmisc/app/dish_proxy/katproxy/proxy/mke_dsh_model.py#L39
+            if (1760000000 < cbid) and ref_ant.startswith('s'): # TODO: SkaoDishProxy seems to require this - get it back to 5sec!
+                t_o = 6.2
             katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
         elif ref_ant:
             if ref_ant.startswith("s"):
@@ -313,4 +315,31 @@ def get_datalog_entries(ant, dataset="*"):
     return headings, values
 
 
+def ls_archive(query, min_duration=0, min_night_duration=0, vis_status=False,
+               fields=['CaptureBlockId','StartTime','CenterFrequency','InstructionSet'], field_len=60):
+    """ Query the archive and ensure an entry is added to the DVS data registry.
+    """ + ksl.ls_archive.__doc__
+    
+    recs = ksl.ls_archive(query, min_duration, min_night_duration, vis_status=vis_status, fields=fields, field_len=field_len)
+    
+    # TODO: check & add entries to the data registry spreadsheet
+    
+    return recs
+
+
+
+if __name__ == "__main__":
+    # add_datalog_entry("SKA119", 123456, "description", "center_freq", "notes", "env_conditions")
+    h, v = get_datalog_entries("SKA119", dataset="*")
+    print(h)
+    for r in v:
+        print(r)
+    # add_datalog_entry("SKA119", 1234567890, "description2", "center_freq", "notes", "env_conditions", ["TP 1"])
+    # h, v = get_datalog_entries("SKA119", dataset="123456")
+    # print(h)
+    # for r in v:
+    #     print(r)
+    #
+    # add_datalog_entry("SKA119", 1234567890, "description3", -99, "notes", "supper", ["TP 1", "TP 2"],
+    #                   replace_all=True)
     
