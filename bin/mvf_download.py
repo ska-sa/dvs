@@ -207,6 +207,7 @@ def main():
     query = urlencode(query_params)
     rdb_path = (meta_path / rdb_filename).absolute()
     local_rdb = urlunparse(('file', '', str(rdb_path), '', query, ''))
+    local_rdb = local_rdb.replace("C:\\", "") # HACK for MS Windows - but only C: 
     print(f"Opening local RDB file: {local_rdb}")
     d = katdal.open(local_rdb)
     d.select(**args.select)
