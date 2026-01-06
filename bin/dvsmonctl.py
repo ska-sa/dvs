@@ -40,6 +40,57 @@ def reset_ACU(cam_ant):
     dsm.SetStandbyFPMode()
 
 
+def release_ACU_authority(cam_ant):
+    """ Release control authority on the ACUs """
+    import tango
+    for ant in np.atleast_1d(cam_ant):
+        dsm_addr = ant.sensors.dsm_tango_address.get_value()
+        dsm = tango.DeviceProxy(dsm_addr)
+        dsm.ReleaseAuthority()
+
+
+def clear_FORBIDDEN(cam_ant):
+    """ [APH] FORBIDDEN should be treated as a BUG; this function is a stopgap measure!
+        [Cristobal 8/07/2025] "ResetDishMode does the following:
+         1. flushes the task queue
+         2. resets al progress attributes (StandbyLPModeProgress, SetStowModeProgress, etc)
+         3. Sets the dish to Standby-LP mode"
+        and the point is exactly that, getting the dish out of FORBIDDEN """
+    import tango
+    for ant in np.atleast_1d(cam_ant):
+        dsh_addr = ant.sensors.dsh_tango_address.get_value()
+        dsh = tango.DeviceProxy(dsh_addr)
+        spfc_addr = ant.sensors.spfc_tango_address.get_value()
+        spfc = tango.DeviceProxy(spfc_addr)
+        SPF_MODE_OPERATE = 3
+        state_pre = [spfc.b2DefaultStartState, spfc.b2OperatingState, spfc.operatingMode]
+        try:
+            dsh.ResetDishMode(); time.sleep(10) # This is necessary to get rid of (some) occurrences of FORBIDDEN
+            dsh.SetStandbyFPMode(); time.sleep(3)
+        finally:
+            # LMC bug!? May need to set SPF back to OPERATE otherwise it warms up!
+            state_post = [spfc.b2DefaultStartState, spfc.b2OperatingState, spfc.operatingMode]
+            
+            if (state_pre[0] != state_post[0]):
+                print("WARNING: SPFB2 default startup state was modified (LMC bug)! Restoring to previous %s..."%state_pre[0])
+                spfc.b2DefaultStartState = state_pre[0]
+                time.sleep(1)
+                final_state = spfc.b2DefaultStartState
+                print(("SUCCESSFULLY restored" if (state_pre[0] == final_state) else "FAILED to restore") + " SPFB2 default startup state.")
+            if (state_pre[2] != state_post[2]):
+                print("WARNING: SPFC operating mode was modified (LMC bug)! Restoring to previous mode %s..."%state_pre[2])
+                if (state_pre[2] == SPF_MODE_OPERATE): spfc.SetOperateMode()
+                time.sleep(5)
+                final_state = spfc.operatingMode
+                print(("SUCCESSFULLY restored" if (state_pre[2] == final_state) else "FAILED to restore") + " SPFC operating mode.")
+            if (state_pre[1] != state_post[1]):
+                print("WARNING: SPFB2 operating state was modified (LMC bug)! Restoring to previous %s..."%state_pre[1])
+                if (state_pre[1] == SPF_MODE_OPERATE): spfc.SetOperateMode()
+                time.sleep(5)
+                final_state = spfc.b2OperatingState
+                print(("SUCCESSFULLY restored" if (state_pre[1] == final_state) else "FAILED to restore") + " SPFB2 operating state.")
+
+
 def toggle_LNAs(cam_ant, band=2, also_tempctl=False):
     """ Toggle the Band's LNA's ON/OFF.
         @param band: (default 2)
