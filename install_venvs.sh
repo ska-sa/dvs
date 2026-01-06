@@ -15,6 +15,9 @@ pip cache purge
 pip install ipykernel jupyter notebook
 ipython3 kernel install --name "python3" --user
 
+pip install --upgrade nbdime
+nbdime config-git --enable --global
+
 
 pip install numpy scipy matplotlib
 pip install pysolr paramiko zernike
@@ -48,8 +51,12 @@ PK=\"env\":{\"PYTHONPATH\":\"`pwd`/dvs\"}
 sed -i -E ':a; N; $! ba; s@(.*)}@\1,'$PK'\n}@' $KS
 
 
-echo YOU must install rclone - that's if you want to download local cached datasets!
-# see https://rclone.org/install
+# Install rclone - that's if you want to download local cached datasets! See https://rclone.org/install
+curl -O https://downloads.rclone.org/rclone-current-linux-amd64.zip
+unzip rclone-current-linux-amd64.zip
+chmod +x `ls -d rclone-*-linux-amd64`/rclone
+cp `ls -d rclone-*-linux-amd64`/rclone /home/aph/venv-py3/bin
+rm -rf rclone-*-linux-amd64*
 
 echo You may start the notebook server by using the following command:
 echo `readlink -f dvs/startjnb` 
