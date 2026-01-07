@@ -19,7 +19,7 @@ pip install --upgrade nbdime
 nbdime config-git --enable --global
 
 
-pip install numpy scipy matplotlib
+pip install numpy scipy matplotlib allantools
 pip install pysolr paramiko zernike
 
 pip install git+https://github.com/ska-sa/{scape,katdal,katversion,katpoint,katsdpcal,katsdpcalproc}
