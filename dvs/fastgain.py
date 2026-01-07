@@ -11,6 +11,7 @@
 """
 
 import numpy as np
+import allantools
 from .util import open_dataset, get_fft_shift_and_gains
 from pylab import figure, subplots, plot, psd, imshow, colorbar, legend, xlabel, ylabel, subplot, ylim, title, suptitle
 import pylab as plt
@@ -34,52 +35,29 @@ def fit_avg(x, win_length):
         results[i:i+W] = np.ones(W)*np.average(x[i:i+W])
     return np.asarray(results)
 
-def calculate_allanvariance(data):
-    """
-        Calculates the Allan variance of frequency, as described by Rau, Schneider & Vowinkel
-        - see "Characterization and Measurement of Radiometer Stability"
-        @param data: measurements spaced at regular intervals
-        @return: (Ks, sA2) - the number of integration intervals and the Allan variance^2,
-        respectively.
-    """ 
-    # Functions to calculate the Allan variance:
-    # (The python compiler does a good job at optimizing this, so I focused on readability.)
-    def R(i, K, x):
-        y = x[i*K:(i+1)*K]
-        return np.nanmean(y)
-    
-    def s2(K, x):
-        M = int(len(x)/K)-1
-        y = [(R(i+1, K, x) - R(i, K, x))**2 for i in range(M)]
-        return np.nanmean(y)/2.
-    
-    # Calculate the Allan variances vs. integration intervals:
-    Ks = range(1,int(len(data)/3))
-    sA2 = np.asarray([s2(K, data) for K in Ks])
-    return Ks, sA2
 
-def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitude [lin]"), label=None, title="", grid=False, plot_raw=False, normalize=True, figs=None):
-    """
-        Creates the Allan variance plot for the regularly sampled frequency or magnitude data, as
-        proposed by Rau, Schneider & Vowinkel
-        - see "Characterization and Measurement of Radiometer Stability"
-        @param x: time series data - either magnitude or frequency - in a linear scale!
+def plot_allandev(x, dt=1, time=None, sfact=1., xyunits=("[sec]",""), label=None, title="", grid=True, plot_raw=False, normalize=True, figs=None):
+    """ Creates the Allan deviation plot for the nominally constant (magnitude or frequency-like, as opposed
+        to phase-like) data.
+        @param x: regularly sampled time series data - in a linear scale!
         @param dt: the time increment between successive data measurements.
         @param time: the regularly spaced time vector, if available.
         @param sfact: scale factor to apply to deviations e.g. in case of samples being differences (default 1)
-        @param xylabels: pair of (xlabel, ylabel) for plots (default "time [sec]", "amplitude [lin]").
+        @param xyunits: pair of (xlabel, ylabel) for plots (default "[sec]", "").
         @param label: the legend label for this data series (default None).
         @param title: a title to use for the figure instead of the automatic one (default None)
-        @param grid: True to show the grid on all of the plots (default False)
+        @param grid: True to show the grid on all of the plots (default True)
         @param plot_raw: True to plot the time series and PSD thereof (default False)
         @param normalize: True to normalize the data to the average value before analysis (default True)
         @param figs: a list of length 2 (or 1 if not plot_raw) containing existing pylab
         figures to plot over, or None to create new ones (default None).
         @return: the list of figures created / re-used ("raw" is at index 0, "avar" is at -1)
     """
-    p_data = np.asarray(x)
-    if normalize: # Legacy support: has no impact on the slope of Allan variance curve
-        p_data = p_data/np.nanmean(p_data)
+    data = np.asarray(x)
+    xyunits = list(xyunits)
+    if normalize: # Legacy support: has no impact on the slope of Allan deviation graph
+        data = data/np.nanmean(data)
+        xyunits[1] = ""
     
     figs = [None]*2 if (figs is None) else figs
     
@@ -87,32 +65,29 @@ def plot_allanvar(x, dt=1, time=None, sfact=1., xylabels=("time [sec]","amplitud
         if figs[0]:
             plt.sca(figs[0].axes[-1])
         else:
-            figs[0] = figure(figsize=(14,6))
+            figs[0] = plt.figure(figsize=(14,6))
         time = dt*np.arange(len(x)) if (time is None) else time
         time = time - time[0] # Ensure there are no confusing sample offsets
-        plot(time, p_data, ".", label=label); legend()
-        xlabel(xylabels[0]); ylabel(xylabels[1]); plt.grid(grid)
+        plt.plot(time, data, ".", label=label); plt.legend()
+        plt.xlabel("time "+xyunits[0]); plt.ylabel(xyunits[1]); plt.grid(grid)
         plt.title("Time series: %s"%title)
     
-    # TODO: figure out why, when flags are applied (values set to nan), the AVAR typically gets spikes.
-    K, sA2 = calculate_allanvariance(p_data)
-    sA2 *= sfact**2 # sfact applies to stddev
-    # Calculate and plot the Allan variances vs. integration time:
-    if (dt > 0.1): ndecimals = 1
-    elif (dt > 0.01): ndecimals = 2
-    elif (dt > 0.001): ndecimals = 3
-    else: ndecimals = 4
+    # Calculate and plot the Allan deviation vs. integration time:
     if figs[-1]:
         plt.sca(figs[-1].axes[-1])
     else:
-        figs[-1] = figure(figsize=(14,6))
-    plot(np.log10(K*dt), 0.5*np.log10(sA2), ".--", label=label); legend()
-    plot(np.log10(K*dt), 0.5*np.log10(sA2[0]/K), "-") # White noise, for comparison
-    ylabel(r"$\log_{10}(\sigma_A)$"); xlabel(xylabels[0]); plt.grid(grid)
-    plt.title("Allan Variance: %s"%title)
-    plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda k, pos: round(dt*10**k,ndecimals)))
+        figs[-1] = plt.figure(figsize=(14,6))
+    plt.yscale('log'); plt.xscale('log')
+    plt.grid(grid, which='both')
+    taus2, ad, ade, n = allantools.oadev(data, rate=1/dt, data_type='freq')
+    ad *= sfact; ade *= sfact
+    plt.errorbar(taus2, ad, yerr=ade, fmt=".--", label=label); plt.legend()
+    plt.plot(taus2, ad[0]/(taus2/taus2[0])**.5, "k-", alpha=0.3) # White noise, for comparison
+    plt.xlabel(r"$\tau$ "+xyunits[0]); plt.ylabel(r"$\sigma_A$ "+xyunits[1])
+    plt.title("Allan Deviation: %s"%title)
     
     return figs
+plot_allanvar = plot_allandev # DEPRECATED!
 
 
 def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
@@ -397,8 +372,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         axes[2*i+1].set_ylim(0,1.5*sigma_spec)
     axes[-1].set_xlabel("time [sec]");
     
-    af = plot_allanvar(ret[0], dt=dt, sfact=sfact, label="H-pol");
-    plot_allanvar(ret[1], dt=dt, sfact=sfact, label="V-pol", grid=True, figs=af)
+    af = plot_allandev(ret[0], dt=dt, sfact=sfact, label="H-pol");
+    plot_allandev(ret[1], dt=dt, sfact=sfact, label="V-pol", grid=True, figs=af)
     suptitle(_suptitle3_)
     
     return ret
