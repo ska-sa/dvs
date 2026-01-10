@@ -307,14 +307,15 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
             assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
             hv = ds.vis[mask]
+            hv[np.abs(hv)==0] = np.nan # Under-quantised channels may be zero - must not contribute to height!
+            f_ref = np.mean(ds.freqs[np.any(np.isnan(hv),axis=(0,2))])
             hv_mag = np.abs(hv)
-            hv_mag[hv_mag==0] = np.min(hv_mag[hv_mag>0])/10 # Under-quantised channels may be zero
             hv_c_angle = np.median(np.unwrap(np.angle(hv), axis=0), axis=0) # Flatten phases relative to median over time
             hv /= np.mean(hv_mag, axis=0)*np.exp(1j*hv_c_angle) # Normalise for H-V gains & bandpass
             if track_ant and phased_up: # Phase coherent average
-                height = np.abs(np.sum(hv, axis=(1,2))) # TOTAL complex power integrated  over frequency
+                height = np.abs(np.nansum(hv, axis=(1,2))) # TOTAL complex power integrated  over frequency
             else:
-                height = np.sum(np.abs(hv), axis=(1,2)) # TOTAL power integrated over frequency
+                height = np.nansum(np.abs(hv), axis=(1,2)) # TOTAL power integrated over frequency
             
             if (kind in ['circle','cardioid','epicycle']): # These don't have enough sampling to fit background reliably
                 bkg = np.array([0])
@@ -338,9 +339,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
                 else:
                     axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
                 axs[2].set_xlabel("target x [deg]")
+            
             constr = {}
             if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycle
-                constr = dict(constrain_hpbw=1.22*(_c_/np.mean(ds.freqs))/scan_ant.diameter * R2D)
+                constr = dict(constrain_hpbw=1.22*(_c_/f_ref)/scan_ant.diameter * R2D)
             # Fitted beam center is in (x, y) coordinates, in projection centered on target
             xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                                  debug=axs[1:] if debug else None, **constr)
