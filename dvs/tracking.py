@@ -83,7 +83,7 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
         p = sop.minimize(lambda p: np.nansum(mask*(height-model(*p))**2), p0, method='BFGS', options=dict(disp=False))
     else: # Constrained fits should be robust, and not very sensitive to bounds
-        bounds = [(0,np.inf)] + ( [(-width0,width0)]*2 ) + ( [(0.1*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
+        bounds = [(0,np.inf)] + ( [(-scanext/2,scanext/2)]*2 ) + ( [(0.1*width0,2*width0)]*2 ) + [(-np.pi/2,np.pi/2)] + [(0,np.min(height))]
         if (constrain_ampl): # Explicit constraint for e.g. circular scan
             bounds[0] = (0.20*ampl0, 1.20*ampl0)
         if (constrain_hpbw):
