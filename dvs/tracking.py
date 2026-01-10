@@ -50,7 +50,7 @@ def gaussian2D(x, y, x0, y0, wx, wy, theta=0):
     # Evaluate the Gaussian
     return np.exp( -np.log(2) * ( (a-a0)**2/wx**2 + (b-b0)**2/wy**2) )
 
-def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_hpbw=None, constrain_center=True, debug=None):
+def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain_ampl=None, constrain_hpbw=None, constrain_center=False, debug=None):
     """ Fit a Gaussian to the magnitude measured in tangent plane coordinates.
         NB: this does not fit the background, so only works reliably if the background is "flat".
         
@@ -64,19 +64,20 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # These measurements (power & voltage) are typically done by scanning around half _power_ contour
     r = np.squeeze((x**2+y**2)**.5)
     scanext = 2*np.median(r)
-    width0 = constrain_hpbw if (constrain_hpbw) else scanext/2
-    ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
-    p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
-    
     mask = np.full(len(height), 1.0)
     if constrain_center: # Suppress things towards the periphery
-        mask = 2./(1+r/width0); mask[r < width0] = 1
+        mask = 2./(1+(r/scanext*2)**.5); mask[r < scanext/2] = 1
     
+    width0 = constrain_hpbw if (constrain_hpbw) else scanext/2
+    ampl0 = constrain_ampl if (constrain_ampl) else (np.max(height) - np.min(height))
     if powerbeam:
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl*gaussian2D(x,y,xoffset,yoffset,wx,wy,rot)
     else: # Scan referenced to a tracking antenna scans the voltage beam, convert it to power
+        width0 /= 2
         SQRT2 = 2**.5
         model = lambda ampl,xoffset,yoffset,wx,wy,rot, h0=0: h0 + ampl/SQRT2*gaussian2D(x,y,xoffset,yoffset,wx*SQRT2,wy*SQRT2,rot)
+    
+    p0 = [ampl0,0,0,width0,width0,0, np.min(height)]
     
     # Fit model to data
     if not constrained: # Unconstrained fit is VERY BRITTLE, results also very sensitive to method (BFGS seems best, but Powell, Nelder-Mead, LM ...)
@@ -94,9 +95,9 @@ def fit_gaussianoffset(x, y, height, powerbeam=True, constrained=True, constrain
     # 'p.success' status isn't quite reliable (e.g. multiple minima)
     # Also check deduced signal-to-noise, and residuals must be "in the noise"
     resid = np.mean((height - model_height)**2)**.5
-    valid = p.success and (ampl/resid > 7) # 3sigma is the absolute minimum for reliable fits! 
+    valid = p.success
     valid = valid and (fwhmx/scanext < 0.99) and (fwhmy/scanext < 0.99) # Width must be smaller than measured extent for reliable fits - especially when fit is constrained! 
-    valid = valid and (xoffset/scanext < 0.8) and (yoffset/scanext < 0.8) # A fit is not reliable if it extrapolates far outside the measured region!
+    valid = valid and (abs(xoffset)/scanext < 0.8) and (abs(yoffset)/scanext < 0.8) # A fit is not reliable if it extrapolates far outside the measured region!
     
     if debug is not None: # 'debug' is expected to be two plot axes: first one for amplitude series, second one for x,y
         debug[0].plot(model_height, 'k-', alpha=0.5, label="%.1f + %.1f exp(Q(%.2f, %.2f))"%(h0, ampl, fwhmx/scanext, fwhmy/scanext))
@@ -340,12 +341,13 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
                     axs[2].tricontourf(target_x.squeeze(), target_y.squeeze(), delta_n.squeeze(), 20)
                 axs[2].set_xlabel("target x [deg]")
             
-            constr = {}
-            if (kind in ['circle', 'raster']): # Extra constraints - not necessary for cardioid & epicycle
-                constr = dict(constrain_hpbw=1.22*(_c_/f_ref)/scan_ant.diameter * R2D)
+            constr = dict(constrain_center=(kind=='raster'),
+                          constrain_hpbw=1.22*(_c_/f_ref)/scan_ant.diameter * R2D) # Strictly only necessary for cardioid & epicycle
             # Fitted beam center is in (x, y) coordinates, in projection centered on target
             xoff, yoff, valid, hpwx, hpwy, rot, ampl, resid = fit_gaussianoffset(target_x, target_y, height, powerbeam=(track_ant is None),
                                                                                  debug=axs[1:] if debug else None, **constr)
+            if strict:
+                valid = valid and (ampl/resid > 7) # The acceptable minimum for reliable fits: ~3sigma
             if debug:
                 fig.suptitle(f"Scan #{cs_no}: {cs_label}, on {target.name} @ {rEl*R2D:.0f}degEl [Fit: {valid}]")
         except Exception as e:
