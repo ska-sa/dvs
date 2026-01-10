@@ -309,7 +309,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
             hv = ds.vis[mask]
             hv[np.abs(hv)==0] = np.nan # Under-quantised channels may be zero - must not contribute to height!
-            f_ref = np.mean(ds.freqs[np.any(np.isnan(hv),axis=(0,2))])
+            f_ref = np.mean(ds.freqs[~np.any(np.isnan(hv),axis=(0,2))])
             hv_mag = np.abs(hv)
             hv_c_angle = np.median(np.unwrap(np.angle(hv), axis=0), axis=0) # Flatten phases relative to median over time
             hv /= np.mean(hv_mag, axis=0)*np.exp(1j*hv_c_angle) # Normalise for H-V gains & bandpass
