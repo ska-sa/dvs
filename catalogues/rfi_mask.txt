@@ -17,12 +17,12 @@
 1674.5, 1698.5 # METEOSAT & NOAA
 1701.5, 1703.5 # NOAA HRPT & ARGOS
 1706.5, 1708.5 # NOAA HRPT
-1905, 1940 # TODO Sattelite?
+1905, 1940 # TODO LTE / Sattelite?
 2025, 2110 # S-band downlink
 2200, 2290 # S-band downlink
-2220, 2250 # WiFi & Bluetooth
-2400, 2485
-2490, 2500
+2400, 2485 # WiFi (20MHz channels) & Bluetooth (1MHz channels)
+#2500, 2570 # UMTS/LTE band 7 Uplink, 20MHz channels
+#2620, 2690 # UMTS/LTE band 7 Downlink, 20MHz channels
 3130, 3170 # Aircraft RNAV?
 3400, 3700
 # Ku-band (GEOS, Starlink, OneWeb) satellite downlink
