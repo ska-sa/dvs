@@ -322,7 +322,10 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
                 for idx in polswap:
                     polproducts = [(swap(p[0]),p[1]) if (idx==0) else (p[0],swap(p[1]))  for p in polproducts]
             polproducts = [p[0]+'-'+p[1] for p in polproducts] # Convert to simpler format for reporting.
-            bore_dumps = (dataset.ll)**2+(dataset.mm)**2 < (dataset.radialscan_sampling)**2
+            lmoffset = kwargs.get('extralmoffset', [0,0])
+            if (lmoffset == 'auto'):
+                lmoffset = (np.median(dataset.ll[dataset.time_range]), np.median(dataset.mm[dataset.time_range]))
+            bore_dumps = (dataset.ll-lmoffset[0])**2+(dataset.mm-lmoffset[1])**2 < (dataset.radialscan_sampling)**2
         dumps = bore_dumps[dataset.time_range]
         timestamps = dataset.h5.timestamps[dumps]
         chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-f_MHz) <= dMHz]
@@ -361,12 +364,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         beams, apmapsH, apmapsV = [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)], [[] for _ in np.atleast_1d(freqMHz)]
         for ic, select_loadscan_cycle in enumerate(loadscan_cycles):
             print('--------------------------------------------\nProcessing cycle %d (%d of %d)\n'%(select_loadscan_cycle, ic+1,len(loadscan_cycles)))
-            dataset.flagdata(cycle=select_loadscan_cycle, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
-            if (overlap_cycles > 0):
-                t_c0 = dataset.rawtime[dataset.time_range]-dataset.rawtime[0]
-                dataset.flagdata(cycle=select_loadscan_cycle+overlap_cycles, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
-                t_c1 = dataset.rawtime[dataset.time_range]-dataset.rawtime[0]
-                dataset.flagdata(flagslew=flag_slew, flags_hrs=flags_hrs, timestart_hrs=t_c0[0]/3600, timeduration_hrs=(t_c1[-1]-t_c0[0])/3600, **selectkwargs)
+            select_cycles = list(range(select_loadscan_cycle,select_loadscan_cycle+1+overlap_cycles, 1))
+            dataset.flagdata(cycle=select_cycles, flagslew=flag_slew, flags_hrs=flags_hrs, **selectkwargs)
             for i,f_MHz in enumerate(np.atleast_1d(freqMHz)):
                 _load_cycle_(f_MHz, beams[i], apmapsH[i], apmapsV[i])
         
@@ -510,7 +509,7 @@ ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=N
                 clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if ignoreantennas is None else ignoreantennas,[] if tags==None else tags)
 
 
-def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, extent=None, telescopename="SKA"):
+def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=(0,1), dMHz=0.1, extent=None, telescopename="SKA"):
     """ Plot beam patterns to allow inspection for 'timingoffset'. This presents as scalloping around the
         contours.
         ADVICE: only proceed with a timingoffset if it makes an obvious difference in these patterns.
@@ -519,7 +518,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=0, dMHz=0.1, exte
         @param freqMHz: the 
         @param ant: the scan antenna in the dataset to plot patterns for
         @param timingoffset: time offset to apply, or list of offsets (default 0)
-        @param cycle: index of the particular cycle to load, if there are multiple cycles defined (default 0)
+        @param cycle: index or indices of the particular cycle to load, if there are multiple cycles defined (default (0,1))
         @param dMHz: bandwidth to load [MHz] (default 0.1)
         @param extent: range of x & y to plot [deg], or None to only plot SNR stats (default None)
     """
