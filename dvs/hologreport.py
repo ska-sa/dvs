@@ -1023,7 +1023,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 feedindexer_deg[-1].append(beam.feedindexer_deg)
                 enviro[-1].append(dict(sun_deg=beam.sun_deg, sun_rel_deg=beam.sun_rel_deg, temp_C=beam.temp_C, wind_mps=beam.wind_mps, wind_rel_deg=beam.wind_rel_deg))
                 print(">> %.1f degEl @ %.2f hrs [local time]; SNR~%s"%(el_deg[-1][-1], time_hod[-1][-1], np.array2string(snr[ci],precision=0).replace("\n",",")))
-                print(">> Sun from dAz~{sun_rel_deg[0]:.0f}deg, dEl~{sun_rel_deg[1]:.0f}deg, mean wind<{wind_mps[2]}m/s from dAz~{wind_rel_deg:.0f}deg".format(**enviro[-1][-1]))
+                print(">> Sun from dAz~{sun_rel_deg[0]:.0f}deg, dEl~{sun_rel_deg[1]:.0f}deg, mean wind<{wind_mps[2]:.1f}m/s from dAz~{wind_rel_deg:.0f}deg".format(**enviro[-1][-1]))
                 
                 _apmapH, _apmapV = apmapH, apmapV # Un-modified copies, in case they get modified below
                 # If predicted maps provided, generate copies of measured maps that are corrected by predicted maps
@@ -1448,12 +1448,13 @@ def collate_results(results_a, results_b):
     return results
 
 
-def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20000)):
+def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20000), fit="theil-sen"):
     """ Generate a meta-report of the results from 'generate_results()'.
         
         @param results: {tag:[HologResults]}
         @param tags: a list of specific tags to summarise, in order (default "*" i.e. all tag strings)
-        @param fspec_MHz: the frequencies corresponding to the last columns in phase_eff [MHz] """
+        @param fspec_MHz: the frequencies corresponding to the last columns in phase_eff [MHz]
+        @param fit: passed to plot_offsets_el() (default 'theil-sen') """
     if (tags == "*"):
         tags = [t for t in results.keys() if isinstance(t,str)]
     
@@ -1497,7 +1498,7 @@ def meta_report(results, tags="*", tag2label=lambda tag:tag, fspec_MHz=(15000,20
             pass
     
     # Make plots
-    plot_offsets_el(sets, labels, figsize=(14,3), fit="theil-sen")
+    plot_offsets_el(sets, labels, figsize=(14,3), fit=fit)
     plot_errbeam_el(sets, labels, figsize=(14,3), extra="95pct")
     for eff_ix in range(-len(fspec_MHz),0):
         plot_eff_el(sets, labels, fspec_MHz=fspec_MHz, eff_ix=eff_ix, figsize=(14,3))
@@ -1509,7 +1510,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
         or not matching 'f_MHz'.
         
         @param results: {tag:[HologResults]}
-        @param exclude_tags: a list of tags whose HologResults must be omitted (default None)
+        @param exclude_tags: a list of tags and/or dataset IDs whose HologResults must be omitted (default None)
         @param fincl_MHz: (f_min,f_max) frequencies [MHz] to match (default "*" i.e. all)
         @param elincl_deg: (el_min,el_max) elevation angles [deg] to match (default "*" i.e. all)
         @param enviro_filter: a function like `lambda enviro: enviro['wind_mps'][0]<10` to select results to keep (default None i.e. no filtering)
