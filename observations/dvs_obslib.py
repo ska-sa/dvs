@@ -372,7 +372,7 @@ def start_nd_switching(sub, n_on, n_off, T_start='now'):
     
     cbf_dt = cbf.sensors.wide_baseline_correlation_products_int_time.get_value()
     sdp_dt = cbf_dt * np.round(1/sdp.sensors.dump_rate.get_value() / cbf_dt + 0.5) # SDP dump rate is not accurate
-    time.sleep(2*sdp_dt) # Guard against getting old timestamp immediately after capture_start
+    time.sleep(4*sdp_dt) # Guard against getting old timestamp immediately after capture_start
     T0 = sdp.sensors.spmc_array_1_wide_0_ingest_sdp_l0_1_last_dump_timestamp.get_value()
     ND_LEAD_TIME = np.round(10/sdp_dt+0.5) * sdp_dt # At least 10 seconds - needed because of sensor update rates etc
     T_start = max(T_start, T0 + ND_LEAD_TIME) # Specified time or on the next(+1) dump boundary
