@@ -1089,7 +1089,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 
                 feedoffsetH, feedoffsetV = apmapH.feedoffset, apmapV.feedoffset
                 if (coords == "SKA"): # katholog -> SKA coordinates
-                    feedoffsetH, feedoffsetV = [1,-1,1]*np.take(feedoffsetH,(1,0,2)), [1,-1,1]*np.take(feedoffsetV,(1,0,2))
+                    feedoffsetH, feedoffsetV = [-1,-1,1]*np.take(feedoffsetH,(1,0,2)), [-1,-1,1]*np.take(feedoffsetV,(1,0,2))
                 feedoffsetsH[-1].append(feedoffsetH)
                 feedoffsetsV[-1].append(feedoffsetV)
                 print("%s Feed XYZ_f offsets %s [mm]"%(coords,TAG))
