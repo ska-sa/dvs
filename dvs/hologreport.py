@@ -554,7 +554,7 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=(0,1), dMHz=0.1, 
             lim = (-extent/2, extent/2)
             for n,(t_o,d) in enumerate(zip(timingoffsets,ds)):
                 b = katholog.BeamCube(d, scanantennaname=ant, freqMHz=f, dMHz=dMHz, interpmethod='scipy')
-                plt.subplot(2,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %d\nGx timingoffset=%g"%(fid,f,cycle,t_o))
+                plt.subplot(2,2*N,2*n+1); b.plot('Gx', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("%s @ %gMHz cycle %s\nGx timingoffset=%g"%(fid,f,cycle,t_o))
                 plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gx[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
                 plt.subplot(2,2*N,2*n+2); b.plot('Gy', doclf=False); plt.gca().images[-1].colorbar.remove(); plt.title("\nGy")
                 plt.contour(b.margin, b.margin, 20*np.log10(np.abs(b.Gy[0])), [-15], colors='k', alpha=0.7); plt.xlim(*lim); plt.ylim(*lim)
