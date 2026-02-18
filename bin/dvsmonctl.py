@@ -24,20 +24,30 @@ import numpy as np
 import urllib.request
 
 
-def reset_ACU(cam_ant):
+def reset_ACU(cam_ant, force=False):
     """ Let LMC take authority of ACU & clear old tasks etc. Necessary e.g. after ESTOP, manual control or OHB GUI /SCU work.
         This should be a temporary hack - if not sorted out by 01/03/2025 follow up with LMC team!
     """
     import tango
     dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
     dsm = tango.DeviceProxy(dsm_addr)
+    # Always req auth first - sometimes mode("STOP") does absolutely nothing
     dsm.RequestAuthority(); time.sleep(1)
-    dsm.AckInterlock(); time.sleep(5)
-    dsm.ClearLatchedErrors(); time.sleep(1)
-    dsm.ClearOldTasks(); time.sleep(1)
-    dsm.ResetTrackTableBuffer(); time.sleep(1)
-    dsm.ResetTrackTable(); time.sleep(1)
-    dsm.SetStandbyFPMode()
+    try: # First try to just STOP the proxy - that should get things "ready"
+        cam_ant.req.mode("STOP")
+    except:
+        force = True
+    
+    if force:
+        dsm.AckInterlock(); time.sleep(5)
+        dsm.ClearLatchedErrors(); time.sleep(1)
+        dsm.ClearOldTasks(); time.sleep(1)
+        dsm.ResetTrackTableBuffer(); time.sleep(1)
+        dsm.ResetTrackTable(); time.sleep(1)
+        dsm.SetStandbyFPMode()
+        dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
+        dsh = tango.DeviceProxy(dsh_addr)
+        dsh.SetStandbyFPMode()
 
 
 def release_ACU_authority(cam_ant):
