@@ -146,7 +146,7 @@ with verify_and_connect(opts) as kat:
                         session.ants = all_ants
                     count += 1
                     # The default is to do only one iteration through source list; or if the time is up, stop immediately
-                    keep_going = (opts.min_time <= 0) or (time.time() - start_time < opts.min_time)
+                    keep_going = (opts.min_time > 0) and (time.time() - start_time < opts.min_time)
                     if not keep_going:
                         break
                     # Switch the indexer out & back, if requested
