@@ -68,10 +68,20 @@ parser.add_option('--style', type='choice', choices=styles.keys(),
                        "and scan spacing. The available styles are: %s" % (styles,))
 parser.add_option('--alternate-style', type='choice', choices=styles.keys(), default=None,
                   help="If given, will repeat the measurement on each target with this style (default=%default)")
+# If these are given, --style may not be used
+parser.add_option('--num-scans', type="int", default=None, help="Explicit number of scans, used instead of --style (default=%default)")
+parser.add_option('--scan-duration', type="float", default=None, help="Explicit scan duration, used instead of --style (default=%default)")
+parser.add_option('--scan-extent', type="float", default=None, help="Explicit scan extent, used instead of --style (default=%default)")
+parser.add_option('--scan-spacing', type="float", default=None, help="Explicit scan spacing, used instead of --style (default=%default)")
 
 
 # Parse the command line
 opts, args = parser.parse_args()
+if (opts.num_scans is not None) or (opts.scan_duration is not None) or (opts.scan_extent is not None) or (opts.scan_spacing is not None):
+    assert (opts.style is None), "--style may not be used if explicit scan parameters are given!"
+    styles["explicit"] = dict(num_scans=opts.num_scans, scan_duration=opts.scan_duration, scan_extent=opts.scan_extent, scan_spacing=opts.scan_spacing, scan_in_az=[True])
+    opts.style = "explicit"
+
 
 with verify_and_connect(opts) as kat:
     
