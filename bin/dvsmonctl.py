@@ -54,6 +54,7 @@ def reset_ACU(cam_ant, force=False):
     if ("FULL" in dsh.powerState.name) and ("LOW" in dsm.powerState.name): # Some cases of "Set STOW already running" don't manifest like this?
         print("WARNING: STOW inconcsistency! Attempting to resolve it:")
         dsm.Unstow(); time.sleep(10)
+        dsh.ResetDishMode(); time.sleep(10)
         print("\t FAILED " if ("FULL" in dsh.powerState.name) and ("LOW" in dsm.powerState.name) else "\t OK")
 
 
