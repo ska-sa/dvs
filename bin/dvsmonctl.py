@@ -52,9 +52,9 @@ def reset_ACU(cam_ant, force=False):
     dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
     dsh = tango.DeviceProxy(dsh_addr)
     if ("FULL" in dsh.powerState.name) and ("LOW" in dsm.powerState.name): # Some cases of "Set STOW already running" don't manifest like this?
-        print("WARNING: STOW inconcsistency! Attempting to resolve it: ", end="")
+        print("WARNING: STOW inconcsistency! Attempting to resolve it:")
         dsm.Unstow(); time.sleep(10)
-        print("FAILED " if ("FULL" in dsh.powerState.name) and ("LOW" in dsm.powerState.name) else "OK")
+        print("\t FAILED " if ("FULL" in dsh.powerState.name) and ("LOW" in dsm.powerState.name) else "\t OK")
 
 
 def release_ACU_authority(cam_ant):
