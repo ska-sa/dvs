@@ -254,16 +254,16 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
         @return (P4_adjust_angle, FI_adjust_angle) [deg] to be added to the current FI angle """
     BDF=0.894; R_FI=1400; F_eq=8507 # [], mm, mm for SKA Dish
 
-    if (delta_P4 is not None): # Change in P4 pointing term
+    if (delta_P4 is not None): # Convert change in P4 pointing term to equivalent translation
+        delta_Yf = np.tan(delta_P4*np.pi/180 / BDF) * F_eq
         # Correction is in opposite sense of the model coefficient
         dP4 = - delta_P4
-        dFI_angle = dP4 / (1 - BDF*R_FI/F_eq)
-        _delta_Yf = np.tan(dFI_angle*np.pi/180) * R_FI
-    else: # Change in Feed effective in-plane translation
-        # If feed is pointed right looking at SR (Yf>0), correction should decrease FI angle (ICD)
-        dFI_angle = np.atan2(- delta_Yf, R_FI) * 180/np.pi
-        dP4 = dFI_angle * (1 - BDF*R_FI/F_eq) # Translation AND rotation if FI angle is adjusted
-        _delta_P4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # Just in-plane translation without rotation
+    
+    # Change in Feed effective in-plane translation
+    # If feed is pointed right looking at SR (Yf>0), correction should decrease FI angle (ICD)
+    dFI_angle = np.atan2(- delta_Yf, R_FI) * 180/np.pi
+    dP4 = dFI_angle * (1 - BDF*R_FI/F_eq) # Translation AND rotation if FI angle is adjusted
+    _delta_P4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # Just in-plane translation without rotation
     return (dP4, dFI_angle)
 
 
