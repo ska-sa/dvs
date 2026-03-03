@@ -792,15 +792,16 @@ def plot_offsets_freq(RS, labels=None, hide="", figsize=(14,10)):
         XYZ_f, el, FI = [], [], []
         fig, axs = plt.subplots(3,1, layout='constrained', figsize=figsize)
         for c,r in enumerate(results):
-            el.append(r.el_deg)
-            FI.append(r.info['feedindexer_deg'][1]) # [min,mean,max]
-            if ("H" not in hide): XYZ_f.extend(r.feedoffsetsH)
-            if ("V" not in hide): XYZ_f.extend(r.feedoffsetsV)
-            for p,l in enumerate("XYZ"):
-                if ("H" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsH[:,p], 'C%do-'%c, label="FI@%.2fdeg"%FI[-1])
-                if ("V" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsV[:,p], 'C%d^--'%c,
-                                                  **(dict(label="FI@%.2fdeg"%FI[-1]) if "H" in hide else {})) 
-                axs[p].set_ylabel("%s_f [mm]"%l)
+            if isinstance(r.el_deg, float): # TODO: fix this code for multi-cycles!
+                el.append(r.el_deg)
+                FI.append(r.info['feedindexer_deg'][1]) # [min,mean,max]
+                if ("H" not in hide): XYZ_f.extend(r.feedoffsetsH)
+                if ("V" not in hide): XYZ_f.extend(r.feedoffsetsV)
+                for p,l in enumerate("XYZ"):
+                    if ("H" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsH[:,p], 'C%do-'%c, label="FI@%.2fdeg"%FI[-1])
+                    if ("V" not in hide): axs[p].plot(r.f_MHz, r.feedoffsetsV[:,p], 'C%d^--'%c,
+                                                      **(dict(label="FI@%.2fdeg"%FI[-1]) if "H" in hide else {}))
+                    axs[p].set_ylabel("%s_f [mm]"%l)
         axs[1].legend() # Because Y_f relates to FI angle
         axs[-1].set_xlabel("Frequency [MHz]")
         for ax in axs: ax.grid(True)
@@ -1527,10 +1528,11 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
     
     exclude_tags = [] if exclude_tags is None else exclude_tags
     omit_tagged = list(iter.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
+    omit_tagged = map(str, omit_tagged) # Workaround error raised below by 'r not in omit_tagged' - strange python identity issue?
     tags = [t for t in results.keys() if (t not in exclude_tags)] # Must filter through these sets
     for tag in tags:
         filtered[tag] = []
-        rr = [r for r in results[tag] if (r not in omit_tagged)] # Only continue with HologResults that have not been flagged
+        rr = [r for r in results[tag] if (str(r) not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
             # Filter on environment - potentially cycles > 1
