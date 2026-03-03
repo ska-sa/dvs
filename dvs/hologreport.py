@@ -1528,7 +1528,7 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
     
     exclude_tags = [] if exclude_tags is None else exclude_tags
     omit_tagged = list(iter.chain(*[results.get(xt,None) for xt in exclude_tags])) # HologResults that must be omitted wholesale
-    omit_tagged = map(str, omit_tagged) # Workaround error raised below by 'r not in omit_tagged' - strange python identity issue?
+    omit_tagged = [str(x) for x in omit_tagged] # Workaround error raised below by 'r not in omit_tagged' - strange python identity issue?
     tags = [t for t in results.keys() if (t not in exclude_tags)] # Must filter through these sets
     for tag in tags:
         filtered[tag] = []
