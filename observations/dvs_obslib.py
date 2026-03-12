@@ -347,12 +347,12 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
             user_logger.info("Switching Feed Indexer to index %s"%index)
             if not dry_run:
                 ants.req.dsh_SetIndexerPosition(index)
-            time.sleep(30)
+            time.sleep(40) # Slightly longer than R.D.P.15. TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible errors if indexer is slow
         finally: # Switch back to the nominal position. This also ensures that we "clean up"
             user_logger.info("Switching Feed Indexer back to index %s"%index0)
             if not dry_run:
                 ants.req.dsh_SetIndexerPosition(index0)
-            time.sleep(30) # TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible errors if indexer is slow
+            time.sleep(40)
 
 
 def start_nd_switching(sub, n_on, n_off, T_start='now'):
