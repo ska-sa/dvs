@@ -875,9 +875,13 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
                 axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
                 axes[0].legend()
             axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
-            v = katselib.getsensorvalues(feng_labels[ant+P.lower()]+"_rms_dbfs", T)[1]
+            if (band != 's'):
+                key, unit = "%s_dig_%s_band_adc_%spol_rf_power_in"%(ant,band,P.lower()), "dBm"
+            else: # F-engine sensors are not sampled as regularly as the RFCU ones, but this is all for S-band
+                key, unit = feng_labels[ant+P.lower()]+"_rms_dbfs", "dBFS"
+            v = katselib.getsensorvalues(key, T)[1]
             axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
-            axes[1].set_ylabel("ADC RF input power [dBFS]"); axes[1].grid(True); axes[1].legend()
+            axes[1].set_ylabel("ADC RF input power [%s]"%unit); axes[1].grid(True); axes[1].legend()
     
     # Plot boresight visibilities
     labels = [] # Collect labels to avoid repetition if there's more than one cycle
