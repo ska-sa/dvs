@@ -33,6 +33,11 @@ def reset_ACU(cam_ant, force=False):
     dsm = tango.DeviceProxy(dsm_addr)
     # Always req auth first - sometimes mode("STOP") does absolutely nothing
     dsm.RequestAuthority(); time.sleep(1)
+    
+    # Inconsistent STOW state not handled properly by LMC at present 03/2026
+    if ("STOWED" in dsm.elaxisstate.name and not "STOWED" in dsm.azaxisstate.name):
+        dsm.Unstow(); time.sleep(20)
+    
     try: # First try to just STOP the proxy - that should get things "ready"
         cam_ant.req.mode("STOP")
     except:
