@@ -29,6 +29,8 @@ def reset_ACU(cam_ant, force=False):
         This should be a temporary hack - if not sorted out by 01/03/2025 follow up with LMC team!
     """
     import tango
+    dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
+    dsh = tango.DeviceProxy(dsh_addr)
     dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
     dsm = tango.DeviceProxy(dsm_addr)
     # Always req auth first - sometimes mode("STOP") does absolutely nothing
@@ -42,6 +44,8 @@ def reset_ACU(cam_ant, force=False):
         cam_ant.req.mode("STOP")
     except:
         force = True
+    # Get rid of expired dsh.GetTaskSequenceInfo() that are stuck in RUNNING state
+    dsh.ClearTaskHistory(); time.sleep(1)
     
     if force:
         dsm.AckInterlock(); time.sleep(5)
@@ -51,8 +55,6 @@ def reset_ACU(cam_ant, force=False):
     #  1. flushes the task queue
     #  2. resets al progress attributes (StandbyLPModeProgress, SetStowModeProgress, etc)
     #  3. Sets the dish to Standby-LP mode"
-    dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
-    dsh = tango.DeviceProxy(dsh_addr)
     dsh.ResetDishMode(); time.sleep(5)
 
 
