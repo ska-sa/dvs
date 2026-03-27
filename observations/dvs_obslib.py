@@ -561,19 +561,22 @@ def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sun
     return filtered
 
 
-def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, cluster_radius=0, antenna=None, el_limit_deg=20):
-    """ Generates a "nearest-neighbour" sequence of targets to observe, starting at the specified time.
+def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cluster_radius=0, antenna=None, el_limit_deg=20):
+    """ Generates a sequence of targets to observe according to specific strategies, starting at the specified time.
         This does not consider behaviour around the azimuth wrap zone.
          
         @param catalogue: [katpoint.Catalogue]
         @param T_start: UTC timestamp, seconds since epoch [sec].
         @param t_observe: duration of an observation per target [sec]
         @param dAdt: angular rate when slewing (default 1.8) [deg/sec]
+        @param strategy: 'nearest' (nearest-neighbour) | 'uniform' (uniform sky cover) (default "nearest-neighbour")
         @param cluster_radius: returned targets are clustered with this great circle dimension (default 0) [degrees]
         @param antenna: None to use the catalogue's antenna (default None) [katpoint.Antenna or str or antenna proxy]
         @param el_limit_deg: observation elevation limit (default 20) [deg]
         @return: [list of Targets], expected duration in seconds
     """
+    assert (strategy in ['nearest','uniform']), "Strategy not supported!"
+    
     # If it's an "antenna proxy, use current coordinates as starting point
     try:
         az0, el0 = antenna.sensor.pos_actual_scan_azim.get_value(), antenna.sensor.pos_actual_scan_elev.get_value()
@@ -585,11 +588,21 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, cluster_radius=0, ante
     antenna = katpoint.Antenna(antenna) if isinstance(antenna, str) else antenna
     antenna = catalogue.antenna if (antenna is None) else antenna
     
+    if (strategy == 'nearest'):
+        pick_next = lambda available, current, T: available.closest_to(current, T, antenna) if (len(available.targets) > 0) else (None, 0)
+    elif (strategy == 'uniform'):
+        def pick_next(available, current, T):
+            if (len(available.targets) == 0):
+                return (None, 0)
+            dist = sorted([current.separation(tgt, T, antenna) for tgt in available.targets])
+            i = len(dist)//3
+            return (available.targets[i], dist[i])
+                
     todo = list(catalogue.targets)
     done = []
     T = T_start # Absolute time
-    available = catalogue.filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
-    next_tgt, dGC = available.closest_to(start_pos, T, antenna) if (len(available.targets) > 0) else (None, 0)
+    available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
+    next_tgt, dGC = pick_next(available, start_pos, T)
     while (next_tgt is not None):
         # Slew to next
         T += dGC * dAdt
@@ -604,7 +617,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, cluster_radius=0, ante
             cluster = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna,
                                                       dist_limit_deg=(0,cluster_radius), proximity_targets=tgt0)
             # Find next nearest in the cluster
-            next_tgt, dGC = cluster.closest_to(done[-1], T, antenna)
+            next_tgt, dGC = pick_next(cluster, done[-1], T)
             while next_tgt:
                 # Slew to next
                 T += dGC * dAdt
@@ -615,10 +628,10 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, cluster_radius=0, ante
                 todo.pop(todo.index(next_tgt))
                 # Find next nearest in the cluster
                 cluster.remove(next_tgt.name)
-                next_tgt, dGC = cluster.closest_to(done[-1], T, antenna)
+                next_tgt, dGC = pick_next(cluster, done[-1], T)
         
         # Done with cluster (if any), now continue to nearest remaining & visible neighbour
         available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
-        next_tgt, dGC = available.closest_to(done[-1], T, antenna)
+        next_tgt, dGC = pick_next(available, done[-1], T)
     
     return done, (T-T_start)
