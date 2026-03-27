@@ -187,6 +187,8 @@ if __name__=="__main__":
     parser.add_option('--max-elevation', type="float", default=90,
                   help="Maximum elevation angle for targets, in degrees (default=%default)")
 
+    parser.add_option('--strategy', default='nearest',
+                      help='Strategy for arranging the sequence of target visits across the sky  (default=%default)')
     parser.add_option('--cluster-radius', type="float", default=0,
                       help="Group targets into clusters with this great circle dimension, in degrees (default=%default)")
     
@@ -262,7 +264,7 @@ if __name__=="__main__":
             # Remove sources that crowd too closely
             catalogue = filter_separation(catalogue, time.time(), kat.sources.antenna,
                                           separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
-            targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
+            targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime, strategy=opts.strategy,
                                    cluster_radius=opts.cluster_radius, antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             # Initialise a capturing session
             with start_session(kat, **vars(opts)) as session:
@@ -314,7 +316,7 @@ if __name__=="__main__":
                 while cycle<opts.num_cycles or opts.num_cycles<0: # Override exit conditions are coded in the next ten lines
                     fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
-                        targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime,
+                        targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime, strategy=opts.strategy,
                                                cluster_radius=opts.cluster_radius, antenna=scan_ants[0], el_limit_deg=opts.horizon)[0]
                         fresh_plan = True
                     if (len(targets) == 0):
