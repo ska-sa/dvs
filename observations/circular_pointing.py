@@ -177,7 +177,7 @@ if __name__=="__main__":
                       help='speed at which to slew in degrees per second, or if negative number then this multiplied by scanspeed (default=%default)')
     parser.add_option('--high-elevation-slowdown-factor', type='float', default=2.0,
                       help='factor by which to slow down nominal scanning speed at 90 degree elevation, linearly scaled from factor of 1 at 60 degrees elevation (default=%default)')
-    parser.add_option('--prepopulatetime', type='float', default=10.0,
+    parser.add_option('--prepopulatetime', type='float', default=5.0,
                       help='time in seconds to prepopulate buffer in advance (default=%default)')
                   
     parser.add_option('--min-separation', type="float", default=1.0,
@@ -254,6 +254,18 @@ if __name__=="__main__":
         plt.legend(['ddx','ddy'])
         plt.title('Acceleration profile')
         plt.show()
+        import csv
+        scanaz_rad,scanel_rad=plane_to_sphere_holography(10.*np.pi/180.,45.*np.pi/180.,x*np.pi/180. ,y*np.pi/180.)
+        scanaz=scanaz_rad*180./np.pi
+        scanel=scanel_rad*180./np.pi
+        with open("circular_pointing.csv", 'w') as f:
+            # ## For uploading via Jive/Tango attribute
+            # f.write(",".join([str(_) for _ in np.c_[t+808573171.1369994,scanaz,scanel].ravel()]))
+            ## For uploading via DiSQ etc.
+            writer = csv.writer(f)
+            writer.writerow(['time from start [sec]','azimuth [deg]','elevation [deg]'])
+            for _t,_a,_e in zip(t,scanaz,scanel):
+                writer.writerow(["%.6f"%_ for _ in [_t,_a,_e]])
     else:
         # Check basic command-line options and obtain a kat object connected to the appropriate system
         with verify_and_connect(opts) as kat:
@@ -387,7 +399,7 @@ if __name__=="__main__":
                     
                     user_logger.info("Using Track antennas: %s",' '.join([ant.name for ant in track_ants if ant.name not in always_scan_ants_names]))
                     session.activity("track") # Scan labels for all below - 'track' is counter-intuitive but is also used by holography_scan.py
-                    lasttime = time.time()
+                    lasttime = time.time() + opts.prepopulatetime
                     for iarm in range(len(cx)):# arm index
                         user_logger.info("Performing scan arm %d of %d.", iarm + 1, len(cx))
                         user_logger.info("Using Scan antennas: %s %s",
@@ -420,7 +432,7 @@ if __name__=="__main__":
                                 lastisslew=arms[it]
                                 session.telstate.add('obs_label',"slew" if lastisslew else "%d.0.%d"%(cycle,iarm),ts=scan_data[it,0]) # Compscan label
                         
-                        time.sleep(scan_data[-1,0]-time.time()-opts.prepopulatetime)
+                        time.sleep(scan_data[-1,0]-opts.prepopulatetime - time.time())
                         lasttime = scan_data[-1,0]
 
                     session.telstate.add('obs_label',"slew",ts=lasttime) # Compscan label
