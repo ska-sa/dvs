@@ -597,7 +597,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cl
             if (len(available.targets) == 0):
                 return (None, 0)
             dist = sorted([current.separation(tgt, T, antenna) for tgt in available.targets])
-            i = len(dist)//3
+            i = len(dist)//2
             return (available.targets[i], dist[i])
                 
     todo = list(catalogue.targets)
