@@ -77,6 +77,20 @@ def standard_script_options(usage, description):
     return parser
 
 
+def split_ants(ants):
+    """ @param ants: a list of CAM antennas
+        @return: [m0XX...], [eXXX...], [sXXXX] """
+    m_ants, e_ants, s_ants = [], [], []
+    for ant in ants:
+        if hasattr(ant.sensor, "ap_point_error_tiltmeter_enabled"):
+            m_ants.append(ant)
+        elif hasattr(ant.sensor, "dsm_tiltPointCorrEnabled"):
+            e_ants.append(ant)
+        else:
+            s_ants.append(ant)
+    return m_ants, e_ants, s_ants
+
+
 class start_nocapture_session(object):
     """ Like katsdpscripts.rts_session.CaptureSession, but this one avoids interacting with cbf & sdp. """
     def __enter__(self):
@@ -240,11 +254,10 @@ def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     __tilt_corr_allowed__ = allow_tiltcorrections
     
     # Ensure the MKE antennas have transitioned to the "Operating" mode, by POINT
-    for ant in cam.ants:
-        if hasattr(ant.req, 'dsm_DisablePointingCorrections'):
-            az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
-            ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
-            ant.req.mode("POINT")
+    for ant in split_ants(cam.ants)[1]:
+        az, el = (ant.sensor.dsh_achievedPointing_1.get_value(), ant.sensor.dsh_achievedPointing_2.get_value())
+        ant.req.target_azel(az+0.01, el+0.01) # Must be different or else the proxy doesn't propagate this to the ACU?
+        ant.req.mode("POINT")
     time.sleep(5)
     # Now disable ACU SPEM corrections (for as long as it only uses POINT mode for controlled motion)
     hack_SetPointingCorrections(cam.ants)
@@ -261,33 +274,33 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
     global __tilt_corr_allowed__, __d_tilt_OK__
     mod_spem, mod_tilt, force_tilt = [], [], []
     
-    for a in ants:
-        if a.name.startswith("e"): # Only relevant for MKE dishes
-            dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
-            # Enforce our rules for TILT
-            tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
-            if hasattr(dsm, "tiltPointCorrEnabled"):
-                if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
-                    mod_tilt.append(a.name)
-                    dsm.tiltPointCorrEnabled = False
-                elif tilt_corr and not dsm.tiltPointCorrEnabled:
-                    force_tilt.append(a.name)
-                    dsm.tiltPointCorrEnabled = True
-            elif hasattr(dsm, "tiltOnInput"):
-                if dsm.tiltOnInput and not tilt_corr: # It should be off but is on
-                    mod_tilt.append(a.name)
-                    dsm.tiltOnInput = False
-                elif tilt_corr and not dsm.tiltOnInput:
-                    force_tilt.append(a.name)
-                    dsm.tiltOnInput = True
-            ## SPEM & TEMP must always be disabled
-            #if dsm.staticPointCorrEnabled:
-            #    mod_spem.append(a)
-            ## These asynchronous writes just don't work for me, and cause unnecessary logs & interruptions?(!)
-            ## so rather zero the ACU SPEM and only toggle tilt above if necessary
-            #dsm.write_attributes([("tiltPointCorrEnabled", tilt_corr),
-            #                      ("staticPointCorrEnabled", False), ("tempPointCorrEnabled", False)
-            #                      ], wait=True)
+    for a in split_ants(ants)[1]: # Only relevant for MKE dishes
+        # !ssh kat@10.97.8.2 "python -c \"import tango; print(tango.DeviceProxy('{a.sensor.dsh_tango_address.get_value()}').tiltPointCorrEnabled = False)\""
+        dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
+        # Enforce our rules for TILT
+        tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
+        if hasattr(dsm, "tiltPointCorrEnabled"):
+            if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
+                mod_tilt.append(a.name)
+                dsm.tiltPointCorrEnabled = False
+            elif tilt_corr and not dsm.tiltPointCorrEnabled:
+                force_tilt.append(a.name)
+                dsm.tiltPointCorrEnabled = True
+        elif hasattr(dsm, "tiltOnInput"):
+            if dsm.tiltOnInput and not tilt_corr: # It should be off but is on
+                mod_tilt.append(a.name)
+                dsm.tiltOnInput = False
+            elif tilt_corr and not dsm.tiltOnInput:
+                force_tilt.append(a.name)
+                dsm.tiltOnInput = True
+        ## SPEM & TEMP must always be disabled
+        #if dsm.staticPointCorrEnabled:
+        #    mod_spem.append(a)
+        ## These asynchronous writes just don't work for me, and cause unnecessary logs & interruptions?(!)
+        ## so rather zero the ACU SPEM and only toggle tilt above if necessary
+        #dsm.write_attributes([("tiltPointCorrEnabled", tilt_corr),
+        #                      ("staticPointCorrEnabled", False), ("tempPointCorrEnabled", False)
+        #                      ], wait=True)
     
     if (len(mod_spem) > 0):
         user_logger.info("APPLIED HACK: Disabled SPEM & TEMP Corrections on %s" % ",".join([_.name for _ in set(mod_spem)-set(mod_tilt)]))
@@ -320,41 +333,85 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
     """
     if (switch_indexer_every_nth_cycle <= 0) or (cycle%switch_indexer_every_nth_cycle > 0):
         return
-        
-    # Set up parameters to use to switch the indexer between rasters, if requested
-    index0 = None
-    # TODO: This mapping is for MKE - TBC for SKA Dishes
-    indexer_positions, indices = ["B1","B5c","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
-    for ant in ants:
-        try:
-            index0 = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
-            break
-        except:
-            if dry_run:
-                index0 = 0 
-    assert (index0 is not None), "Unable to query indexer status, cannot perform indexer switching as required!"
-    indexer_sequence = [indices[min(max(0,index0+i),len(indices)-1)] for i in [-1,1]]
-    index0 = indices[index0]
-    try: # Remove "switch to self" end case
-        indexer_sequence.remove(index0)
-    except:
-        pass
     
-    # Execute the switch for the current cycle
-    if (len(indexer_sequence) > 0): # Switching alternates between indexer_sequence[0] and [1]
-        wrapped_cycle = cycle % (2*switch_indexer_every_nth_cycle)
-        i_cycle = -int(wrapped_cycle/switch_indexer_every_nth_cycle) # Alternates between 0 & -1
+    ants = split_ants(ants) # mkat, mke, ska
+    duration = [60,40,40] # Worst case switch duration. Slightly longer than spec (MKAT R.AP.C.64<=60sec; MKE&SKA R.D.P.15<=30sec)
+    # Set up parameters to use to switch the indexer between rasters, if requested
+    index0 = [None, None, None] # mkat, mke, ska
+    indexer_sequence = [None, None, None] # mkat, mke, ska
+    
+    ### Determine active band, and the sequence of switches to use for it
+    if (len(ants[0]) > 0): # For MKAT
+        neighbours = {'l':['u','s'], 'x':['u','s'], 'u':['l'], 's':['l']}
+        for ant in ants[0]:
+            try:
+                index0[0] = ant.sensor.ap_indexer_position.get_value()
+                indexer_sequence[0] = neighbours[index0[0]]
+                break
+            except:
+                if dry_run:
+                    index0[0] = 'l'
+                    indexer_sequence[0] = neighbours[index0[0]]
+    if (len(ants[1]) > 0): # For MKE
+        indexer_positions, indices = ["B1","B5c","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
+        for ant in ants[1]:
+            try:
+                index0[1] = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
+                break
+            except:
+                if dry_run:
+                    index0[1] = 0 
+        indexer_sequence[1] = [indices[min(max(0,index0[1]+i),len(indices)-1)] for i in [-1,1]]
+        index0[1] = indices[index0[1]]
+    if (len(ants[2]) > 0): # For SKA
+        # TODO
+        index0[2] = 0 
+        indexer_sequence[2] = [1]
+    assert (len(set(index0)-{None}) > 0), "Unable to query indexer status, cannot perform indexer switching as required!"
+    # Remove "switch to self" end case
+    for i in range(len(ants)):
         try:
-            index = indexer_sequence[i_cycle]
-            user_logger.info("Switching Feed Indexer to index %s"%index)
+            indexer_sequence[i].remove(index0[i])
+        except:
+            pass
+    
+    ## Execute the switch for the current cycle
+    # Switching alternates between indexer_sequence[0] and [1]
+    wrapped_cycle = cycle % (2*switch_indexer_every_nth_cycle)
+    i_cycle = -int(wrapped_cycle/switch_indexer_every_nth_cycle) # Alternates between 0 & -1
+    duration_ = min(duration)
+    try: # Switch away from nominal position
+        if (len(ants[0]) > 0): # MKAT
+            index = indexer_sequence[0][i_cycle]
+            print("Switching MKAT Feed Indexer to index %s"%index)
             if not dry_run:
-                ants.req.dsh_SetIndexerPosition(index)
-            time.sleep(40) # Slightly longer than R.D.P.15. TODO: rather "wait on dsm_indexerAxisState==PARKED" to avoid possible errors if indexer is slow
-        finally: # Switch back to the nominal position. This also ensures that we "clean up"
-            user_logger.info("Switching Feed Indexer back to index %s"%index0)
+                for ant in ants[0]: ant.req.ap_set_indexer_position(index)
+            duration_ = max(duration_, duration[0])
+        if (len(ants[1]) > 0): # MKE
+            index = indexer_sequence[1][i_cycle]
+            print("Switching MKE Feed Indexer to index %s"%index)
             if not dry_run:
-                ants.req.dsh_SetIndexerPosition(index0)
-            time.sleep(40)
+                for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index)
+            duration_ = max(duration_, duration[1])
+        if (len(ants[1]) > 0): # SKA
+            # TODO
+            duration_ = max(duration_, duration[2])
+        
+        time.sleep(duration_) # TODO: rather "wait on state==PARKED" to avoid possible errors if indexer is slow
+        
+    finally: # Switch back to the nominal position. This also ensures that we "clean up"
+        if (len(ants[0]) > 0): # MKAT
+            print("Switching MKAT Feed Indexer back to index %s"%index0[0])
+            if not dry_run:
+                for ant in ants[0]: ant.req.ap_set_indexer_position(index0[0])
+        if (len(ants[1]) > 0): # MKE
+            print("Switching MKE Feed Indexer back to index %s"%index0[1])
+            if not dry_run:
+                for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index0[1])
+        if (len(ants[1]) > 0): # SKA
+            pass
+        
+        time.sleep(duration_) # TODO: rather "wait on state==PARKED" to avoid possible errors if indexer is slow
 
 
 def start_nd_switching(sub, n_on, n_off, T_start='now'):
