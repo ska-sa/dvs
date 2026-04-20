@@ -383,13 +383,13 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
     try: # Switch away from nominal position
         if (len(ants[0]) > 0): # MKAT
             index = indexer_sequence[0][i_cycle]
-            print("Switching MKAT Feed Indexer to index %s"%index)
+            user_logger.info("Switching MKAT Feed Indexer to index %s"%index)
             if not dry_run:
                 for ant in ants[0]: ant.req.ap_set_indexer_position(index)
             duration_ = max(duration_, duration[0])
         if (len(ants[1]) > 0): # MKE
             index = indexer_sequence[1][i_cycle]
-            print("Switching MKE Feed Indexer to index %s"%index)
+            user_logger.info("Switching MKE Feed Indexer to index %s"%index)
             if not dry_run:
                 for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index)
             duration_ = max(duration_, duration[1])
@@ -401,11 +401,11 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
         
     finally: # Switch back to the nominal position. This also ensures that we "clean up"
         if (len(ants[0]) > 0): # MKAT
-            print("Switching MKAT Feed Indexer back to index %s"%index0[0])
+            user_logger.info("Switching MKAT Feed Indexer back to index %s"%index0[0])
             if not dry_run:
                 for ant in ants[0]: ant.req.ap_set_indexer_position(index0[0])
         if (len(ants[1]) > 0): # MKE
-            print("Switching MKE Feed Indexer back to index %s"%index0[1])
+            user_logger.info("Switching MKE Feed Indexer back to index %s"%index0[1])
             if not dry_run:
                 for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index0[1])
         if (len(ants[1]) > 0): # SKA
