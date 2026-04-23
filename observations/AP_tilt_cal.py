@@ -4,10 +4,8 @@
 import time
 import numpy as np
 
-from katcorelib import (standard_script_options,
-                        verify_and_connect,
-                        user_logger)
-from dvs_obslib import hack_SetPointingCorrections
+from katcorelib import (ant_array, standard_script_options, verify_and_connect, user_logger)
+from dvs_obslib import split_ants, hack_SetPointingCorrections
 
 
 class ParametersExceedTravelRange(Exception):
@@ -39,7 +37,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     
     if not dry_run:
         ants.req.mode('STOP')
-        time.sleep(1)
+        time.sleep(2)
         ants.req.target_azel(azim, elev)
         ants.req.scan(-azim_range/2, -elev_range/2, azim_range/2, elev_range/2, T_duration, 'plate-carree')
         ants.req.mode('POINT') # Go to start of scan
@@ -68,7 +66,7 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
             user_logger.info("Timed out while waiting to reach end point. %s"%e)
         
         ants.req.mode('STOP')
-        time.sleep(1)
+        time.sleep(2)
     else:
         user_logger.info("Reached the end position.")
     
@@ -110,15 +108,11 @@ opts.az_range = abs(opts.az_range)
 # Check options and build KAT configuration, connecting to proxies and devices
 with verify_and_connect(opts) as kat:
 
-    # The interfaces for these two are different in some respects
-    mkat_ants = []
-    mke_ants = []
-    ska_ants = []
+    # The interfaces for these are different in some respects
+    mkat_ants, mke_ants, ska_ants = split_ants(kat.ants)
     TILT_state = {} # ant name:tilt_corr_enabled boolean
     
     # Set sensor strategies
-    kat.ants.set_sampling_strategy("ap.on-target", "event") # This is a combination of mount-lock & lock, so set all three
-    kat.ants.set_sampling_strategy("mount-lock", "event")
     kat.ants.set_sampling_strategy("lock", "event")
 
     if not kat.dry_run and kat.ants.req.mode('STOP'):
@@ -132,17 +126,14 @@ with verify_and_connect(opts) as kat:
     mean_el = opts.start_el + opts.el_range/2
     try:
         if opts.no_corrections and not kat.dry_run: # Disable tilt correction
-            for ant in kat.ants:
-                if hasattr(ant.sensor, "ap_point_error_tiltmeter_enabled"):
-                    mkat_ants.append(ant)
-                    TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
-                    ant.req.ap_enable_point_error_tiltmeter(False)
-                elif hasattr(ant.sensor, "dsm_tiltPointCorrEnabled"):
-                    mke_ants.append(ant)
-                    TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
-                else:
-                    ska_ants.append(ant)
-                    TILT_state[ant.name] = ant.sensor.dsm_tiltOnInput.get_value()
+            for ant in mkat_ants:
+                TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
+                ant.req.ap_enable_point_error_tiltmeter(False)
+            for ant in mke_ants:
+                TILT_state[ant.name] = ant.sensor.dsm_tiltPointCorrEnabled.get_value()
+            for ant in ska_ants:
+                TILT_state[ant.name] = ant.sensor.dsm_Pointing_Status_TiltCorrActive.get_value()
+            # ant_array(kat, mke_ants+ska_ants, "_ants").req.dsh_DisableTiltCorrections() # TODO: not exposed 11/2024
             hack_SetPointingCorrections(mke_ants+ska_ants, tilt_enabled=False)
 
         for n in range(opts.repeats):
@@ -163,13 +154,9 @@ with verify_and_connect(opts) as kat:
                     resp = ant.req.ap_enable_point_error_tiltmeter(TILT_state[ant.name])
                     if not resp.succeeded:
                         user_logger.error("FAILED to restore ACU state for %s: %s"%(ant.name, resp.reply))
-                for ant in mke_ants:
-                    if (TILT_state[ant.name] == True):
-                        # ant.req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
-                        hack_SetPointingCorrections([ant], tilt_enabled=True, force=True)
-                for ant in ska_ants:
-                    if (TILT_state[ant.name] == True):
-                        user_logger.error("FAILED to restore ACU state for %s: NOT IMPLEMENTED!"%(ant.name))
+                enable_ants = [ant for ant in mke_ants+ska_ants if (TILT_state[ant.name] == True)]
+                # ant_array(kat, enable_ants, "_ants").req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
+                hack_SetPointingCorrections(enable_ants, tilt_enabled=True, force=True)
 
             kat.ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
