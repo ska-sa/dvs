@@ -40,9 +40,17 @@
 try:
     from katcorelib import user_logger, standard_script_options as _kcl_std_opts_, start_session as _kcl_start_session_
 except:
-    import logging
+    import logging, sys
     user_logger = logging.getLogger("user")
     user_logger.info("Not running in the OBS framework, some hacks may break!")
+    # Set up logging to console & file
+    logFormatter = logging.Formatter("%(threadName)-12.12s: %(asctime)s %(levelname)-5.5s  %(message)s")
+    fileHandler = logging.FileHandler("dvs_manual_session.log")
+    fileHandler.setFormatter(logFormatter)
+    user_logger.addHandler(fileHandler)
+    consoleHandler = logging.StreamHandler(sys.stdout)
+    consoleHandler.setFormatter(logFormatter)
+    user_logger.addHandler(consoleHandler)
 import time, os, telnetlib
 import numpy as np
 import katpoint
@@ -275,7 +283,6 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
     mod_spem, mod_tilt, force_tilt = [], [], []
     
     for a in split_ants(ants)[1]: # Only relevant for MKE dishes
-        # !ssh kat@10.97.8.2 "python -c \"import tango; print(tango.DeviceProxy('{a.sensor.dsh_tango_address.get_value()}').tiltPointCorrEnabled = False)\""
         dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
         # Enforce our rules for TILT
         tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
@@ -437,7 +444,7 @@ def start_nd_switching(sub, n_on, n_off, T_start='now'):
     T_start = max(T_start, T0 + ND_LEAD_TIME) # Specified time or on the next(+1) dump boundary
     ants.req.dig_noise_source(T_start, on_fraction, sdp_dt*(n_on+n_off))
     return T_start, on_fraction, sdp_dt*(n_on+n_off)
-
+            
 
 def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
