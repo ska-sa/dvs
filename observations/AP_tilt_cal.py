@@ -4,7 +4,7 @@
 import time
 import numpy as np
 
-from katcorelib import (ant_array, standard_script_options, verify_and_connect, user_logger)
+from katcorelib import ant_array, standard_script_options, verify_and_connect, user_logger
 from dvs_obslib import split_ants, hack_SetPointingCorrections
 
 
@@ -71,61 +71,41 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
         user_logger.info("Reached the end position.")
     
 
+def measure_tilt_cal(kat, ants="*", start_az=-135, start_el=20, az_range=360, azim_speed=0.5, el_range=0, reverse=False, repeats=1, **kwargs):
+    """ Turn the antennas in azimuth at the specified speed - without capturing sky data.
+        
+        @param kat: the telescope control container.
+        @param ants: names of antennas to use, or "*" or "all".
+        @param start-az: Starting azimuth for sequence (default=-135)
+        @param start-el: Starting elevation for sequence (default=20)
+        @param az-range: Azimuth range (positive number) over which to turn, from starting position (default=360)
+        @param azim-speed: Azimuth turn speed (signed number) in deg/sec (default=0.5)
+        @param el-range: Elevation range (signed number) over which to turn, from starting position (default=0)
+        @param reverse: Do the rate movement in both directions (default False)
+        @param repeats: Number of times to repeat a complete sequence, (default=1)
+        @param kwargs: If this includes 'no-corrections' then disable static and tilt corrections during the controlled movement, restore afterwards. """
 
-# Set up standard script options
-
-parser = standard_script_options(usage="%prog [options]",
-                                 description="Turn the antennas in azimuth at the specified speed - without capturing sky data.")
-
-parser.add_option('--start-az', type='float',
-                  default=-135.0,
-                  help='Starting azimuth for sequence (default=%default)')
-parser.add_option('--start-el', type='float',
-                  default=20.0,
-                  help='Starting elevation for sequence (default=%default)')
-parser.add_option('--az-range', type='float',
-                  default=360.0,
-                  help='Azimuth range (positive number) over which to turn, from starting position (default=%default)')
-parser.add_option('--azim-speed', type='float',
-                  default=0.5,
-                  help='Azimuth turn speed (signed number) in deg/sec (default=%default)')
-parser.add_option('--el-range', type='float',
-                  default=0.0,
-                  help='Elevation range (signed number) over which to turn, from starting position (default=%default)')
-parser.add_option('--reverse', action='store_true', default=False,
-                  help='Do the rate movement in both directions')
-parser.add_option('--repeats', type='int', default=1,
-                  help='Number of times to repeat a complete sequence, (default=%default)')
-parser.add_option('--no-corrections', action='store_true',
-                  help='Disable static and tilt corrections during the controlled movement, restore afterwards.')
-
-
-
-# Parse the command line
-opts, args = parser.parse_args()
-opts.az_range = abs(opts.az_range)
-
-# Check options and build KAT configuration, connecting to proxies and devices
-with verify_and_connect(opts) as kat:
-
+    ants = kat.ants if (ants in "* all") else ant_array(kat, [ant for ant in kat.ants if (ant.name in ants)], "tilt_cal_ants")
+    no_corrections = 'no_corrections' in kwargs.keys()
+    
     # The interfaces for these are different in some respects
-    mkat_ants, mke_ants, ska_ants = split_ants(kat.ants)
+    mkat_ants, mke_ants, ska_ants = split_ants(ants)
     TILT_state = {} # ant name:tilt_corr_enabled boolean
     
     # Set sensor strategies
-    kat.ants.set_sampling_strategy("lock", "event")
+    ants.set_sampling_strategy("lock", "event")
 
-    if not kat.dry_run and kat.ants.req.mode('STOP'):
+    if not kat.dry_run and ants.req.mode('STOP'):
         user_logger.info("Setting antennas to mode 'STOP'")
         time.sleep(2)
     else:
         if not kat.dry_run:
             user_logger.error("Unable to set antennas to mode 'STOP'!")
 
-    mean_az = opts.start_az + opts.az_range/2
-    mean_el = opts.start_el + opts.el_range/2
+    mean_az = start_az + az_range/2
+    mean_el = start_el + el_range/2
     try:
-        if opts.no_corrections and not kat.dry_run: # Disable tilt correction
+        if no_corrections and not kat.dry_run: # Disable tilt correction
             for ant in mkat_ants:
                 TILT_state[ant.name] = ant.sensor.ap_point_error_tiltmeter_enabled.get_value()
                 ant.req.ap_enable_point_error_tiltmeter(False)
@@ -136,19 +116,19 @@ with verify_and_connect(opts) as kat:
             # ant_array(kat, mke_ants+ska_ants, "_ants").req.dsh_DisableTiltCorrections() # TODO: not exposed 11/2024
             hack_SetPointingCorrections(mke_ants+ska_ants, tilt_enabled=False)
 
-        for n in range(opts.repeats):
-            rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, opts.az_range, opts.el_range, dry_run=kat.dry_run)
+        for n in range(repeats):
+            rate_slew(ants, mean_az, mean_el, azim_speed, az_range, el_range, dry_run=kat.dry_run)
 
-            if opts.reverse or (opts.repeats > 1):
+            if reverse or (repeats > 1):
                 user_logger.info("1/2 sequence completed successfully!")
                 user_logger.info("Scanning in reverse direction...")
-                rate_slew(kat.ants, mean_az, mean_el, opts.azim_speed, -opts.az_range, -opts.el_range, dry_run=kat.dry_run)
+                rate_slew(ants, mean_az, mean_el, azim_speed, -az_range, -el_range, dry_run=kat.dry_run)
     
             user_logger.info("Sequence completed successfully!")
             
     finally:
         if not kat.dry_run:
-            if opts.no_corrections:
+            if no_corrections:
                 user_logger.info("Restoring ACU pointing correction states...")
                 for ant in mkat_ants:
                     resp = ant.req.ap_enable_point_error_tiltmeter(TILT_state[ant.name])
@@ -158,5 +138,47 @@ with verify_and_connect(opts) as kat:
                 # ant_array(kat, enable_ants, "_ants").req.dsh_EnableTiltCorrections() # TODO: not exposed 11/2024
                 hack_SetPointingCorrections(enable_ants, tilt_enabled=True, force=True)
 
-            kat.ants.req.mode('STOP')
+            ants.req.mode('STOP')
             user_logger.info("Stopping antennas")
+
+
+if __name__ == "__main__":
+    # Set up standard script options
+    
+    parser = standard_script_options(usage="%prog [options]",
+                                     description="Turn the antennas in azimuth at the specified speed - without capturing sky data.")
+    
+    parser.add_option('--start-az', type='float',
+                      default=-135.0,
+                      help='Starting azimuth for sequence (default=%default)')
+    parser.add_option('--start-el', type='float',
+                      default=20.0,
+                      help='Starting elevation for sequence (default=%default)')
+    parser.add_option('--az-range', type='float',
+                      default=360.0,
+                      help='Azimuth range (positive number) over which to turn, from starting position (default=%default)')
+    parser.add_option('--azim-speed', type='float',
+                      default=0.5,
+                      help='Azimuth turn speed (signed number) in deg/sec (default=%default)')
+    parser.add_option('--el-range', type='float',
+                      default=0.0,
+                      help='Elevation range (signed number) over which to turn, from starting position (default=%default)')
+    parser.add_option('--reverse', action='store_true', default=False,
+                      help='Do the rate movement in both directions')
+    parser.add_option('--repeats', type='int', default=1,
+                      help='Number of times to repeat a complete sequence, (default=%default)')
+    parser.add_option('--no-corrections', action='store_true',
+                      help='Disable static and tilt corrections during the controlled movement, restore afterwards.')
+    
+    
+    
+    # Parse the command line
+    opts, args = parser.parse_args()
+    opts.az_range = abs(opts.az_range)
+    
+    # Check options and build KAT configuration, connecting to proxies and devices
+    with verify_and_connect(opts) as kat:
+    
+        measure_tilt_cal(kat, ants="*", start_az=opts.start_az, start_el=opts.start_el,
+                         az_range=opts.az_range, azim_speed=opts.azim_speed, el_range=opts.el_range,
+                         reverse=opts.reverse, repeats=opts.repeats, no_corrections=opts.no_corrections)
