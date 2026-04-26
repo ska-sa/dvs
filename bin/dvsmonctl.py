@@ -24,38 +24,30 @@ import numpy as np
 import urllib.request
 
 
-def reset_ACU(cam_ant, force=False):
-    """ Let LMC take authority of ACU & clear old tasks etc. Necessary e.g. after ESTOP, manual control or OHB GUI /SCU work.
-        This should be a temporary hack - if not sorted out by 01/03/2025 follow up with LMC team!
+def reset_ACU(cam_ant):
+    """ Acknowledge interlocks on the ACU & actions not currently in CAM or LMC code. Necessary e.g. after ESTOP, manual control or OHB GUI /SCU work.
+        This should be a temporary hack - follow up with CAM & LMC teams!
     """
     import tango
-    dsh_addr = cam_ant.sensors.dsh_tango_address.get_value()
-    dsh = tango.DeviceProxy(dsh_addr)
     dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
     dsm = tango.DeviceProxy(dsm_addr)
-    # Always req auth first - sometimes mode("STOP") does absolutely nothing
+    
+    # Defaults that are sometimes messed up after LMC testing
+    dsm.utcTimeEnabled = True; dsm.mjdTimeDriftCorrEnabled = False
+    
+    # Try to clear interlocks & error states after site work has been completed 
     dsm.RequestAuthority(); time.sleep(1)
+    dsm.AckInterlock(); time.sleep(5)
+    dsm.ClearLatchedErrors(); time.sleep(1)
     
     # Inconsistent STOW state not handled properly by LMC at present 03/2026
     if ("STOWED" in dsm.elaxisstate.name and not "STOWED" in dsm.azaxisstate.name):
         dsm.Unstow(); time.sleep(20)
     
-    try: # First try to just STOP the proxy - that should get things "ready"
-        cam_ant.req.mode("STOP")
-    except:
-        force = True
-    # Get rid of expired dsh.GetTaskSequenceInfo() that are stuck in RUNNING state
-    dsh.ClearTaskHistory(); time.sleep(1)
-    
-    if force:
-        dsm.AckInterlock(); time.sleep(5)
-        dsm.ClearLatchedErrors(); time.sleep(1)
-    
-    # [Cristobal 8/07/2025] "ResetDishMode does the following:
+    # "STOP" should get things "ready to operate", including "ResetDishMode" which:
     #  1. flushes the task queue
     #  2. resets al progress attributes (StandbyLPModeProgress, SetStowModeProgress, etc)
-    #  3. Sets the dish to Standby-LP mode"
-    dsh.ResetDishMode(); time.sleep(5)
+    cam_ant.req.mode("STOP")
 
 
 def release_ACU_authority(cam_ant):
