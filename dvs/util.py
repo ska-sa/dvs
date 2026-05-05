@@ -258,7 +258,7 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     if (delta_P4 is not None): # Convert P4 pointing term to equivalent translation
         delta_Yf = np.tan(delta_P4*np.pi/180 / BDF) * F_eq
 
-    delta_Yf *= shape_factor
+    delta_Yf = delta_Yf*shape_factor
     # Change in Feed effective in-plane translation
     # If feed is pointed right of SR (Yf>0), correction should decrease FI angle (ICD)
     delta_Yf *= -1
