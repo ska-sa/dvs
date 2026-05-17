@@ -298,13 +298,12 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         out.sun_rel_deg = ([katsemat.wrap(sun_azel[0]-az_deg, 360), sun_azel[1]-out.el_deg]) if (sun_azel[1] > -5) else (np.nan, np.nan) # (az,el) mean angle relative to bore sight
         
         # Feed Indexer angles
-        a = []
-        # TODO: consider changing below to katdal's equivalent mechanism
-        if (telescope.upper() == "MEERKAT"):
-            a = katselib.getsensorvalues("%s_ap_indexer_position_raw"%scanant, dataset.rawtime)[1]
-        elif (telescope.upper() == "SKA"):
-            a = katselib.getsensorvalues("%s_dsm_indexerActualPosition"%scanant, dataset.rawtime)[1]
-        if (len(a) == 0):
+        try: # TODO: consider changing below to katdal's equivalent mechanism
+            fi_sensor = {'MEERKAT':'ap_indexer_position_raw', 'SKA':'dsm_indexerActualPosition'}[telescope.upper()]
+            if (scanant[0] == 's') and (1760000000 < dataset.env_times[0]): # SKA-MID (not MKE)
+                fi_sensor = 'dsm_FeedIndexer_Status_p_Enc'
+            a = katselib.getsensorvalues(scanant+"_"+fi_sensor, dataset.rawtime)[1]
+        except:
             print("WARNING: No indexer positions retrieved from sensor database. Continuing with nan's.")
             a = [np.nan]*3
         out.feedindexer_deg = np.round([np.mean(a), np.min(a), np.max(a)],6) # (avg,min,max)
@@ -1285,7 +1284,7 @@ def plot_errbeam_cycles(recs, predicted, DF=5, beampolydegree=28, beamsmoothing=
                     continue
 
 
-def plot_enviro(recs, label, what="sun,wind,temp,humidity", tzoffset=0, figsize=(14,3)):
+def plot_enviro(recs, label, what="elev,wind,temp,humidity", tzoffset=0, figsize=(14,3)):
     """ Generates a figure of the following metrics vs. hour of day for measurements (singles & cycles):
         * sun & wind attack angles
         * wind speed
