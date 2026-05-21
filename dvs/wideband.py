@@ -192,7 +192,13 @@ def band_defs(band_ID):
         ulim=-122.7+10*np.log10(3e6)
         mask_f = [0,100e6,300e6,1200e6,np.nan,1610e6,3600e6]
         mask_a = [ulim-13, ulim-13, ulim, ulim,np.nan, ulim-13, ulim-13]
-        band_freq = (580e6,1050e6)
+        band_freq = (580e6,1015e6)
+        nd_lim = (0.5,1.5)
+    elif ('B1' in band_ID): # SPFB1
+        ulim=-122.7+10*np.log10(3e6) # TODO
+        mask_f = [0,100e6, 350e6,1050e6, np.nan, 1400e6,3600e6] # TODO
+        mask_a = [ulim-13,ulim-13, ulim,ulim, np.nan, ulim-13,ulim-13]
+        band_freq = (350e6,1050e6)
         nd_lim = (0.5,1.5)
     
     GTsys_ref = 10**5.6 * 18 # 18K + 56dB
