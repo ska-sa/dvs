@@ -199,7 +199,7 @@ def band_defs(band_ID):
         mask_f = [0,100e6, 350e6,1050e6, np.nan, 1400e6,3600e6] # TODO
         mask_a = [ulim-13,ulim-13, ulim,ulim, np.nan, ulim-13,ulim-13]
         band_freq = (350e6,1050e6)
-        nd_lim = (0.5,1.5)
+        nd_lim = (0.05,0.13)
     
     GTsys_ref = 10**5.6 * 18 # 18K + 56dB
     
