@@ -349,7 +349,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
     
     ### Determine active band, and the sequence of switches to use for it
     if (len(ants[0]) > 0): # For MKAT
-        neighbours = {'l':['u','s'], 'x':['u','s'], 'u':['l'], 's':['l','x']}
+        neighbours = {'l':['x','s'], 'x':['u','l'], 'u':['x'], 's':['l']}
         for ant in ants[0]:
             try:
                 index0[0] = ant.sensor.ap_indexer_position.get_value()
