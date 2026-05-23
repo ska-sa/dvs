@@ -194,6 +194,8 @@ if __name__=="__main__":
     
     parser.add_option('--switch-indexer-every', type="int", default=-1,
                       help="Switch the feed indexer out & back again after every few scans, alternating directions if possible (default=never)")
+    parser.add_option('--switch-indexer-avoid-x', action='store_true',
+                      help="Avoid switching the feed indexer to X-band position.")
     
     # Set default value for any option (both standard and experiment-specific options)
     parser.set_defaults(description='Circular pointing scan', quorum=1.0, nd_params='off')
@@ -445,4 +447,4 @@ if __name__=="__main__":
                     
                     cycle+=1
                     # Switch the indexer out & back, if requested
-                    cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run)
+                    cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run, avoid_x=opts.switch_indexer_avoid_x)
