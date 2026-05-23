@@ -331,7 +331,7 @@ def release_ACU_authority(ants):
             pass
 
 
-def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False):
+def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, avoid_x=False, dry_run=False):
     """ Switch the indexer out & back, if requested. This implementation currently only works for MKE/SKA Dish!
         
         @param ants: a katcorelib ant_array with the antennas to change indexer for.
@@ -349,7 +349,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
     
     ### Determine active band, and the sequence of switches to use for it
     if (len(ants[0]) > 0): # For MKAT
-        neighbours = {'l':['u','s'], 'x':['u','s'], 'u':['l'], 's':['l']}
+        neighbours = {'l':['u','s'], 'x':['u','s'], 'u':['l'], 's':['l','x']}
         for ant in ants[0]:
             try:
                 index0[0] = ant.sensor.ap_indexer_position.get_value()
@@ -361,6 +361,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
                     indexer_sequence[0] = neighbours[index0[0]]
     if (len(ants[1]) > 0): # For MKE
         indexer_positions, indices = ["B1","B5c","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
+        if avoid_x: indexer_positions, indices = ["B5c","B2"], [7,2]
         for ant in ants[1]:
             try:
                 index0[1] = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
