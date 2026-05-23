@@ -331,7 +331,7 @@ def release_ACU_authority(ants):
             pass
 
 
-def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, avoid_x=False, dry_run=False):
+def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False, avoid_x=False):
     """ Switch the indexer out & back, if requested. This implementation currently only works for MKE/SKA Dish!
         
         @param ants: a katcorelib ant_array with the antennas to change indexer for.
