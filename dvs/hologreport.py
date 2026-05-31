@@ -1222,9 +1222,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         pp.close()
     
     if (_predicted_ is None):
-        plot_apmapdiffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+        plot_diffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
     else:
-        plot_apmapdiffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+        plot_diffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
     
     return results
 
@@ -1344,39 +1344,54 @@ def plot_enviro(recs, label, what="elev,wind,temp,humidity", tzoffset=0, figsize
     katpoint.projection.set_out_of_range_treatment(prev_oort)
 
 
-def plot_apmapdiffs(apmap0, apmap1, title, what="nopointingphasemap", vlim=None, masked=True):
-    """ Generates a figure to show the differences between aperture plane maps.
-        @param apmap0, apmap1: instances of katholog.ApertureMap
-        @param what: the attribute of an ApertureMap to represent (default 'nopointingphasemap')
+def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
+    """ Generates a figure to show the differences between maps.
+        @param map0, map1: instances of either katholog.ApertureMap or katholog.BeamCube - not allowed to mix types!
+        @param what: the attribute of the maps to represent - e.g. 'nopointingphasemap' or 'Gx'
         @param vlim: limit the range of values of 'what' displayed, either None or (min,max) (default None).
         @return: the figure's axes (always a 2D list)
     """
-    apmaps0 = np.atleast_1d(np.squeeze(apmap0))
-    apmaps1 = np.atleast_1d(np.squeeze(apmap1))
-    fig, axs = plt.subplots(len(apmaps0),2, figsize=(6*2,5*len(apmaps0)))
+    maps0 = np.atleast_1d(np.squeeze(map0))
+    maps1 = np.atleast_1d(np.squeeze(map1))
+    try:
+        is_beam = maps0[0].Gx is not None
+    except:
+        is_beam = False
+    fig, axs = plt.subplots(len(maps0),3, width_ratios=[1.8,2,.7], figsize=(4*3,4*len(maps0)))
     axs = [axs] if (len(np.shape(axs))==1) else axs # Undo auto squeeze
     fig.suptitle("%s [%s]"%(title, what))
-    unit = "mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl")
+    unit = "dB" if is_beam else ("mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl"))
     
-    for i,(ax_,apmap0,apmap1) in enumerate(zip(axs,apmaps0,apmaps1)):
+    for i,(ax_,map0,map1) in enumerate(zip(axs,maps0,maps1)):
         try:
-            subtitle = "%.f - %.f" % (apmap0.dataset.env_times[1], apmap1.dataset.env_times[1])
+            subtitle = "%.f - %.f" % (map0.dataset.env_times[1], map1.dataset.env_times[1])
         except: # Some maps don't have datasets attached
             subtitle = "#%d - #%d" % (i, i)
-        ax_[1].set_title(subtitle, x=0)
+        ax_[1].set_title(subtitle)
         
-        diff = apmap0.__getattribute__(what) - apmap1.__getattribute__(what)
-        if masked:
-            diff[apmap0.maskmap * apmap1.maskmap == 1] = np.nan
-        vlim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
-        im = ax_[0].imshow(diff, vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[0])
+        what0, what1 = map0.__getattribute__(what), map1.__getattribute__(what)
+        if is_beam: # Only first freq if the BeamCube, complex voltage converted to real power
+            what0, what1 = 20*np.log10(np.real(what0[0])), 20*np.log10(np.real(what1[0]))
+            domain = (map0.margin, map0.margin)
+        else:
+            domain = [range(np.shape(what0)[0]), range(np.shape(what0)[1])]
+        diff = what0 - what1
+        if masked and not is_beam: # Beams don't have maskmap
+            diff[map0.maskmap * map1.maskmap == 1] = np.nan
+        print(np.shape(domain[0]), np.shape(what0))
+        ax_[0].contour(domain[0], domain[1], what0, colors='k', alpha=0.2)
+        ax_[0].contour(domain[0], domain[1], what1, colors='r', alpha=0.2)
         ax_[0].set_ylabel("Y"); ax_[0].set_xlabel("X")
+        
+        vlim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
+        im = ax_[1].imshow(diff, vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[1])
+        ax_[1].set_ylabel("Y"); ax_[1].set_xlabel("X")
 
         diff = np.reshape(diff, (-1,))
         std_sq2 = np.nanstd(diff)/2**.5
         diff = np.clip(diff, vlim[0], vlim[1])
-        ax_[1].hist(diff[np.isfinite(diff)], bins=100, range=vlim); ax_[1].set_xlabel(unit)
-        ax_[1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
+        ax_[2].hist(diff[np.isfinite(diff)], bins=100, range=vlim, orientation='horizontal', log=True); ax_[2].set_ylabel(unit)
+        ax_[2].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
         
     return axs
 
