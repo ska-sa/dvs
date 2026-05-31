@@ -1378,7 +1378,6 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
         diff = what0 - what1
         if masked and not is_beam: # Beams don't have maskmap
             diff[map0.maskmap * map1.maskmap == 1] = np.nan
-        print(np.shape(domain[0]), np.shape(what0))
         ax_[0].contour(domain[0], domain[1], what0, colors='k', alpha=0.2)
         ax_[0].contour(domain[0], domain[1], what1, colors='r', alpha=0.2)
         ax_[0].set_ylabel("Y"); ax_[0].set_xlabel("X")
