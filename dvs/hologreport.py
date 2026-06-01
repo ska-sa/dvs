@@ -731,22 +731,30 @@ def plot_errbeam_el(RS, labels, extra="95pct", figsize=(14,4)):
     ax.set_xlabel("Elevation [deg]"); ax.legend()
 
 
-def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,4)):
-    """ Generates a figure of feed offsets vs elevation angle 
+def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", figsize=(14,4)):
+    """ Generates a figure of feed offsets vs environmental variable 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
+        @param key: 'el_deg'|'time_hod'|'sun_deg'|'sun_rel_deg'|'temp_C'|'wind_mps'|'wind_rel_deg'
         @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
-        @param elspec_deg: if given and fit is also specified then print out the offsets fitted at these elevation angles (default None)
+        @param eval_fit_at: if given and fit is also specified then print out the offsets fitted at this point (default None)
         @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
-        @return: (X,Y,Z) offsets at each `elspec_deg` (or None)"""
+        @return: (X,Y,Z) offsets at each `eval_fit_at` (or None)"""
     layout = _plan_layout_(RS, labels, separate_freqs=False)
-    elspec_deg = np.atleast_1d(elspec_deg) if elspec_deg else None
-    offsets_el = None if (elspec_deg is None) else []
+    xlbl, e2v = {'el_deg':("Elevation [deg]", lambda rs: rs.el_deg),
+                 'time_hod':("Local time [hr]", lambda rs: rs.info['time_hod']),
+                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][1]),
+                 'sun_rel_deg':("Sun offset from boresight [deg]", lambda rs: (rs.info['enviro']['sun_rel_deg'][0]**2+rs.info['enviro']['sun_rel_deg'][1]**2)**.5),
+                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][1]),
+                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][1]),
+                 'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
+    eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
+    offsets_el = None if (eval_fit_at is None) else []
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
     for ax,(fs,rs,lbl) in zip(axes,layout):
         fits = []
-        el = _flatten_([r.el_deg for r in rs])
+        el = _flatten_([e2v(r) for r in rs])
         for p,q in enumerate("XYZ"):
             if (q in hide): continue
             foH = _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)])
@@ -766,18 +774,20 @@ def plot_offsets_el(RS, labels, fit=None, elspec_deg=None, hide="", figsize=(14,
                 fits.append((q, fitp, model))
         
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2fEl"%(f[0],*(list(f[1])+[0])[:2]) for f in fits]))) # Guard against 'single point fit'
-            if (elspec_deg is not None):
+            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2f%s"%(f[0],*(list(f[1])+[0])[:2],key) for f in fits]))) # Guard against 'single point fit'
+            if (eval_fit_at is not None):
                 offset = {}
                 for q,fitp,model in fits:
-                    offset[q] = [model(el) for el in elspec_deg]
-                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.fdegEl = %.1fmm"%(el,off) for el,off in zip(elspec_deg,offset[q])])))
-                offsets_el.append([offset.get(q,[np.nan]*len(elspec_deg)) for q in "XYZ"])
-                    
+                    offset[q] = [model(el) for el in eval_fit_at]
+                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.f%s = %.1fmm"%(el,key,off) for el,off in zip(eval_fit_at,offset[q])])))
+                offsets_el.append([offset.get(q,[np.nan]*len(eval_fit_at)) for q in "XYZ"])
+        
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
-    ax.set_xlabel("Elevation [deg]"); ax.legend()
+    ax.set_xlabel(xlbl); ax.legend()
     
     return offsets_el
+
+plot_offsets_el = lambda RS, labels, fit=None, elspec_deg=None, hide="", **k: plot_offsets_against(RS, labels, 'el_deg', fit, elspec_deg, hide, **k)
 
 
 def plot_offsets_freq(RS, labels=None, hide="", figsize=(14,10)):
