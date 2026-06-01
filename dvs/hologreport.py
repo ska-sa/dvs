@@ -736,7 +736,7 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
         @param key: 'el_deg'|'time_hod'|'sun_deg'|'sun_rel_deg'|'temp_C'|'wind_mps'|'wind_rel_deg'
-        @param fit: 'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
+        @param fit: 'leastsq'|'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
         @param eval_fit_at: if given and fit is also specified then print out the offsets fitted at this point (default None)
         @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
         @return: (X,Y,Z) offsets at each `eval_fit_at` (or None)"""
@@ -766,11 +766,10 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                 if ("H" in hide): offsets[:len(foH)] = np.nan
                 if ("V" in hide): offsets[-len(foV):] = np.nan
                 _el = np.concatenate([el, el])
-                fitp, model = katsemat.polyfit(_el, offsets, order=1, method='leastsq' if fit=='lin' else fit)
-                warn = 0 if (np.nanmax(_el)-np.nanmin(_el) > 15) else 4
+                _mask = np.isfinite(_el)
+                fitp, model = katsemat.polyfit(_el[_mask], offsets[_mask], order=1, method='leastsq' if fit=='lin' else fit)
                 fitted = model(np.sort(el))
-                # Solid line if fitted without warnings
-                ax.plot(np.sort(el), fitted, ('C%d'%p) + ('-' if (warn==0) else '--'), alpha=0.3)
+                ax.plot(np.sort(el), fitted, 'C%d-'%p, alpha=0.3)
                 fits.append((q, fitp, model))
         
         if (len(fits) > 0):
