@@ -191,6 +191,8 @@ if __name__=="__main__":
                       help='Strategy for arranging the sequence of target visits across the sky  (default=%default)')
     parser.add_option('--cluster-radius', type="float", default=0,
                       help="Group targets into clusters with this great circle dimension, in degrees (default=%default)")
+    parser.add_option('--cluster-repeats', type="float", default=0,
+                      help="Number of times to re-visit targets in each cluster after the first round (default=%default)")
     
     parser.add_option('--switch-indexer-every', type="int", default=-1,
                       help="Switch the feed indexer out & back again after every few scans, alternating directions if possible (default=never)")
@@ -279,7 +281,7 @@ if __name__=="__main__":
             catalogue = filter_separation(catalogue, time.time(), kat.sources.antenna,
                                           separation_deg=opts.min_separation, sunmoon_separation_deg=opts.sunmoon_separation)
             targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime, strategy=opts.strategy,
-                                   cluster_radius=opts.cluster_radius, antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
+                                   cluster_radius=opts.cluster_radius, cluster_repeats=opts.cluster_repeats, antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             # Initialise a capturing session
             with start_session(kat, **vars(opts)) as session:
                 # Use the command-line options to set up the system
@@ -331,7 +333,7 @@ if __name__=="__main__":
                     fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
                         targets = plan_targets(catalogue, time.time(), t_observe=opts.cycle_duration+opts.cycle_tracktime, strategy=opts.strategy,
-                                               cluster_radius=opts.cluster_radius, antenna=scan_ants[0], el_limit_deg=opts.horizon)[0]
+                                               cluster_radius=opts.cluster_radius, cluster_repeats=opts.cluster_repeats, antenna=scan_ants[0], el_limit_deg=opts.horizon)[0]
                         fresh_plan = True
                     if (len(targets) == 0):
                         user_logger.warning("No targets defined!")
