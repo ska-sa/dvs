@@ -24,26 +24,68 @@ import numpy as np
 import urllib.request
 
 
+def _ska_tango_(ant, sub, cmd_args, attr_value):
+    """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param sub: either 'dsh', 'dsm' or 'spfc'
+        @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
+        @param attr_value: (name, value) for the attribute, or None
+    """
+    import subprocess
+    addr = "\"%s\"" % eval("ant.sensor.%s_tango_address.get_value()"%sub)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
+    if (cmd_args is not None):
+        cmd_args = np.atleast_1d(cmd_args)
+        cmd, args = cmd_args[0], cmd_args[1:]
+        cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
+        if (cmd_args.lower() == "restartserver()"):
+            addr = "tango.DeviceProxy(%s).adm_name()"%addr
+        print(tango_dp_instr(addr, "dp."+cmd_args))
+    if (attr_value is not None):
+        attr_value = np.atleast_1d(attr_value)
+        set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
+        print(tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
+def x_dsh(ant, cmd_args=None, attr_value=None):
+    """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
+        @param attr_value: (name, value) for the attribute (default None)
+    """
+    _ska_tango_(ant, 'dsh', cmd_args, attr_value)
+def x_dsm(ant, cmd_args=None, attr_value=None):
+    """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
+        @param attr_value: (name, value) for the attribute (default None)
+    """
+    _ska_tango_(ant, 'dsm', cmd_args, attr_value)
+
+
 def reset_ACU(cam_ant):
     """ Acknowledge interlocks on the ACU & actions not currently in CAM or LMC code. Necessary e.g. after ESTOP, manual control or OHB GUI /SCU work.
         This should be a temporary hack - follow up with CAM & LMC teams!
     """
-    import tango
-    dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
-    dsm = tango.DeviceProxy(dsm_addr)
+    if (cam_ant.name[0] == 's'):
+        x_dsm(cam_ant, ("InterlockAck"))
+        x_dsh(cam_ant, attr_value=("ignoreSpfrx",True))
     
-    # Defaults that are sometimes messed up after LMC testing
-    dsm.utcTimeEnabled = True; dsm.mjdTimeDriftCorrEnabled = False
-    
-    # Try to clear interlocks & error states after site work has been completed 
-    dsm.RequestAuthority(); time.sleep(1)
-    dsm.AckInterlock(); time.sleep(5)
-    dsm.ClearLatchedErrors(); time.sleep(1)
-    
-    # Inconsistent STOW state not handled properly by LMC at present 03/2026
-    if ("STOWED" in dsm.elaxisstate.name and not "STOWED" in dsm.azaxisstate.name):
-        dsm.Unstow(); time.sleep(20)
-    
+    else:
+        import tango
+        dsm_addr = cam_ant.sensors.dsm_tango_address.get_value()
+        dsm = tango.DeviceProxy(dsm_addr)
+        
+        # Defaults that are sometimes messed up after LMC testing
+        dsm.utcTimeEnabled = True; dsm.mjdTimeDriftCorrEnabled = False
+        
+        # Try to clear interlocks & error states after site work has been completed 
+        dsm.RequestAuthority(); time.sleep(1)
+        dsm.AckInterlock(); time.sleep(5)
+        dsm.ClearLatchedErrors(); time.sleep(1)
+        
+        # Inconsistent STOW state not handled properly by LMC at present 03/2026
+        if ("STOWED" in dsm.elaxisstate.name and not "STOWED" in dsm.azaxisstate.name):
+            dsm.Unstow(); time.sleep(20)
+        
     # "STOP" should get things "ready to operate", including "ResetDishMode" which:
     #  1. flushes the task queue
     #  2. resets al progress attributes (StandbyLPModeProgress, SetStowModeProgress, etc)
@@ -87,41 +129,28 @@ def toggle_LNAs(cam_ant, band=2, also_tempctl=False):
                 spfc.b2LnaPidPowerState = True
 
 
-def _ska_tango_(ant, sub, cmd_args, attr_value):
-    """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
-        @param ant: control object for dish proxy (e.g. cam.s0001)
-        @param sub: either 'dsh', 'dsm' or 'spfc'
-        @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
-        @param attr_value: (name, value) for the attribute, or None
+def setTiltCorrections(cam_ants, tiltcorr=True):
+    """ Disable SPEM & Temperature corrections, and en/disable Tilt corrections on the specified dishes.
+        This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
+        
+        @param ants: list of instances of CAM Receptor/Dish Proxy.
+        @param tiltcorr: enable/disable ACU's internal inclinometer-based corrections (default True)
     """
-    import subprocess
-    addr = "\"%s\"" % eval("ant.sensor.%s_tango_address.get_value()"%sub)
-    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
-    if (cmd_args is not None):
-        cmd_args = np.atleast_1d(cmd_args)
-        cmd, args = cmd_args[0], cmd_args[1:]
-        cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
-        if (cmd_args.lower() == "restartserver()"):
-            addr = "tango.DeviceProxy(%s).adm_name()"%addr
-        print(tango_dp_instr(addr, "dp."+cmd_args))
-    if (attr_value is not None):
-        attr_value = np.atleast_1d(attr_value)
-        set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
-        print(tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
-def x_dsh(ant, cmd_args=None, attr_value=None):
-    """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
-        @param ant: control object for dish proxy (e.g. cam.s0001)
-        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
-        @param attr_value: (name, value) for the attribute (default None)
-    """
-    _ska_tango_(ant, 'dsh', cmd_args, attr_value)
-def x_dsm(ant, cmd_args=None, attr_value=None):
-    """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
-        @param ant: control object for dish proxy (e.g. cam.s0001)
-        @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
-        @param attr_value: (name, value) for the attribute (default None)
-    """
-    _ska_tango_(ant, 'dsm', cmd_args, attr_value)
+    import tango
+    cam_ants = np.atleast_1d(cam_ants)
+    for a in cam_ants:
+        if (a.name[0] == 's'):
+            x_dsm(a, attr_value=('tiltPointCorrEnabled', tiltcorr))
+        elif (a.name[0] == 'e'):
+            dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
+            if hasattr(dsm, "tiltPointCorrEnabled"):
+                dsm.tiltPointCorrEnabled = tiltcorr
+            elif hasattr(dsm, "tiltOnInput"):
+                dsm.tiltOnInput = tiltcorr
+    
+    # Wait once, for all changes, rather than waiting for changes for individual dishes
+    if (len(cam_ants) > 0):
+        time.sleep(3)
 
 
 def match_ku_siggen_freq(cam, override=False):
@@ -150,6 +179,7 @@ def trk(pointables, tgt):
         @param pointables: list of control objects e.g. [cam.ant1, cam.ant2, cam.cbf_1]
         @param tgt: target object or description e.g. cam.sources['3C 279']
     """
+    pointables = np.atleast_1d(pointables)
     tgt = tgt if isinstance(tgt, str) else tgt.description
     for proxy in pointables:
         proxy.req.target(tgt)
