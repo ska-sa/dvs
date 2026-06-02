@@ -57,6 +57,30 @@ import katpoint
 import tango
 
 
+def _ska_tango_(ant, sub, cmd_args, attr_value):
+    """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
+        @param ant: control object for dish proxy (e.g. cam.s0001)
+        @param sub: either 'dsh', 'dsm' or 'spfc'
+        @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
+        @param attr_value: (name, value) for the attribute, or None
+        @return: text representation of the result
+    """
+    import subprocess
+    addr = "\"%s\"" % eval("ant.sensor.%s_tango_address.get_value()"%sub)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
+    if (cmd_args is not None):
+        cmd_args = np.atleast_1d(cmd_args)
+        cmd, args = cmd_args[0], cmd_args[1:]
+        cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
+        if (cmd_args.lower() == "restartserver()"):
+            addr = "tango.DeviceProxy(%s).adm_name()"%addr
+        return tango_dp_instr(addr, "dp."+cmd_args)
+    if (attr_value is not None):
+        attr_value = np.atleast_1d(attr_value)
+        set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
+        return tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0]))
+
+
 def standard_script_options(usage, description):
     """ Add additional options that are used by `start_hacked_session()`. """
     parser = _kcl_std_opts_(usage, description)
@@ -371,10 +395,18 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
                     index0[1] = 0 
         indexer_sequence[1] = [indices[min(max(0,index0[1]+i),len(indices)-1)] for i in [-1,1]]
         index0[1] = indices[index0[1]]
-    if (len(ants[2]) > 0): # For SKA
-        # TODO
-        index0[2] = 0 
-        indexer_sequence[2] = [1]
+    if (len(ants[2]) > 0): # For SKA - same as above but only B5c->B6?
+        indexer_positions, indices = ["B1","B6","B2"], [1,7,2] # Arranged in angle sequence, only the positions relevant to DVS listed
+        if avoid_x: indexer_positions, indices = ["B6","B2"], [7,2]
+        for ant in ants[2]:
+            try:
+                index0[2] = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
+                break
+            except:
+                if dry_run:
+                    index0[2] = 0 
+        indexer_sequence[2] = [indices[min(max(0,index0[2]+i),len(indices)-1)] for i in [-1,1]]
+        index0[2] = indices[index0[2]]
     assert (len(set(index0)-{None}) > 0), "Unable to query indexer status, cannot perform indexer switching as required!"
     # Remove "switch to self" end case
     for i in range(len(ants)):
@@ -402,7 +434,10 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
                 for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index)
             duration_ = max(duration_, duration[1])
         if (len(ants[1]) > 0): # SKA
-            # TODO
+            index = indexer_sequence[2][i_cycle]
+            user_logger.info("Switching SKA Feed Indexer to index %s"%index)
+            if not dry_run:
+                for ant in ants[2]: _ska_tango_(ant, 'dsm', ("SetIndexPosition",index))
             duration_ = max(duration_, duration[2])
         
         time.sleep(duration_) # TODO: rather "wait on state==PARKED" to avoid possible errors if indexer is slow
@@ -417,7 +452,8 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
             if not dry_run:
                 for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index0[1])
         if (len(ants[1]) > 0): # SKA
-            pass
+            if not dry_run:
+                for ant in ants[2]: _ska_tango_(ant, 'dsm', ("SetIndexPosition",index0[2]))
         
         time.sleep(duration_) # TODO: rather "wait on state==PARKED" to avoid possible errors if indexer is slow
 
@@ -536,6 +572,41 @@ def start_hacked_session(cam, **kwargs):
     
     session.end = hacked_end
     
+    
+    def hacked_fire_noise_diode(diode='coupler', on=10.0, off=10.0, period=0.0, announce=True, **k):
+        """ For SKA-MID antennas, fire the noise diode *non-precise timing* via SPFC instead of digitiser """
+        # TODO: this MUST NOT BE PERMANENT since it can't support the "periodic switching" required for gain stability test
+        # Minor copy-mod from mkat_session.CaptuerSession.fire_noise_diode()
+        ants = session.ants # All
+        s_ants = split_ants(ants)[2] # SKA ants get special treatment
+
+        # If period is non-negative, quit if it is not yet time to fire
+        if period < 0.0 or (time.time() - session.last_nd_firing) < period:
+            return False
+
+        if announce:
+            user_logger.info("Firing %r noise diode (%g seconds on, "
+                             "%g seconds off)", diode, on, off)
+        else:
+            user_logger.info('firing noise diode')
+
+        # Switch noise diode on on all antennas
+        ants.req.dig_noise_source('now', 1)
+        if  not session._cam_.dry_run:
+            for ant in s_ants: _ska_tango_(ant, 'spfc', None, ('b2CalSourcePowerState', True))
+        time.sleep(on)
+        # Mark on -> off transition as last firing
+        session.last_nd_firing = time.time()
+        # Switch noise diode off on all antennas
+        ants.req.dig_noise_source('now', 0)
+        if  not session._cam_.dry_run:
+            for ant in s_ants: _ska_tango_(ant, 'spfc', None, ('b2CalSourcePowerState', False))
+        time.sleep(off)
+        user_logger.info('noise diode fired')
+        return True  
+          
+    session.fire_noise_diode = hacked_fire_noise_diode
+    
     return session
 
 
@@ -628,7 +699,7 @@ def filter_separation(catalogue, T_observed, antenna=None, separation_deg=1, sun
     return filtered
 
 
-def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cluster_radius=0, antenna=None, el_limit_deg=20):
+def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cluster_radius=0, cluster_repeats=0, antenna=None, el_limit_deg=20):
     """ Generates a sequence of targets to observe according to specific strategies, starting at the specified time.
         This does not consider behaviour around the azimuth wrap zone.
          
@@ -638,6 +709,7 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cl
         @param dAdt: angular rate when slewing (default 1.8) [deg/sec]
         @param strategy: 'nearest' (nearest-neighbour) | 'uniform' (uniform sky cover) (default "nearest-neighbour")
         @param cluster_radius: returned targets are clustered with this great circle dimension (default 0) [degrees]
+        @param cluster_repeats: number of times to re-visit targets in each cluster after the first round (default 0)
         @param antenna: None to use the catalogue's antenna (default None) [katpoint.Antenna or str or antenna proxy]
         @param el_limit_deg: observation elevation limit (default 20) [deg]
         @return: [list of Targets], expected duration in seconds
@@ -681,21 +753,25 @@ def plan_targets(catalogue, T_start, t_observe, dAdt=1.8, strategy='nearest', cl
         
         if cluster_radius and (cluster_radius > 0): # Find targets in the current cluster and visit them in turn
             tgt0 = next_tgt
-            cluster = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna,
-                                                      dist_limit_deg=(0,cluster_radius), proximity_targets=tgt0)
-            # Find next nearest in the cluster
-            next_tgt, dGC = pick_next(cluster, done[-1], T)
-            while next_tgt:
-                # Slew to next
-                T += dGC * dAdt
-                # Observe
-                next_tgt.antenna = antenna
-                T += t_observe
-                done.append(next_tgt)
-                todo.pop(todo.index(next_tgt))
+            candidates = list(todo)
+            for r in range(1+cluster_repeats):
+                if (r == 1):
+                    candidates += [tgt0]
+                cluster = katpoint.Catalogue(candidates).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna,
+                                                                dist_limit_deg=(0,cluster_radius), proximity_targets=tgt0)
                 # Find next nearest in the cluster
-                cluster.remove(next_tgt.name)
                 next_tgt, dGC = pick_next(cluster, done[-1], T)
+                while next_tgt:
+                    # Slew to next
+                    T += dGC * dAdt
+                    # Observe
+                    next_tgt.antenna = antenna
+                    T += t_observe
+                    done.append(next_tgt)
+                    todo.pop(todo.index(next_tgt))
+                    # Find next nearest in the cluster
+                    cluster.remove(next_tgt.name)
+                    next_tgt, dGC = pick_next(cluster, done[-1], T)
         
         # Done with cluster (if any), now continue to nearest remaining & visible neighbour
         available = katpoint.Catalogue(todo).filter(el_limit_deg=el_limit_deg, timestamp=T, antenna=antenna)
