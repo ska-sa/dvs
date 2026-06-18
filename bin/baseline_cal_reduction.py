@@ -42,6 +42,8 @@ parser.add_option("--truncate-tracklength", type='float', default=np.inf,
                   help="Truncate 'tracks' that are longer than this duration in seconds (default = %default)")
 parser.add_option("--discard-tracklength", type='float', default=np.inf,
                   help="'tracks' longer than this are discarded; duration in seconds (default = %default)")
+parser.add_option("--pre-average", action="store_true", default=False,
+                  help="True to average all samples of each scan before passing it to the solver (default=%default)")
 parser.add_option('--fit-niao', action="store_true", default=False,
                   help="Also fit Non-Intersecting Axes Offset, instead of keeping it constant (default=%default)")
 parser.add_option('--polswap', type='choice', choices=['None', 'ref', 'ants'], default='None',
@@ -145,6 +147,10 @@ for bl, (indA, indB) in enumerate(baseline_inds):
     bl_parameter_map[(bl * num_params + 5 * indA):(bl * num_params + 5 * indA + 5), :] = -np.eye(5)
     bl_parameter_map[(bl * num_params + 5 * indB):(bl * num_params + 5 * indB + 5), :] = +np.eye(5)
 
+pre_avg = lambda x: x
+if opts.pre_average:
+    pre_avg = lambda x: np.nanmean(x, axis=0, keepdims=True)
+
 # Iterate through scans
 augmented_targetdir, group_delay, sigma_delay = [], [], []
 scan_targets, scan_mid_az, scan_mid_el, scan_timestamps, scan_phase = [], [], [], [], []
@@ -168,6 +174,10 @@ for scan_ind, state, target in data.scans():
     # Extract visibilities for scan as an array of shape (T, F, B)
     vis = data.vis[:num_ts]
     vis[data.flags[:num_ts]] = np.nan
+    # Apply pre-averaging
+    ts_unavg = ts
+    if opts.pre_average:
+        vis = pre_avg(vis); ts = np.mean(ts, keepdims=True); num_ts = 1
     # Obtain unit vectors pointing from array antenna to target for each timestamp in scan
     az, el = target.azel(ts, array_ant)
     targetdir = np.array(katpoint.azel_to_enu(az, el))
@@ -216,10 +226,10 @@ for scan_ind, state, target in data.scans():
     delay_stats_sigma /= np.sqrt(num_chans - 1)
     # Get corrections from existing / old correlator delay model and undo delay tracking
     # Since baseline-based `delay` is delay2 - delay1, subtract the corrections accordingly
-    delay_corrections = correlator_model.corrections(target, ts)[0]
+    delay_corrections = correlator_model.corrections(target, ts_unavg)[0]
     static_delays = data.sensor["cbf_delay_adjustments"]
     for bl, (inp1, inp2) in enumerate(data.corr_products):
-        delay_stats_mu[:, bl] -= delay_corrections[inp2][:, 0] - delay_corrections[inp1][:, 0]
+        delay_stats_mu[:, bl] -= pre_avg(delay_corrections[inp2][:, 0] - delay_corrections[inp1][:, 0])
         # Add the static delays back in to undo their correction
         delay_stats_mu[:, bl] += np.array([_.get(inp2, 0.0) - _.get(inp1, 0.0) for _ in static_delays[:num_ts]])
     # Rearrange measurements to shape (B T,)
@@ -341,34 +351,35 @@ def extract_scan_segments(x):
     return [x[scan_start:(scan_start + num_bls*scan_len)]
             for scan_start, scan_len in zip(scan_bl_starts, scan_lengths)]
 
-plt.figure(1).set_figwidth(14)
-plt.clf()
-scan_freqinds = [np.arange(num_bls * num_chans)] * len(scan_timestamps)
-segms, labels, lines = scape.plots_basic.plot_segments(scan_timestamps, scan_freqinds, scan_phase, labels=scan_targets)
-for label in labels:
-    label.set_rotation('vertical')
-plt.xlabel('Time (s), since %s' % (katpoint.Timestamp(data.start_time).local(),))
-plt.yticks(np.arange(num_chans // 2, num_bls * num_chans, num_chans), baseline_names)
-for yval in range(0, num_bls * num_chans, num_chans):
-    plt.axhline(yval, color='k', lw=2)
-plt.title('Raw visibility phase per baseline')
-
-plt.figure(2).set_figwidth(14)
-plt.clf()
-resid_ind = [np.arange(scan_start, scan_start + num_bls*scan_len)
-             for scan_start, scan_len in zip(scan_bl_starts, scan_lengths)]
-segms, labels, lines = scape.plots_basic.plot_segments(resid_ind, extract_scan_segments(old_resid / 1e-9),
-                                                       labels=scan_targets, width=sample_period, color='b')
-for label in labels:
-    label.set_rotation('vertical')
-scape.plots_basic.plot_segments(resid_ind, extract_scan_segments(new_resid / 1e-9), labels=[],
-                                width=sample_period, color='r')
-plt.axhline(-0.5 * delay_period / 1e-9, color='k', linestyle='--')
-plt.axhline(0.5 * delay_period / 1e-9, color='k', linestyle='--')
-plt.xticks([])
-plt.xlabel('Measurements')
-plt.ylabel('Delay error (ns)')
-plt.title('Residual delay errors (blue = old model and red = new model)')
+if (not opts.pre_average):
+    plt.figure(1).set_figwidth(14)
+    plt.clf()
+    scan_freqinds = [np.arange(num_bls * num_chans)] * len(scan_timestamps)
+    segms, labels, lines = scape.plots_basic.plot_segments(scan_timestamps, scan_freqinds, scan_phase, labels=scan_targets)
+    for label in labels:
+        label.set_rotation('vertical')
+    plt.xlabel('Time (s), since %s' % (katpoint.Timestamp(data.start_time).local(),))
+    plt.yticks(np.arange(num_chans // 2, num_bls * num_chans, num_chans), baseline_names)
+    for yval in range(0, num_bls * num_chans, num_chans):
+        plt.axhline(yval, color='k', lw=2)
+    plt.title('Raw visibility phase per baseline')
+    
+    plt.figure(2).set_figwidth(14)
+    plt.clf()
+    resid_ind = [np.arange(scan_start, scan_start + num_bls*scan_len)
+                 for scan_start, scan_len in zip(scan_bl_starts, scan_lengths)]
+    segms, labels, lines = scape.plots_basic.plot_segments(resid_ind, extract_scan_segments(old_resid / 1e-9),
+                                                           labels=scan_targets, width=sample_period, color='b')
+    for label in labels:
+        label.set_rotation('vertical')
+    scape.plots_basic.plot_segments(resid_ind, extract_scan_segments(new_resid / 1e-9), labels=[],
+                                    width=sample_period, color='r')
+    plt.axhline(-0.5 * delay_period / 1e-9, color='k', linestyle='--')
+    plt.axhline(0.5 * delay_period / 1e-9, color='k', linestyle='--')
+    plt.xticks([])
+    plt.xlabel('Measurements')
+    plt.ylabel('Delay error (ns)')
+    plt.title('Residual delay errors (blue = old model and red = new model)')
 
 plt.figure(3).set_figwidth(14)
 plt.clf()
