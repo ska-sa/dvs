@@ -66,8 +66,10 @@ def reset_ACU(cam_ant):
         This should be a temporary hack - follow up with CAM & LMC teams!
     """
     if (cam_ant.name[0] == 's'):
-        x_dsm(cam_ant, ("InterlockAck"))
+        x_dsm(cam_ant, "InterlockAck")
         x_dsh(cam_ant, attr_value=("ignoreSpfrx",True))
+        if (cam_ant.sensors.mode.get_value() == 'STOW'):
+            x_dsm(cam_ant, "UnStow")
     
     else:
         import tango
@@ -76,6 +78,7 @@ def reset_ACU(cam_ant):
         
         # Defaults that are sometimes messed up after LMC testing
         dsm.utcTimeEnabled = True; dsm.mjdTimeDriftCorrEnabled = False
+        dsm.interpolationMode = {'NEWTON':0, 'SPLINE':1}['SPLINE']
         
         # Try to clear interlocks & error states after site work has been completed 
         dsm.RequestAuthority(); time.sleep(1)
@@ -85,6 +88,9 @@ def reset_ACU(cam_ant):
         # Inconsistent STOW state not handled properly by LMC at present 03/2026
         if ("STOWED" in dsm.elaxisstate.name and not "STOWED" in dsm.azaxisstate.name):
             dsm.Unstow(); time.sleep(20)
+        
+        if (set(dsm.pointingModelParams) != {0}):
+            print("WARNING: ACU Static Pointing Model for current band is non-zero!")
         
     # "STOP" should get things "ready to operate", including "ResetDishMode" which:
     #  1. flushes the task queue
