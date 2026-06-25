@@ -24,6 +24,8 @@ cable_lightspeed = 0.7 * katpoint.lightspeed
 parser = optparse.OptionParser(usage="%prog [options] <data file> [<data file> ...]")
 parser.add_option('-a', '--ants',
                   help="Comma-separated subset of antennas to use in fit (e.g. 'ant1,ant2'), default is all antennas")
+parser.add_option('--flags', type='string', default="data_lost", 
+                  help="Comma-separated list of data quality flags to use to mask out suspect data (default=%default)")
 parser.add_option("-f", "--freq-chans",
                   help="Range of frequency channels to keep (zero-based inclusive 'first_chan,last_chan', "
                        "default is [0.25*num_chans, 0.75*num_chans))")
@@ -93,7 +95,7 @@ active_pol = opts.pol.lower()
 if (opts.polswap != 'None'):
     active_pol = active_pol + {'h':'v', 'v':'h'}[active_pol]
     active_pol = active_pol if (opts.polswap == 'ref') else active_pol[::-1]
-data.select(channels=chan_range, corrprods='cross', pol=active_pol, flags="data_lost")
+data.select(channels=chan_range, corrprods='cross', pol=active_pol, flags=opts.flags)
 if opts.ants is not None:
     data.select(ants=opts.ants, reset='')
 if opts.rfi_mask:
