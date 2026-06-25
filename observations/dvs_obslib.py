@@ -452,6 +452,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
             if not dry_run:
                 for ant in ants[1]: ant.req.dsh_SetIndexerPosition(index0[1])
         if (len(ants[2]) > 0): # SKA
+            user_logger.info("Switching SKA Feed Indexer back to index %s"%index0[2])
             if not dry_run:
                 for ant in ants[2]: _ska_tango_(ant, 'dsm', ("SetIndexPosition",index0[2]))
         
