@@ -57,7 +57,7 @@ import katpoint
 import tango
 
 
-def _ska_tango_(ant, sub, cmd_args, attr_value):
+def _ska_tango_(ant, sub, cmd_args, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param sub: either 'dsh', 'dsm' or 'spfc'
