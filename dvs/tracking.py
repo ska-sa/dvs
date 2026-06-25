@@ -256,7 +256,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     fi_sensor = {'m':"%s_ap_indexer_position_raw",
                  'e':"%s_dsm_indexerActualPosition",
                  's':"%s_dsm_FeedIndexer_Status_p_Enc"}[ant_type]
-    fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps)
+    fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps, interpolate='zero') # TODO: zero seems necessary for some FI repeatability datasets, why?
     
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
@@ -278,8 +278,9 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         if (len(scan_r) == 0) or (np.max(scan_r) > 6): # All points flagged, or large scan offset may mean antenna lagged behind e.g. near zenith or unwrap!
             continue
         
+        timestamps = ds.timestamps[mask]
         # Obtain middle timestamp of compound scan, where all pointing calculations are done
-        t_ref = np.nanmedian(ds.timestamps[mask])
+        t_ref = np.nanmedian(timestamps)
         
         # Environmental parameters
         sun_azel = katpoint.rad2deg(np.array(sun.azel(t_ref, antenna=scan_ant)))
@@ -292,12 +293,12 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         wind_speed = (mean_north_wind**2 + mean_east_wind**2)**.5
         wind_direction = np.degrees(np.arctan2(mean_east_wind, mean_north_wind))
         # analyse_point_source_scans.py & analyse_interferometric_pointing.py take std(raw_wind_speed) but raw_wind_speed == 5 minute mean wind so that makes little sense! 
-        raw_wind_speed = gust_wind_speed[(ds.timestamps[0]<=gust_timestamps) & (gust_timestamps<=ds.timestamps[-1])]
+        raw_wind_speed = gust_wind_speed[(timestamps[0]<=gust_timestamps) & (gust_timestamps<=timestamps[-1])]
         wind_std = np.std(raw_wind_speed)
         # Extra sensor values
-        wind_1000sec = np.mean(avgws[(ds.timestamps[0]<=avgws_timestamps) & (avgws_timestamps<=ds.timestamps[-1])])
+        wind_1000sec = np.mean(avgws[(timestamps[0]<=avgws_timestamps) & (avgws_timestamps<=timestamps[-1])])
         wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_1000sec # SKA Dish definition, 3*std - mean
-        fi_angle = np.median(fi_angles[(ds.timestamps[0]<=fi_timestamps) & (fi_timestamps<=ds.timestamps[-1])])
+        fi_angle = np.median(fi_angles[(timestamps[0]<=fi_timestamps) & (fi_timestamps<=timestamps[-1])])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
