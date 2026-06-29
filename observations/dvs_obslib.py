@@ -265,7 +265,7 @@ def match_ku_siggen_freq(cam, override=False):
 
 
 __tilt_corr_allowed__ = True
-__d_tilt_OK__ = ["e121","e117","e119","e116","e115","e060","e020","e018"] # These tilt installations believed to be OK
+__d_tilt_OK__ = ["e121","e117","e119","e116","e115","e060","e020","e018","e107"] # These tilt installations believed to be OK
 
 def temp_hack_SetupPointingCorrections(cam, allow_tiltcorrections=True):
     """ Temporary hack to disable the MKE ACU static pointing corrections and set tilt corrections according
