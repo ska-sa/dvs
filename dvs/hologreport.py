@@ -813,7 +813,7 @@ def plot_offsets_freq(RS, labels=None, hide="", figsize=(14,10)):
         axs[1].legend() # Because Y_f relates to FI angle
         axs[-1].set_xlabel("Frequency [MHz]")
         for ax in axs: ax.grid(True)
-        XYZ_f = np.array(XYZ_f)
+        XYZ_f = np.ma.array(XYZ_f)
         label = "" if (label is None) else label+":"
         fig.suptitle("%s Elevation %.f .. %.fdeg\n%s" % (label, np.min(el),np.max(el),
                                         "[X,Y,Z]_f ~ %s"%np.mean(XYZ_f, axis=0)))
