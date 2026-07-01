@@ -877,19 +877,22 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
     # Mapping of ant,pol to F-engine labels - to get dBFS for all bands
     feng_labels = katselib.get_feng_input_labels((T[0],T[-1]))
     for ant in dataset.radialscan_allantenna:
-        for i,P in enumerate(["H","V"]):
-            if (band != 's'):
-                v = katselib.getsensorvalues("%s_dig_%s_band_rfcu_%spol_overload"%(ant,band,P.lower()), T)[1]
-                axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
-                axes[0].legend()
-            axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
-            if (band != 's'):
-                key, unit = "%s_dig_%s_band_adc_%spol_rf_power_in"%(ant,band,P.lower()), "dBm"
-            else: # F-engine sensors are not sampled as regularly as the RFCU ones, but this is all for S-band
-                key, unit = feng_labels[ant+P.lower()]+"_rms_dbfs", "dBFS"
-            v = katselib.getsensorvalues(key, T)[1]
-            axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
-            axes[1].set_ylabel("ADC RF input power [%s]"%unit); axes[1].grid(True); axes[1].legend()
+        try:
+            for i,P in enumerate(["H","V"]):
+                if (band != 's'):
+                    v = katselib.getsensorvalues("%s_dig_%s_band_rfcu_%spol_overload"%(ant,band,P.lower()), T)[1]
+                    axes[0].plot(T-T[0], v, '_|'[i], label="%s %s-pol"%(ant,P))
+                    axes[0].legend()
+                axes[0].set_ylabel("RFCU overloaded"); axes[0].set_ylim(-0.1,1.1)
+                if (band != 's'):
+                    key, unit = "%s_dig_%s_band_adc_%spol_rf_power_in"%(ant,band,P.lower()), "dBm"
+                else: # F-engine sensors are not sampled as regularly as the RFCU ones, but this is all for S-band
+                    key, unit = feng_labels[ant+P.lower()]+"_rms_dbfs", "dBFS"
+                v = katselib.getsensorvalues(key, T)[1]
+                axes[1].plot(T-T[0], v, ["-","--"][i], label="%s %s-pol"%(ant,P))
+                axes[1].set_ylabel("ADC RF input power [%s]"%unit); axes[1].grid(True); axes[1].legend()
+        except ValueError as e: # One failure mode of katselib.getsensorvalues()
+            print("WARNING: Failed to load signal path sensor data for %s"%ant, e)
     
     # Plot boresight visibilities
     labels = [] # Collect labels to avoid repetition if there's more than one cycle
@@ -1676,7 +1679,7 @@ def calculate_ant_eff(mss, rrs=None, ieee=True, fspec_MHz=None, return_ids=False
         if (len(np.shape(amH)) == 2): # freq, cycle
             amH, amV, f = np.concat(amH, axis=0), np.concat(amV, axis=0), np.concat([f]*len(amH[0]), axis=0)
             maskH, maskV = np.concat(maskH, axis=0), np.concat(maskV, axis=0)
-    
+        
         # Calculate results
         if ieee: # aeff is IEEE ANTENNA APERTURE ILLUMINATION EFFICIENCY
             ill,aeff,Ag = recalc_eff(amH, amV, f)
