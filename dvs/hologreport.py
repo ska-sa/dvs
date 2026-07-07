@@ -713,35 +713,20 @@ def _flatten_(twod, invmask=False): # Concatenates arrays (even zero-dimensional
         ll = [np.ma.masked_where(~r.mask, r.data) if hasattr(r, "mask") else r for r in ll]
     return np.ma.concatenate(ll, axis=0)
 
-def plot_errbeam_el(RS, labels, extra="95pct", figsize=(14,4)): 
-    """ Generates a figure of error beam vs elevation angle
-        @param RS: set of lists of 'HologResults'
-        @param labels: a text label for each set of results """
-    _eb_ = {"95pct":1, "stddev":2, "resid":3}[extra]
-    layout = _plan_layout_(RS, labels, separate_freqs=False)
-    
-    axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
-    for ax,(fs,rs,lbl) in zip(axes,layout):
-        el = _flatten_([r.el_deg for r in rs])
-        ax.errorbar(el, _flatten_([r.errbeamH[f,...,0]*100 for f,r in zip(fs,rs)]), yerr=_flatten_([r.errbeamH[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C0o', label="H") # max
-        ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C0_')
-        ax.errorbar(el, _flatten_([r.errbeamV[f,...,0]*100 for f,r in zip(fs,rs)]), yerr=_flatten_([r.errbeamV[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C1^', label="V")
-        ax.plot(el, _flatten_([r.errbeamV[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C1|')
-        ax.set_ylabel("Error beam (max & %s) [%%]\n%s"%(extra,lbl)); ax.set_ylim(0,10); ax.grid(True)
-    ax.set_xlabel("Elevation [deg]"); ax.legend()
 
-
-def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", figsize=(14,4)):
-    """ Generates a figure of feed offsets vs environmental variable 
+def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95pct", figsize=(14,4), ylim=(0,10)):
+    """ Generates a figure of error beam (max+residual wiskers) vs another independent variable. 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
-        @param key: 'el_deg'|'time_hod'|'sun_deg'|'sun_rel_deg'|'temp_C'|'wind_mps'|'wind_rel_deg'
+        @param key: 'el_deg'|'feedindexer_deg'|'time_hod'|'sun_deg'|'sun_rel_deg'|'temp_C'|'wind_mps'|'wind_rel_deg'
         @param fit: 'leastsq'|'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
         @param eval_fit_at: if given and fit is also specified then print out the offsets fitted at this point (default None)
-        @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
-        @return: (X,Y,Z) offsets at each `eval_fit_at` (or None)"""
+        @param extra: '95pct'|'stddev'|'resid'|None to plot in addition to max+residual wiskers (default "95pct") """
+    _eb_ = {"95pct":1, "stddev":2, "resid":3, None:None}[extra]
+    ylabel = "Error beam (max%s) [%%]"%("" if (extra is None) else (" & %s"%extra))
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     xlbl, e2v = {'el_deg':("Elevation [deg]", lambda rs: rs.el_deg),
+                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][1]),
                  'time_hod':("Local time [hr]", lambda rs: rs.info['time_hod']),
                  'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][1]),
                  'sun_rel_deg':("Sun offset from boresight [deg]", lambda rs: (rs.info['enviro']['sun_rel_deg'][0]**2+rs.info['enviro']['sun_rel_deg'][1]**2)**.5),
@@ -749,12 +734,75 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                  'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][1]),
                  'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
-    offsets_el = None if (eval_fit_at is None) else []
+    fitted_at = None if (eval_fit_at is None) else []
+    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else dict(**fit)
     
     axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
     for ax,(fs,rs,lbl) in zip(axes,layout):
         fits = []
         el = _flatten_([e2v(r) for r in rs])
+        
+        yH = _flatten_([r.errbeamH[f,...,0]*100 for f,r in zip(fs,rs)]) # max
+        ax.errorbar(el, yH, yerr=_flatten_([r.errbeamH[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C0o', label="H")
+        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C0_')
+        yV = _flatten_([r.errbeamV[f,...,0]*100 for f,r in zip(fs,rs)]) # max
+        ax.errorbar(el, yV, yerr=_flatten_([r.errbeamV[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C1^', label="V")
+        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamV[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C1|')
+        
+        if (fit != None): # Fit offsets vs. elevation angle
+            values = np.ma.concatenate([yH, yV])
+            _el = np.concatenate([el, el])
+            _mask = np.isfinite(_el)
+            fitp, model = katsemat.polyfit(_el[_mask], values[_mask], **fit_args)
+            fitted = model(np.sort(el))
+            ax.plot(np.sort(el), fitted, 'k-', alpha=0.3)
+            fits.append(("EB", fitp, model))
+        
+        if (len(fits) > 0):
+            print("%s\t %s"%(lbl, ";".join(["%s=%s"%(f[0],katsemat.poly2str(f[1],key)) for f in fits])))
+            if (eval_fit_at is not None):
+                fitted = {}
+                for q,fitp,model in fits:
+                    fitted[q] = [model(el) for el in eval_fit_at]
+                    print("\t\t%s @ %s"%(q, "; @ ".join(["%.f%s = %.1f"%(el,key,off) for el,off in zip(eval_fit_at,fitted[q])])))
+                fitted_at.append([fitted.get(q,[np.nan]*len(eval_fit_at)) for q in ["EB"]])
+        
+        ax.set_ylabel("%s\n%s"%(ylabel,lbl)); ax.grid(True)
+    if (ylim is not None): ax.set_ylim(*ylim)
+    ax.set_xlabel(xlbl); ax.legend()
+    
+    return fitted_at
+
+plot_errbeam_el = lambda RS, labels, extra="95pct", fit=None, eval_fit_at=None, **k: plot_errbeam_against(RS, labels, 'el_deg', fit, eval_fit_at, extra, **k)
+
+
+def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", figsize=(14,4), ylim=None):
+    """ Generates a figure of feed offsets vs another independent variable 
+        @param RS: set of lists of 'HologResults'
+        @param labels: a text label for each set of results
+        @param key: 'el_deg'|'feedindexer_deg'|'time_hod'|'sun_deg'|'sun_rel_deg'|'temp_C'|'wind_mps'|'wind_rel_deg'
+        @param fit: 'leastsq'|'lin' to generate least-squares linear fits for each of X, Y & Z, 'theil-sen' for robust linear fit (default None)
+        @param eval_fit_at: if given and fit is also specified then print out the offsets fitted at this point (default None)
+        @param hide: any subset of "XYZHV", to hide the corresponding offset (default "")
+        @return: (X,Y,Z) offsets at each `eval_fit_at` (or None)"""
+    layout = _plan_layout_(RS, labels, separate_freqs=False)
+    xlbl, e2v = {'el_deg':("Elevation [deg]", lambda rs: rs.el_deg),
+                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][1]),
+                 'time_hod':("Local time [hr]", lambda rs: rs.info['time_hod']),
+                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][1]),
+                 'sun_rel_deg':("Sun offset from boresight [deg]", lambda rs: (rs.info['enviro']['sun_rel_deg'][0]**2+rs.info['enviro']['sun_rel_deg'][1]**2)**.5),
+                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][1]),
+                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][1]),
+                 'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
+    eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
+    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else dict(**fit)
+    fitted_at = None if (eval_fit_at is None) else []
+    
+    axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
+    for ax,(fs,rs,lbl) in zip(axes,layout):
+        fits = []
+        el = _flatten_([e2v(r) for r in rs])
+        
         for p,q in enumerate("XYZ"):
             if (q in hide): continue
             foH = _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)])
@@ -767,24 +815,25 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                 if ("V" in hide): offsets[-len(foV):] = np.nan
                 _el = np.concatenate([el, el])
                 _mask = np.isfinite(_el)
-                fitp, model = katsemat.polyfit(_el[_mask], offsets[_mask], order=1, method='leastsq' if fit=='lin' else fit)
+                fitp, model = katsemat.polyfit(_el[_mask], offsets[_mask], **fit_args)
                 fitted = model(np.sort(el))
                 ax.plot(np.sort(el), fitted, 'C%d-'%p, alpha=0.3)
                 fits.append((q, fitp, model))
         
         if (len(fits) > 0):
-            print("%s\t %s"%(lbl, ";".join(["%s_f=%.2f + %.2f%s"%(f[0],*(list(f[1])+[0])[:2],key) for f in fits]))) # Guard against 'single point fit'
+            print("%s\t %s"%(lbl, ";".join(["%s=%s"%(f[0],katsemat.poly2str(f[1],key)) for f in fits])))
             if (eval_fit_at is not None):
-                offset = {}
+                fitted = {}
                 for q,fitp,model in fits:
-                    offset[q] = [model(el) for el in eval_fit_at]
-                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.f%s = %.1fmm"%(el,key,off) for el,off in zip(eval_fit_at,offset[q])])))
-                offsets_el.append([offset.get(q,[np.nan]*len(eval_fit_at)) for q in "XYZ"])
+                    fitted[q] = [model(el) for el in eval_fit_at]
+                    print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.f%s = %.1fmm"%(el,key,off) for el,off in zip(eval_fit_at,fitted[q])])))
+                fitted_at.append([fitted.get(q,[np.nan]*len(eval_fit_at)) for q in "XYZ"])
         
         ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
+    if (ylim is not None): ax.set_ylim(*ylim)
     ax.set_xlabel(xlbl); ax.legend()
     
-    return offsets_el
+    return fitted_at
 
 plot_offsets_el = lambda RS, labels, fit=None, elspec_deg=None, hide="", **k: plot_offsets_against(RS, labels, 'el_deg', fit, elspec_deg, hide, **k)
 
