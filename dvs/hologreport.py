@@ -714,7 +714,7 @@ def _flatten_(twod, invmask=False): # Concatenates arrays (even zero-dimensional
     return np.ma.concatenate(ll, axis=0)
 
 
-def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95pct", figsize=(14,4), ylim=(0,10)):
+def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95pct", figsize=(14,4), ylim=(0,10), hold=False):
     """ Generates a figure of error beam (max+residual wiskers) vs another independent variable. 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
@@ -736,18 +736,24 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
     fitted_at = None if (eval_fit_at is None) else []
     fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else ({} if (fit is None) else dict(**fit))
-    
-    axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
+
+    if hold:
+        axes = np.atleast_1d(plt.gcf().axes)
+        legend = lambda txt, lbl: "%s - %s"%(txt, lbl)
+    else:
+        axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
+        legend = lambda txt, lbl: txt
+    C0 = len(axes[0].lines)//2; C0, C1, Ck = "C%d"%C0, "C%d"%(C0+1), "k"+{0:'-',1:'--',2:'-.'}[C0//2]
     for ax,(fs,rs,lbl) in zip(axes,layout):
         fits = []
         el = _flatten_([e2v(r) for r in rs])
         
         yH = _flatten_([r.errbeamH[f,...,0]*100 for f,r in zip(fs,rs)]) # max
-        ax.errorbar(el, yH, yerr=_flatten_([r.errbeamH[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C0o', label="H")
-        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C0_')
+        ax.errorbar(el, yH, yerr=_flatten_([r.errbeamH[f,...,3]*100 for f,r in zip(fs,rs)]), fmt=C0+'o', label=legend("H",lbl))
+        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamH[f,...,_eb_]*100 for f,r in zip(fs,rs)]), C0+'_')
         yV = _flatten_([r.errbeamV[f,...,0]*100 for f,r in zip(fs,rs)]) # max
-        ax.errorbar(el, yV, yerr=_flatten_([r.errbeamV[f,...,3]*100 for f,r in zip(fs,rs)]), fmt='C1^', label="V")
-        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamV[f,...,_eb_]*100 for f,r in zip(fs,rs)]), 'C1|')
+        ax.errorbar(el, yV, yerr=_flatten_([r.errbeamV[f,...,3]*100 for f,r in zip(fs,rs)]), fmt=C1+'^', label=legend("V",lbl))
+        if (_eb_ is not None): ax.plot(el, _flatten_([r.errbeamV[f,...,_eb_]*100 for f,r in zip(fs,rs)]), C1+'|')
         
         if (fit != None): # Fit offsets vs. elevation angle
             values = np.ma.concatenate([yH, yV])
@@ -755,7 +761,7 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
             _mask = np.isfinite(_el)
             fitp, model = katsemat.polyfit(_el[_mask], values[_mask], **fit_args)
             fitted = model(np.sort(el))
-            ax.plot(np.sort(el), fitted, 'k-', alpha=0.3)
+            ax.plot(np.sort(el), fitted, Ck, alpha=0.3)
             fits.append(("EB", fitp, model))
         
         if (len(fits) > 0):
@@ -767,7 +773,8 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
                     print("\t\t%s @ %s"%(q, "; @ ".join(["%.f%s = %.1f"%(el,key,off) for el,off in zip(eval_fit_at,fitted[q])])))
                 fitted_at.append([fitted.get(q,[np.nan]*len(eval_fit_at)) for q in ["EB"]])
         
-        ax.set_ylabel("%s\n%s"%(ylabel,lbl)); ax.grid(True)
+        if not hold:
+            ax.set_ylabel("%s\n%s"%(ylabel,lbl)); ax.grid(True)
     if (ylim is not None): ax.set_ylim(*ylim)
     ax.set_xlabel(xlbl); ax.legend()
     
@@ -776,7 +783,7 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
 plot_errbeam_el = lambda RS, labels, extra="95pct", fit=None, eval_fit_at=None, **k: plot_errbeam_against(RS, labels, 'el_deg', fit, eval_fit_at, extra, **k)
 
 
-def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", figsize=(14,4), ylim=None):
+def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", figsize=(14,4), ylim=None, hold=False):
     """ Generates a figure of feed offsets vs another independent variable 
         @param RS: set of lists of 'HologResults'
         @param labels: a text label for each set of results
@@ -798,7 +805,13 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
     fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else ({} if (fit is None) else dict(**fit))
     fitted_at = None if (eval_fit_at is None) else []
     
-    axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
+    if hold:
+        axes = np.atleast_1d(plt.gcf().axes)
+        legend = lambda txt, lbl: "%s - %s"%(txt, lbl)
+    else:
+        axes = np.atleast_1d(plt.subplots(len(layout),1,sharex=True,figsize=(figsize[0],figsize[1]*len(layout)))[1])
+        legend = lambda txt, lbl: txt
+    C0 = len(axes[0].lines)//3; CXYZ = ["C%d"%_ for _ in (C0,C0+1,C0+2)]
     for ax,(fs,rs,lbl) in zip(axes,layout):
         fits = []
         el = _flatten_([e2v(r) for r in rs])
@@ -807,8 +820,8 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
             if (q in hide): continue
             foH = _flatten_([r.feedoffsetsH[f,...,p] for f,r in zip(fs,rs)])
             foV = _flatten_([r.feedoffsetsV[f,...,p] for f,r in zip(fs,rs)])
-            if ("H" not in hide): ax.plot(el, foH, 'C%do'%p, label="%s_f H"%q)
-            if ("V" not in hide): ax.plot(el, foV, 'C%d^'%p, label="%s_f V"%q)
+            if ("H" not in hide): ax.plot(el, foH, CXYZ[p]+'o', label=legend("%s_f H"%q,lbl))
+            if ("V" not in hide): ax.plot(el, foV, CXYZ[p]+'^', label=legend("%s_f V"%q,lbl))
             if (fit != None): # Fit offsets vs. elevation angle
                 offsets = np.ma.concatenate([foH, foV])
                 if ("H" in hide): offsets[:len(foH)] = np.nan
@@ -817,7 +830,7 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                 _mask = np.isfinite(_el)
                 fitp, model = katsemat.polyfit(_el[_mask], offsets[_mask], **fit_args)
                 fitted = model(np.sort(el))
-                ax.plot(np.sort(el), fitted, 'C%d-'%p, alpha=0.3)
+                ax.plot(np.sort(el), fitted, CXYZ[p]+'-', alpha=0.3)
                 fits.append((q, fitp, model))
         
         if (len(fits) > 0):
@@ -829,7 +842,8 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                     print("\t\t%s_f @ %s"%(q, "; @ ".join(["%.f%s = %.1fmm"%(el,key,off) for el,off in zip(eval_fit_at,fitted[q])])))
                 fitted_at.append([fitted.get(q,[np.nan]*len(eval_fit_at)) for q in "XYZ"])
         
-        ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
+        if not hold:
+            ax.set_ylabel("Feed offsets [mm]\n%s"%lbl); ax.grid(True)
     if (ylim is not None): ax.set_ylim(*ylim)
     ax.set_xlabel(xlbl); ax.legend()
     
