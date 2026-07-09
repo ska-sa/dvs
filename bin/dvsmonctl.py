@@ -6,8 +6,8 @@
     NB: This file is to be deployed on the monctl.mkat-rts server.
     
     Use as follows:
+        import katuilib, dvsmonctl
         configure_cam('all')
-        import dvsmonctl
         
         ...
         
@@ -15,11 +15,11 @@
         
         ...
         
-        cat = tle_cat(cam) # Downloads to /home/kat/usersnfs/aph/tle.txt by default
+        cat = dvsmonctl.tle_cat(cam) # Downloads to ~/tles.txt by default
 
     @author: aph@sarao.ac.za
 '''
-import katuilib, katpoint, time
+import katpoint, time
 import numpy as np
 import urllib.request
 
@@ -198,7 +198,7 @@ def trk(pointables, tgt):
             proxy.req.dsm_DisablePointingCorrections()
      
 
-def tle_cat(cam, tags="geo,intelsat", savefn="/home/kat/usersnfs/aph/tle.txt"):
+def tle_cat(cam, tags="geo,intelsat", savefn="~/tles.txt"):
     """ Download the current CelesTrak TLEs and combine it into one catalogue file.
         Then instantiates a katpoint catalogue from this file, using the current session's reference antenna.
         
