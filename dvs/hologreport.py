@@ -726,12 +726,12 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
     ylabel = "Error beam (max%s) [%%]"%("" if (extra is None) else (" & %s"%extra))
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     xlbl, e2v = {'el_deg':("Elevation [deg]", lambda rs: rs.el_deg),
-                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][1]),
+                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][0]), # avg,min,max
                  'time_hod':("Local time [hr]", lambda rs: rs.info['time_hod']),
-                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][1]),
+                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][0]), # avg,min,max
                  'sun_rel_deg':("Sun offset from boresight [deg]", lambda rs: (rs.info['enviro']['sun_rel_deg'][0]**2+rs.info['enviro']['sun_rel_deg'][1]**2)**.5),
-                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][1]),
-                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][1]),
+                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][0]), # avg,min,max
+                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][0]), # avg,min,max
                  'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
     fitted_at = None if (eval_fit_at is None) else []
@@ -794,12 +794,12 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
         @return: (X,Y,Z) offsets at each `eval_fit_at` (or None)"""
     layout = _plan_layout_(RS, labels, separate_freqs=False)
     xlbl, e2v = {'el_deg':("Elevation [deg]", lambda rs: rs.el_deg),
-                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][1]),
+                 'feedindexer_deg':("Feed Indexer [deg]", lambda rs: rs.info['feedindexer_deg'][0]), # avg,min,max
                  'time_hod':("Local time [hr]", lambda rs: rs.info['time_hod']),
-                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][1]),
+                 'sun_deg':("Sun elevation [deg]", lambda rs: rs.info['enviro']['sun_deg'][0]), # avg,min,max
                  'sun_rel_deg':("Sun offset from boresight [deg]", lambda rs: (rs.info['enviro']['sun_rel_deg'][0]**2+rs.info['enviro']['sun_rel_deg'][1]**2)**.5),
-                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][1]),
-                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][1]),
+                 'temp_C':("Ambient temperature [degC]", lambda rs: rs.info['enviro']['temp_C'][0]), # avg,min,max
+                 'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][0]), # avg,min,max
                  'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
     fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else ({} if (fit is None) else dict(**fit))
