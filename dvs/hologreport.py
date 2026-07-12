@@ -1250,14 +1250,15 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     smoothbeam(beam, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
                     sHV = []
                     resid = lambda G,mG: np.nanstd(np.abs(G)-np.abs(mG))
-                    for ax,(lbl,meas,sigma,modl,res) in zip(axes,[("H",beam.mGx[0],resid(beam.Gx[0],beam.mGx[0]),p_beam.mGx[0],errbeamH[-1]),
-                                                                  ("V",beam.mGy[0],resid(beam.Gy[0],beam.mGy[0]),p_beam.mGy[0],errbeamV[-1])]):
+                    for ax,(lbl,meas,sigma,modl,res) in enumerate([("H",beam.mGx[0],resid(beam.Gx[0],beam.mGx[0]),p_beam.mGx[0],errbeamH[-1]),
+                                                                   ("V",beam.mGy[0],resid(beam.Gy[0],beam.mGy[0]),p_beam.mGy[0],errbeamV[-1])]):
                         errorbeam = geterrorbeam(meas, modl, contourdB=contourdB)
                         max_eb, fs_eb, std_eb = np.nanmax(np.abs(errorbeam)), np.nanpercentile(np.abs(errorbeam),95), np.nanstd(errorbeam)
                         nn_eb = sigma/np.nanmax(np.abs(meas)) # 1sigma measurement noise in the same scale as errorbeam
                         sHV.append("%s-pol < %.1f[%.1f]%% (95pct %.1f%%, std %.1f%%)"%(lbl, max_eb*100, nn_eb*100, fs_eb*100, std_eb*100))
                         res.append([max_eb, fs_eb, std_eb, nn_eb])
-                        if (ci == 0): # Only figures for the first cycle
+                        if (ci == 0) and (makefigs or makepdf): # Only figures for the first cycle
+                            ax = axes[ax]
                             im = ax.imshow(errorbeam, origin='lower', extent=[lim(list(beam.margin)+list(p_beam.margin)) for lim in [min,max,min,max]]) # Square
                             ax.contour(p_beam.margin, p_beam.margin, 20*np.log10(np.abs(modl)), np.linspace(contourdB,-3,3), colors='k', alpha=0.2) # Un-distorted pattern
                             ax.contour(beam.margin, beam.margin, 20*np.log10(np.abs(meas)), np.linspace(contourdB,-3,3), colors='y', alpha=0.3) # Distorted pattern
