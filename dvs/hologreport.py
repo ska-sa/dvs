@@ -481,6 +481,7 @@ def re_analyse(self, feedoffset=None, feedphasemap=0):
         @param feedphasemap: If not None or 0, subtract this pattern before deriving flatphasemap (default 0)
         @return: a modified (shallow) copy of 'self'
     """
+    # TODO replace with: return copy.copy(self).analyse(feedoffset=feedoffset, feedphasemap=feedphasemap)
     # Some trivial added code
     mod = 2 # 0=original, 2=modification developed in 2020.
     self = copy.copy(self) # Don't need deep copy, and visibilities datasets cannot be deep copied
@@ -1516,12 +1517,13 @@ def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=
         @return: {fid:[HologResults], *(tag:[HologResults])}
     """
     results = []
-    recs = [rec] if isinstance(rec, tuple) else np.atleast_1d(rec) # Not straight forward with namedtuples
+    recs = [rec] if isinstance(rec, tuple) else rec # Not straight forward with namedtuples
     for rec in recs:
         r = standard_report(rec, predicted=predicted, eb_extent=eb_extent, clim=clim, makefigs=makefigs, makepdf=makepdfs, pdfprefix=pdfprefix, **report_kwargs)
+        print()
         mask_results(r, rec, mask_xlin=mask_xlin, SNR_min=SNR_min, phaseRMS_max=phaseRMS_max)
+        print()
         results.append(r)
-        print("\n")
     return collate_results(results)
 
 
@@ -1568,33 +1570,32 @@ def mask_results(r, rec, mask_xlin=2, SNR_min=30, phaseRMS_max=30):
     return r
 
 
-def collate_results(*results):
+def collate_results(results_a, *results_b):
     """ Cross-index results by all defined tags, or combines sets of already collated results.
         
-        @param results: a list of HologResults with data that's already been loaded & processed, OR
-                        a list of dictionaries as returned by `collate_results()`.
+        @param results*: a list of HologResults with data that's already been loaded & processed, OR
+                         a list of dictionaries as returned by `collate_results()`.
         @return: {fid:[HologResults], *(tag:[HologResults])}
     """
-    collated = {}
-    if isinstance(results[0], dict): # Combine already collated sets
-        if (len(results) == 1):
-            return results[0]
-        else:
-            results_a, results_b = results[0], results[1:]
-            results_b = collate_results(*results_b)
-            for a_b in [results_a, results_b]:
-                for k,v in a_b.items():
-                    try:
-                        collated[k].extend(v)
-                    except:
-                        collated[k] = list(v)
-    else: # Collate and combine from scratch
-        for r in results:
+    if isinstance(results_a, dict): # Already collated
+        collated = dict(**results_a)
+    else: # Collate from scratch
+        collated = {}
+        for r in results_a:
             collated[r.fid if (r.cycles is None) else "%d %s"%(r.fid,r.cycles)] = [r]
             for t in r.tags:
                 rr = collated.get(t,[])
                 rr.append(r)
                 collated[t] = rr
+    
+    if (len(results_b) > 0): # Add from b
+        results_b = collate_results(*results_b)
+        for k,v in results_b.items():
+            try:
+                collated[k].extend(v)
+            except:
+                collated[k] = list(v)
+    
     return collated
 
 
