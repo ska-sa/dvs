@@ -450,7 +450,7 @@ class ResultSet(object):
         """ Save the complete data structure to disk. """
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
         beams_f0 = np.atleast_1d(self.beams[0])
-        with open("%s%s_record.cvs"%(root,self.fid), "wt") as ds:
+        with open("%s%s_record.csv"%(root,self.fid), "wt") as ds:
             ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
             ds.write("; ".join([beams_f0[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
                                 str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(self.ignoreantennas), str(self.tags)]))
@@ -467,7 +467,7 @@ class ResultSet(object):
         # Load and check the control data
         conv = {0: lambda s: katpoint.Target(s), 1: lambda s: eval(s), 2: lambda s: eval(s), 3: lambda s: eval(s), 4: lambda s: eval(s), 5: lambda s: eval(s),
                 6: lambda s: eval(s), 7: lambda s: eval(s), 8: lambda s: eval(s), 9: lambda s: eval(s), 10: lambda s: eval(s)}
-        rec = np.loadtxt("%s%s_record.cvs"%(root,self.fid), dtype=object, comments="#", delimiter=";", converters=conv)
+        rec = np.loadtxt("%s%s_record.csv"%(root,self.fid), dtype=object, comments="#", delimiter=";", converters=conv)
         tgt, f_MHz, poln, ext, cycles, ol_cycles, flags_hrs, polswap, timingoffset, ignoreantennas, tags = rec
         assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
         assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
