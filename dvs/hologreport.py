@@ -1008,8 +1008,8 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
     T = np.arange(T[0], T[-1]+2, 2) # 2sec resolution for sensors
     # Mapping of ant,pol to F-engine labels - to get dBFS for all bands
     feng_labels = katselib.get_feng_input_labels((T[0],T[-1]))
-    band = beams_f0.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
-    allantennas = set([_[:-1] for _ in np.concat([p.split('-') for p in beams_f0.rawonboresight_prod])])
+    band = beams_f0[0].band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
+    allantennas = set([_[:-1] for _ in np.concat([p.split('-') for p in beams_f0[0].rawonboresight_prod])])
     for ant in allantennas:
         try:
             for i,P in enumerate(["H","V"]):
