@@ -420,6 +420,35 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     return beams, apmapsH, apmapsV
 
 
+class ResultSet(object):
+    """ Data structure for intermediate processed datasets, typically populated using `load_data()` """
+
+    def __init__(self, fid,f_MHz,beacon_pol,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,timingoffset=0,ignoreantennas=None,tags=None):
+        self.fid = fid
+        self.f_MHz = f_MHz
+        self.beacon_pol = beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz)
+        self.clipextent = clipextent
+        self.cycles = cycles
+        self.overlap_cycles = overlap_cycles
+        self.flags_hrs = flags_hrs
+        self.polswap = polswap
+        self.timingoffset = timingoffset
+        self.ignoreantennas = [] if (ignoreantennas is None) else ignoreantennas
+        self.tags = [] if (tags is None) else tags
+        # These will hold the intermediate processing results, typically populated using load_data()
+        self.beams = []
+        self.apmapsH = []
+        self.apmapsV = []
+    
+    def cache(self, root=""):
+        """ Save the data structure to disk. """
+        pass
+    
+    def un_cache(self, root=""):
+        """ Load the data structure from disk. """
+        pass
+
+
 # TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
 def re_analyse(self, feedoffset=None, feedphasemap=0):
     """ Exactly katholog.ApertureMap.analyse() but with modifications marked as "[2]".
@@ -500,13 +529,6 @@ def BDF(apmap, D, f, k=0.36):
         ap_ill, r = apmap.ampmap[mask], r[mask] # Only magnitude is required in the integral
         BDF = np.sum((ap_ill*r**3)/(1+(r/2./f)**2)) / np.sum(ap_ill*r**3)
     return BDF
-
-
-# Data structure for processed datasets
-_ResultSet_ = namedtuple("_ResultSet_", ["fid","f_MHz","beacon_pol","beams","apmapsH","apmapsV","clipextent","cycles","overlap_cycles","flags_hrs","polswap","timingoffset","ignoreantennas","tags"]) # Work-around for defaults keyword not available in current version of python
-ResultSet = lambda fid,f_MHz,beacon_pol,beams=0,apmapsH=0,apmapsV=0,clipextent=None,cycles=None,overlap_cycles=0,flags_hrs=None,polswap=False,timingoffset=0,ignoreantennas=None,tags=None: \
-                _ResultSet_(fid,f_MHz,beacon_pol if (beacon_pol is not None) else [None]*len(f_MHz),[] if beams==0 else beams,[] if apmapsH==0 else apmapsH,[] if apmapsV==0 else apmapsV,
-                clipextent,cycles,overlap_cycles,flags_hrs,polswap,timingoffset,[] if ignoreantennas is None else ignoreantennas,[] if tags==None else tags)
 
 
 def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=(0,1), dMHz=0.1, extent=None, telescopename="SKA"):
@@ -930,7 +952,7 @@ def plot_eff_freq(RS, labels, fspec_MHz=(15000,20000), figsize=(14,4)):
 
 def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
     """ Plots status of overload & ADC RF power, for all selected antennas & all selected timestamps.
-        @param rec: a ResultSet that's already beean loaded.
+        @param rec: a ResultSet that's already been loaded.
         @param f_MHz: optionally specify any subset of rec.f_MHz (default None)
     """
     axes = plt.subplots(4,1, sharex=True, figsize=(figsize[0],figsize[1]))[1]
@@ -1051,7 +1073,7 @@ def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True)
     
     return errorbeam
 
-def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing='fourier', eb_extent=(-0.2,0.2), coords="SKA", debug=False, makepdf=True, pdfprefix="", **devkwargs):
+def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing='fourier', eb_extent=(-0.2,0.2), coords="SKA", debug=False, makefigs=True, makepdf=True, pdfprefix="", **devkwargs):
     """ Makes standard plots and prints information for the supplied holography result set.
         
         @param measured: the result set to report on [ResultSet]
@@ -1071,6 +1093,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                        errbeam are vs (freq,[max,95pct,stddev,smoothing resid]).
     """
     devcmap = devkwargs.pop('cmap', None)
+    fig0 = max(plt.get_fignums())
     
     feedoffsetsH, feedoffsetsV, refl_phase_effH, refl_phase_effV, rmsH, rmsV = [], [], [], [], [], []
     errbeamH, errbeamV, el_deg, time_hod, deg_per_sec, feedindexer_deg, enviro = [], [], [], [], [], [], []
@@ -1114,8 +1137,8 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     apmapH = re_analyse(apmapH, feedphasemap=p_apmapH.unwrappedphasemap*scale) # Takes care of aperture phase AND squint
                     apmapV = re_analyse(apmapV, feedphasemap=p_apmapV.unwrappedphasemap*scale)
                 
-                if (ci == 0): # Only figures for the first cycle
-                    plt.figure(figsize=(14,18))
+                if (ci == 0) and (makefigs or makepdf): # Only figures for the first cycle
+                    plt.figure(layout='tight', figsize=(14,18))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAs-is")
                     plt.subplot(4,2,1); beam.plot("Gx", clim=(0,-60), doclf=False); plt.title("Gx")
@@ -1139,7 +1162,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 
                     
                     N = 2 if (_predicted_ is None) else 3
-                    plt.figure(figsize=(14,14+(N-2)*4))
+                    plt.figure(layout='tight', figsize=(14,14+(N-2)*4))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAperture plane deviations, corrected for pointing error")
                     plt.subplot(N,2,1); _apmapH.plot('nopointingdev', doclf=False, **devkwargs)
@@ -1218,10 +1241,12 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                         if (beamsmoothing=='fourier'):
                             beampolydegree = (p_beam.Gx[0]+p_beam.Gy[0])
                         smoothbeam(p_beam, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
-                        
+                    
+                    if (ci == 0) and (makefigs or makepdf): # Once-off preparations
                         axes = plt.subplots(1,2, figsize=(14,8))[1]
                         plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                      "\nError Beam")
+                    
                     smoothbeam(beam, fitdBlevel=contourdB-3, degree=beampolydegree, kind=beamsmoothing)
                     sHV = []
                     resid = lambda G,mG: np.nanstd(np.abs(G)-np.abs(mG))
@@ -1239,7 +1264,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                             ax.set_title("Error Beam %s-pol [frac]"%lbl)
                             ax.set_xlabel("degrees"); ax.set_ylabel("degrees")
                             ax.set_xlim(*eb_extent); ax.set_ylim(*eb_extent)
-                    if (ci == 0): # Only figures for the first cycle
+                    if (ci == 0) and (makefigs or makepdf): # Only figures for the first cycle
                         for ax in axes:
                             plt.colorbar(im, ax=ax)
                         pp.report_fig(max(plt.get_fignums()))
@@ -1250,9 +1275,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     errbeamV[-1].append([np.nan, np.nan, np.nan, np.nan])
             
             # Reference patterns for this frequency, if any
-            if (_predicted_ is not None):
+            if (_predicted_ is not None) and (makefigs or makepdf):
                 beamp,apmapHp,apmapVp = _predicted_[-3:]
-                plt.figure(figsize=(14,18))
+                plt.figure(layout='tight', figsize=(14,18))
                 plt.suptitle("Reference patterns @ %.1fMHz, polarisation basis %s"%(_predicted_[1],beacon_pol))
                 plt.subplot(4,2,1); beamp.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Gx")
                 plt.subplot(4,2,2); beamp.plot("Dx", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dx")
@@ -1276,10 +1301,16 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
         
         pp.report_stdout()
         
-        # Signal path statistics
-        plot_signalpathstats(measured)
-        plt.suptitle("Signal Path Statistics")
-        pp.report_fig(max(plt.get_fignums()))
+        if  (makefigs or makepdf): # Signal path statistics
+            plot_signalpathstats(measured)
+            plt.suptitle("Signal Path Statistics")
+            pp.report_fig(max(plt.get_fignums()))
+        
+            if (_predicted_ is None):
+                plot_diffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+            else:
+                plot_diffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+            pp.report_fig(max(plt.get_fignums()))
         
         results = HologResults(el_deg, measured.f_MHz, np.ma.masked_array(feedoffsetsH, fill_value=np.nan), np.ma.masked_array(feedoffsetsV, fill_value=np.nan),
                                np.ma.masked_array(refl_phase_effH, fill_value=np.nan), np.ma.masked_array(refl_phase_effV, fill_value=np.nan),
@@ -1287,7 +1318,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                                np.ma.masked_array(errbeamH, fill_value=np.nan), np.ma.masked_array(errbeamV, fill_value=np.nan),
                                dict(time_hod=time_hod,deg_per_sec=deg_per_sec,feedindexer_deg=feedindexer_deg,enviro=enviro))
         
-        if (ci > 0): # Multiple cycles
+        if (ci > 0) and (makefigs or makepdf): # Multiple cycles
             plot_vs_hod([[results]], ["%d"%measured.fid], False, spec_freq_MHz, figsize=(14,4))
             pp.report_fig(max(plt.get_fignums()))
             if (_predicted_ is not None):
@@ -1297,10 +1328,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     finally:
         pp.close()
     
-    if (_predicted_ is None):
-        plot_diffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
-    else:
-        plot_diffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+    # Close figures if they were only needed for the PDF report
+    if (makepdf and not makefigs):
+        for n in range(fig0, max(plt.get_fignums())): plt.close(n)
     
     return results
 
@@ -1523,7 +1553,6 @@ def generate_results(rec, predicted=None, mask_xlin=2, SNR_min=30, phaseRMS_max=
         print("\n")
     return results
 
-collect_reports = generate_results # DEPRECATED!
 
 def collate_results(results_a, results_b):
     """ Combines results generated by `report_results()`, by ID's and tags.
