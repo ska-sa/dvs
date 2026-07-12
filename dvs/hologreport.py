@@ -1093,7 +1093,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                        errbeam are vs (freq,[max,95pct,stddev,smoothing resid]).
     """
     devcmap = devkwargs.pop('cmap', None)
-    fig0 = max(plt.get_fignums())
+    fig0 = max([0]+plt.get_fignums())
     
     feedoffsetsH, feedoffsetsV, refl_phase_effH, refl_phase_effV, rmsH, rmsV = [], [], [], [], [], []
     errbeamH, errbeamV, el_deg, time_hod, deg_per_sec, feedindexer_deg, enviro = [], [], [], [], [], [], []
