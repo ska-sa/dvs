@@ -466,7 +466,7 @@ class ResultSet(object):
         conv = {0: lambda s: katpoint.Target(s), 1: lambda s: eval(s), 2: lambda s: eval(s), 3: lambda s: eval(s), 4: lambda s: eval(s), 5: lambda s: eval(s),
                 6: lambda s: eval(s), 7: lambda s: eval(s), 8: lambda s: eval(s), 9: lambda s: eval(s), 10: lambda s: eval(s)}
         rec = np.loadtxt("%s%s_record.cvs"%(root,self.fid), dtype=object, comments="#", delimiter=";", converters=conv)
-        tgt, f_MHz, poln, ext, cycles, ol_cycles, flags_hrs, polswap, timingoffset, ignoreantennas, tags = *rec
+        tgt, f_MHz, poln, ext, cycles, ol_cycles, flags_hrs, polswap, timingoffset, ignoreantennas, tags = rec
         assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
         assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
         assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
