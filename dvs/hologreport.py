@@ -461,8 +461,8 @@ class ResultSet(object):
         
         for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
             bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
-            amH.save("%s%s_apmap%d.npz"%(root,self.fid,f))
-            amV.save("%s%s_apmap%d.npz"%(root,self.fid,f))
+            amH.save("%s%s_apmapH%d.npz"%(root,self.fid,f))
+            amV.save("%s%s_apmapV%d.npz"%(root,self.fid,f))
 
     
     def load(self, root=""):
@@ -483,9 +483,9 @@ class ResultSet(object):
             bm = katholog.BeamCube(None)
             bm.load("%s%s_beam%d.npz"%(root,self.fid,f)); bm.target = tgt # Special treatment for target
             amH = katholog.ApertureMap(None)
-            amH.load("%s%s_apmap%d.npz"%(root,self.fid,f))
+            amH.load("%s%s_apmapH%d.npz"%(root,self.fid,f))
             amV = katholog.ApertureMap(None)
-            amV.load("%s%s_apmap%d.npz"%(root,self.fid,f))
+            amV.load("%s%s_apmapV%d.npz"%(root,self.fid,f))
             self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
     
     def __repr__(self):
