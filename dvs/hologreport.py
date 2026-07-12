@@ -287,6 +287,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     flags_hrs = [] if (flags_hrs is None) else flags_hrs
     
     def _load_extrainfo_(dataset, f_MHz, dMHz, out): # Add attributes to 'out', based on dataset as currently flagged.
+        out.band = band
         out.target = dataset.target
         out.time_avg = dataset.env_times[0]
         out.deg_per_sec = np.percentile(dataset.deg_per_min, 95, axis=0)/60. # (Az,El)
@@ -448,13 +449,14 @@ class ResultSet(object):
     def save(self, root=""):
         """ Save the complete data structure to disk. """
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
+        beams_f0 = np.atleast_1d(self.beams[0])
         with open("%s%s_record.cvs"%(root,self.fid), "wt") as ds:
-            ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; cycles; overlap_cycles; flags_hrs; polswap; timingoffset; ignoreantennas; tags\n")
-            ds.write("; ".join([self.beams[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
+            ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
+            ds.write("; ".join([beams_f0[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
                                 str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(self.ignoreantennas), str(self.tags)]))
         
         for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
-            bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap'])
+            bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
             amH.save("%s%s_apmap%d.npz"%(root,self.fid,f))
             amV.save("%s%s_apmap%d.npz"%(root,self.fid,f))
 
@@ -474,13 +476,15 @@ class ResultSet(object):
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
         for f in f_MHz: # Potentially a subset of what's available!
             bm = katholog.BeamCube(None)
-            bm.load("%s%s_beam%d.npz"%(root,self.fid,f))
+            bm.load("%s%s_beam%d.npz"%(root,self.fid,f)); bm.target = tgt # Special treatment for target
             amH = katholog.ApertureMap(None)
             amH.load("%s%s_apmap%d.npz"%(root,self.fid,f))
             amV = katholog.ApertureMap(None)
             amV.load("%s%s_apmap%d.npz"%(root,self.fid,f))
-            bm.target = tgt; bm.cbid = amH.cbid = amV.cbid = self.fid
             self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
+    
+    def __repr__(self):
+        return self.__dict__.__repr__()
 
 
 # TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
