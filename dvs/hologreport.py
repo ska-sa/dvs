@@ -452,6 +452,7 @@ class ResultSet(object):
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
         root += "%s/"%self.fid
         shutil.rmtree(root, ignore_errors=True) # Delete old data before saving
+        shutil.os.mkdir(root)
         beams_f0 = np.atleast_1d(self.beams[0])
         with open("%s%s_record.csv"%(root,self.fid), "wt") as ds:
             ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
