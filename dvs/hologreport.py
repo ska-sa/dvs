@@ -253,7 +253,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     telescope, xyzoffsets, xmag, focallength = DISHPARAMS["telescope"], DISHPARAMS["xyzoffsets"], DISHPARAMS["xmag"], DISHPARAMS["focallength"]
     ndftproc = kwargs.pop("ndftproc", None)
     ndftproc = 64 if (ndftproc is None) else ndftproc
-    calmethod = 'gainrawabs' if (dMHz<5) else 'direct' # Suitable for polarised beacons | continuum
+    calmethod = 'gainrawabs' # if (dMHz<5) else 'direct' # TODO: Confirm suitable for polarised beacons | continuum
     
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method=calmethod, timingoffset=timingoffset, **kwargs)
     cbid = int(dataset.filename.split("/")[-2])
