@@ -1578,7 +1578,7 @@ def collate_results(results_a, *results_b):
         @return: {fid:[HologResults], *(tag:[HologResults])}
     """
     if isinstance(results_a, dict): # Already collated
-        collated = dict(**results_a)
+        collated = dict(results_a)
     else: # Collate from scratch
         collated = {}
         for r in results_a:
