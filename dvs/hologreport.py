@@ -1001,7 +1001,7 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
         @param rec: a ResultSet that's already been loaded.
         @param f_MHz: optionally specify any subset of rec.f_MHz (default None)
     """
-    axes = plt.subplots(4,1, sharex=True, layout='constrained', figsize=(figsize[0],figsize[1]))[1]
+    axes = plt.subplots(4,1, sharex=True, height_ratios=[1,2,2,2], figsize=(figsize[0],figsize[1]))[1]
     # Plot some extra info from sensor logs
     beams_f0 = np.atleast_1d(rec.beams[0])
     T = (beams_f0[0].rawonboresight_time[0], beams_f0[-1].rawonboresight_time[-1])
@@ -1186,7 +1186,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                     apmapV = re_analyse(apmapV, feedphasemap=p_apmapV.unwrappedphasemap*scale)
                 
                 if (ci == 0) and (makefigs or makepdf): # Only figures for the first cycle
-                    plt.figure(layout='constrained', figsize=(14,18))
+                    plt.figure(layout='tight', figsize=(14,18))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAs-is")
                     plt.subplot(4,2,1); beam.plot("Gx", clim=(0,-60), doclf=False); plt.title("Gx")
@@ -1210,7 +1210,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
                 
                     
                     N = 2 if (_predicted_ is None) else 3
-                    plt.figure(layout='constrained', figsize=(14,14+(N-2)*4))
+                    plt.figure(layout='tight', figsize=(14,14+(N-2)*4))
                     plt.suptitle("%.1fMHz @ %.1fdegEl, %.1fhrs [local time]"%(f_MHz,el_deg[-1][-1],time_hod[-1][-1]) +
                                  "\nAperture plane deviations, corrected for pointing error")
                     plt.subplot(N,2,1); _apmapH.plot('nopointingdev', doclf=False, **devkwargs)
@@ -1326,7 +1326,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             # Reference patterns for this frequency, if any
             if (_predicted_ is not None) and (makefigs or makepdf):
                 beamp,apmapHp,apmapVp = _predicted_[-3:]
-                plt.figure(layout='constrained', figsize=(14,18))
+                plt.figure(layout='tight', figsize=(14,18))
                 plt.suptitle("Reference patterns @ %.1fMHz, polarisation basis %s"%(_predicted_[1],beacon_pol))
                 plt.subplot(4,2,1); beamp.plot("Gx", clim=(0,-60), doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Gx")
                 plt.subplot(4,2,2); beamp.plot("Dx", doclf=False); plt.xlim(-beamp.extent/2., beamp.extent/2.); plt.ylim(-beamp.extent/2., beamp.extent/2.); plt.title("Dx")
