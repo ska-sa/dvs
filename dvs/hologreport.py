@@ -255,7 +255,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     calmethod = 'gainrawabs' if (dMHz<5) else 'direct' # Suitable for polarised beacons | continuum
     
     dataset = katholog.Dataset(fn, telescope, scanantname=scanant, method=calmethod, timingoffset=timingoffset, **kwargs)
-    dataset.band = dataset.h5.spectral_windows[0].band # Cache this value for later reference
+    cbid = int(dataset.filename.split("/")[-2])
+    band = dataset.h5.spectral_windows[0].band
     polswap = None if (polswap == False) else polswap # Backward compatibility
     if polswap is not None: # Correct for polarisation swap(s) at scan antenna
         # Unfortunately the following is not usable for katdal datasets
@@ -286,6 +287,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     flags_hrs = [] if (flags_hrs is None) else flags_hrs
     
     def _load_extrainfo_(dataset, f_MHz, dMHz, out): # Add attributes to 'out', based on dataset as currently flagged.
+        out.target = dataset.target
         out.time_avg = dataset.env_times[0]
         out.deg_per_sec = np.percentile(dataset.deg_per_min, 95, axis=0)/60. # (Az,El)
         az_deg = np.mean(dataset.h5.az)
@@ -330,7 +332,9 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         timestamps = dataset.h5.timestamps[dumps]
         chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-f_MHz) <= dMHz]
         rawonaxis = [dataset.h5.vis[dumps,chan,p] for p in cpindices] # (prod, time, freq)
-        out.rawonboresight = (timestamps, np.mean(rawonaxis, axis=2), polproducts) # [1]=(prod, time)
+        out.rawonboresight_time = timestamps
+        out.rawonboresight_prod = polproducts
+        out.rawonboresight = np.mean(rawonaxis, axis=2) # (prod, time)
     
     def _load_cycle_(f_MHz, b_buf, aH_buf, aV_buf):
         # Don't flip any dimension in ApertureMap as that obstructs understanding
@@ -352,6 +356,7 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
         aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
+        b_buf[-1].cbid = aH_buf[-1].cbid = aV_buf[-1].cbid = cbid
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
     
     selectkwargs = dict(targetname=kwargs.get("targetname",None), ignoreantennas=kwargs.get("ignoreantennas",[]), group=kwargs.get("select_loadscan_group",0), clipextent=kwargs.get("clipextent",None))
@@ -440,13 +445,42 @@ class ResultSet(object):
         self.apmapsH = []
         self.apmapsV = []
     
-    def cache(self, root=""):
-        """ Save the data structure to disk. """
-        pass
+    def save(self, root=""):
+        """ Save the complete data structure to disk. """
+        root = root if (len(root)==0 or root[-1]=='/') else root+"/"
+        with open("%s%s_record.cvs"%(root,self.fid), "wt") as ds:
+            ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; cycles; overlap_cycles; flags_hrs; polswap; timingoffset; ignoreantennas; tags\n")
+            ds.write("; ".join([self.beams[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
+                                str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(self.ignoreantennas), str(self.tags)]))
+        
+        for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
+            bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap'])
+            amH.save("%s%s_apmap%d.npz"%(root,self.fid,f))
+            amV.save("%s%s_apmap%d.npz"%(root,self.fid,f))
+
     
-    def un_cache(self, root=""):
-        """ Load the data structure from disk. """
-        pass
+    def load(self, root=""):
+        """ Load the data structure from disk. Raises an AssertionError if there's a mismatch in control data. """
+        root = root if (len(root)==0 or root[-1]=='/') else root+"/"
+        # Load and check the control data
+        conv = {0: lambda s: katpoint.Target(s), 1: lambda s: eval(s), 2: lambda s: eval(s), 3: lambda s: eval(s), 4: lambda s: eval(s), 5: lambda s: eval(s),
+                6: lambda s: eval(s), 7: lambda s: eval(s), 8: lambda s: eval(s), 9: lambda s: eval(s), 10: lambda s: eval(s)}
+        rec = np.loadtxt("%s%s_record.cvs"%(root,self.fid), dtype=object, comments="#", delimiter=";", converters=conv)
+        tgt, f_MHz, poln, ext, cycles, ol_cycles, flags_hrs, polswap, timingoffset, ignoreantennas, tags = *rec
+        assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
+        assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
+        assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
+        
+        self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
+        for f in f_MHz: # Potentially a subset of what's available!
+            bm = katholog.BeamCube(None)
+            bm.load("%s%s_beam%d.npz"%(root,self.fid,f))
+            amH = katholog.ApertureMap(None)
+            amH.load("%s%s_apmap%d.npz"%(root,self.fid,f))
+            amV = katholog.ApertureMap(None)
+            amV.load("%s%s_apmap%d.npz"%(root,self.fid,f))
+            bm.target = tgt; bm.cbid = amH.cbid = amV.cbid = self.fid
+            self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
 
 
 # TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
@@ -567,7 +601,9 @@ def check_timingoffset(fn, freqMHz, ant, timingoffset=0, cycle=(0,1), dMHz=0.1, 
         timestamps = dataset.h5.timestamps[dumps]
         chan = dataset.h5.channels[np.abs(dataset.h5.channel_freqs/1e6-freqMHz[0]) <= dMHz]
         rawonaxis = [dataset.h5.vis[dumps,chan,p] for p in cpindices] # (prod, time, freq)
-        dataset.rawonboresight = (timestamps, np.mean(rawonaxis, axis=2), polproducts) # [1]=(prod, time)
+        dataset.rawonboresight_time = timestamps
+        dataset.rawonboresight_prod = polproducts
+        dataset.rawonboresight = np.mean(rawonaxis, axis=2) # (prod, time)
     
     N = len(ds)
     fid = fn.split('/')[-1]
@@ -958,12 +994,14 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
     """
     axes = plt.subplots(4,1, sharex=True, figsize=(figsize[0],figsize[1]))[1]
     # Plot some extra info from sensor logs
-    dataset = np.atleast_1d(rec.beams[0])[0].dataset
-    T = dataset.rawtime
-    band = dataset.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
+    beams_f0 = np.atleast_1d(rec.beams[0])
+    T = (beams_f0[0].rawonboresight_time[0], beams_f0[-1].rawonboresight_time[-1])
+    T = np.arange(T[0], T[-1]+2, 2) # 2sec resolution for sensors
     # Mapping of ant,pol to F-engine labels - to get dBFS for all bands
     feng_labels = katselib.get_feng_input_labels((T[0],T[-1]))
-    for ant in dataset.radialscan_allantenna:
+    band = beams_f0.band[0].lower() # Dataset bands (e.g. UHF, L, S) -> sensor naming ("u", "l", "s")
+    allantennas = set([_[:-1] for _ in np.concat([p.split('-') for p in beams_f0.rawonboresight_prod])])
+    for ant in allantennas:
         try:
             for i,P in enumerate(["H","V"]):
                 if (band != 's'):
@@ -987,7 +1025,7 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
         if (f_MHz is not None) and (freq_MHz not in np.atleast_1d(f_MHz)): # Skip if not in subset of interest
             continue
         for beam in np.atleast_1d(beams):
-            ts, rb, prod = beam.rawonboresight
+            ts, rb, prod = beam.rawonboresight_time, beam.rawonboresight, beam.rawonboresight_prod
             for p,x in enumerate(rb):
                 for ax,quant in zip(axes[-2:], [np.abs(x), np.unwrap(np.angle(x))*180/np.pi]):
                     ax.plot(ts-T[0], quant, 'C%d.'%((p+len(labels))%10)) # CN must have N 0..9
@@ -996,7 +1034,7 @@ def plot_signalpathstats(rec, f_MHz=None, figsize=(14,16)):
         ax.legend(labels)
         if (len(np.atleast_1d(beams)) > 1): # Add markers to identify multiple cycles
             for beam in beams:
-                ts = beam.rawonboresight[0]
+                ts = beam.rawonboresight_time
                 ax.axvline(ts[0]-T[0], color='k', alpha=0.1)
     axes[-2].set_ylabel("Raw visibilities amplitude [linear]"); axes[-2].grid(True)
     axes[-1].set_ylabel("Raw visibilities phase [deg]"); axes[-1].grid(True)
@@ -1016,7 +1054,7 @@ def snr_mask(beams, SNR_min=30, phaseRMS_max=30):
     snr = [] # per cycle ([SNR_p0_amplitude,std_p0_phase],...)
     mask = [] # per cycle
     for beam in np.atleast_1d(beams): # Cycles
-        x, prods = beam.rawonboresight[1:] # x is visibilities (products,time)
+        x, prods = beam.rawonboresight, beam.rawonboresight_prod # x is visibilities (products,time)
         prods = [p.split("-") for p in prods] # Convert from "xx-yy" to (xx,yy)
         ix = [i for i in range(len(prods)) if (prods[i][0][-1]==prods[i][1][-1])]
         a, ph = np.abs(x), np.unwrap(np.angle(x))*180/np.pi
@@ -1104,7 +1142,7 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
     pp = katselib.PDFReport("%s_hologreport_%s_%d.pdf"%(pdfprefix,key[1],key[0]), header="%d: %s referenced to %s"%key, pagesize=(11,17), save=makepdf)
     try:
         pp.capture_stdout(echo=True)
-        print("Target: %s  [dataset %s]"%(b0.dataset.target.name, measured.fid))
+        print("Target: %s  [dataset %s]"%(b0.target.name, measured.fid))
         print("Processing tags: %s"%measured.tags, "timingoffset=%gsec"%measured.timingoffset)
         
         for f_MHz, beacon_pol, beams, apmapsH, apmapsV in zip(measured.f_MHz, measured.beacon_pol, measured.beams, measured.apmapsH, measured.apmapsV):
@@ -1471,10 +1509,7 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
     unit = "dB" if is_beam else ("mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl"))
     
     for i,(ax_,map0,map1) in enumerate(zip(axs,maps0,maps1)):
-        try:
-            subtitle = "%.f - %.f" % (map0.dataset.env_times[1], map1.dataset.env_times[1])
-        except: # Some maps don't have datasets attached
-            subtitle = "#%d - #%d" % (i, i)
+        subtitle = "%s - %s" % (map0.cbid, map1.cbid)
         ax_[1].set_title(subtitle)
         
         what0, what1 = map0.__getattribute__(what), map1.__getattribute__(what)
@@ -1765,10 +1800,9 @@ def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save_to=None, band=""):
                         apmap[1].gainmeasured/apmap[1].gainuniform] for f,apmap in zip(freqs_MHz,apmaps)])*100*scale
 
     if save_to:
-        cbid = apmap.dataset.filename.split("/")[-2]
         scaled_to = "A_g=%.1fm^2 (D_g=%.1fm)" % (avg_Ag, 2*(avg_Ag/np.pi)**.5)
         np.savetxt("%s/%s_ant_eff.csv"%(save_to,band), np.c_[freqs_MHz,anteff], fmt='%g', delimiter="\t",
-                   header="The ratio gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,cbid)+
+                   header="The ratio gainmeasured/gainuniform scaled for %s \nDerived from ApertureMaps of %s\n"%(scaled_to,apmap.cbid)+
                           "f [MHz]\teta_ap H [%]\teta_ap V [%]")
     return (illeff, anteff, avg_Ag)
 
