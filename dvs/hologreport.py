@@ -804,7 +804,7 @@ def plot_errbeam_against(RS, labels, key, fit=None, eval_fit_at=None, extra="95p
                  'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
     fitted_at = None if (eval_fit_at is None) else []
-    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else ({} if (fit is None) else dict(**fit))
+    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","leastsq","theil-sen"] else ({} if (fit is None) else dict(**fit))
 
     if hold:
         axes = np.atleast_1d(plt.gcf().axes)
@@ -871,7 +871,7 @@ def plot_offsets_against(RS, labels, key, fit=None, eval_fit_at=None, hide="", f
                  'wind_mps':("Mean wind [m/s]", lambda rs: rs.info['enviro']['wind_mps'][0]), # avg,min,max
                  'wind_rel_deg':("Wind relative azimuth angle [deg]", lambda rs: rs.info['enviro']['wind_rel_deg'])}[key]
     eval_fit_at = np.atleast_1d(eval_fit_at) if eval_fit_at else None
-    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","theil-sen"] else ({} if (fit is None) else dict(**fit))
+    fit_args = dict(order=1, method={'lin':'leastsq'}.get(fit,fit)) if fit in ["lin","leastsq","theil-sen"] else ({} if (fit is None) else dict(**fit))
     fitted_at = None if (eval_fit_at is None) else []
     
     if hold:
