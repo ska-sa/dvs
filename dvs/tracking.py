@@ -217,7 +217,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         @param strict: True to set invalid fits to nan (default True)
         @param output_filepattern: filename pattern (with %s for dataset and antenna names) for CSV file to store results to (default '%s_%s_circular_pointing.csv')
         @return: ( [(timestamp [sec], target ID [string], Az, El, dAz, dEl, hpw_x, hpw_y [deg], ampl, resid, bkgnd [power]), ...(for each cycle)]
-                   [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle), ...(for each cycle)] )
+                   [(temperature, pressure, humidity, wind_std, wind_speed, wind_dir, sun_Az, sun_El, feedindexer_angle, tilt...), ...(for each cycle)] )
     """
     if freq_MHz is not None:
         ds.select(reset="F")
@@ -257,6 +257,12 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
                  'e':"%s_dsm_indexerActualPosition",
                  's':"%s_dsm_FeedIndexer_Status_p_Enc"}[ant_type]
     fi_timestamps, fi_angles = katselib.getsensorvalues(fi_sensor%ant, ds.timestamps)
+    tck = katsepnt._TILT_CORR_KEYS_(ant)
+    tilt_timestamps = ds.timestamps[:]
+    tiltx = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['tiltx'])
+    tilty = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['tilty'])
+    tiltcorr_az = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['azCorr'], max_upsample=np.inf)
+    tiltcorr_el = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['elCorr'], max_upsample=np.inf)
     
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
@@ -298,6 +304,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         wind_1000sec = np.mean(avgws[(ds.timestamps[0]<=avgws_timestamps) & (avgws_timestamps<=ds.timestamps[-1])])
         wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_1000sec # SKA Dish definition, 3*std - mean
         fi_angle = np.median(fi_angles[(ds.timestamps[0]<=fi_timestamps) & (fi_timestamps<=ds.timestamps[-1])])
+        _ts_ = (ds.timestamps[0]<=tilt_timestamps) & (tilt_timestamps<=ds.timestamps[-1])
+        tiltx_, tilty_, tiltcorr_az_, tiltcorr_el_ = tiltx[_ts_], tilty[_ts_], tiltcorr_az[_ts_], tiltcorr_el[_ts_]
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
@@ -374,7 +382,8 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             dAz, dEl = np.nan, np.nan
         fitted.append((t_ref, target.name, rAz*R2D, rEl*R2D, dAz, dEl, hpwx/R2D, hpwy/R2D, ampl, resid, np.mean(bkg)))
         
-        enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + [wind_dynamic, fi_angle])
+        enviro.append([temperature, pressure, humidity, wind_std, wind_speed, wind_direction] + list(sun_azel) + \
+                      [wind_dynamic, fi_angle, tiltx_, tilty_, tiltcorr_az_, tiltcorr_el_])
     
     if (output_filepattern):
         save_apss_file(output_filepattern, ds, [a for a in ds.ants if (a.name==ant)][0], fitted, enviro)
@@ -483,7 +492,8 @@ def save_apss_file(output_filename, ds, ant, fitted, enviro):
     fields = ['timestamp', 'target', 'azimuth', 'elevation', 'delta_azimuth', 'delta_elevation',
               'beam_width_HH','beam_width_VV', 'beam_height_I', 'beam_height_I_std', 'baseline_height_I']
     # Note: we map 'resid'-> 'beam_height_I_std', which is not quite the same, but equivalent?
-    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_std', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el', 'wind_dynamic', 'feedindexer_angle']
+    fields_enviro = ['temperature', 'pressure', 'humidity', 'wind_std', 'wind_speed', 'wind_direction', 'sun_az', 'sun_el', 'wind_dynamic', 'feedindexer_angle',
+                     'tiltx','tilty','tiltcorr_az','tiltcorr_el']
     string_fields = ['target']
     record = {}
     for c,f in enumerate(fields):
