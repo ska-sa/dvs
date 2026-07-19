@@ -464,6 +464,7 @@ class ResultSet(object):
             bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
             amH.save("%s%s_apmapH%d.npz"%(root,self.fid,f))
             amV.save("%s%s_apmapV%d.npz"%(root,self.fid,f))
+        print("INFO: Saved data to "+root)
 
     
     def load(self, root="", ant=0):
@@ -481,6 +482,7 @@ class ResultSet(object):
         assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
         assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
         
+        print("INFO: Loading data from "+root)
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
         for f in f_MHz: # Potentially a subset of what's available!
             bm = katholog.BeamCube(None)
