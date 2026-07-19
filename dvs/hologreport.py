@@ -14,7 +14,7 @@
         load_records(recs, "s0000", DISHPARAMS=DISHPARAMS, flag_slew=True, inspect_DT=True, timingoffset=0.1)
         generate_results(recs, predicted, eb_extent=(-0.3,0.3), SNR_min=30, makepdfs=True, pdfprefix="ku")
     
-    @author aph@ska.ac.za
+    @author aph@sarao.ac.za
 """
 import numpy as np
 import scipy.signal as sig
@@ -22,7 +22,7 @@ from collections import namedtuple
 import itertools as iter
 import copy
 import time
-import shutil
+import shutil, os
 import dvsholog as katholog # (a special release of katholog)
 import katpoint
 from analysis import katselib, katsemat
@@ -450,10 +450,11 @@ class ResultSet(object):
     def save(self, root=""):
         """ Save the complete data structure to disk. """
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
-        root += "%s/"%self.fid
+        beams_f0 = np.atleast_1d(self.beams[0])
+        ant = beams_f0[0].scanantennaname
+        root += f"{self.fid}_{ant}/"
         shutil.rmtree(root, ignore_errors=True) # Delete old data before saving
         shutil.os.mkdir(root)
-        beams_f0 = np.atleast_1d(self.beams[0])
         with open("%s%s_record.csv"%(root,self.fid), "wt") as ds:
             ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
             ds.write("; ".join([beams_f0[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
@@ -465,13 +466,15 @@ class ResultSet(object):
             amV.save("%s%s_apmapV%d.npz"%(root,self.fid,f))
 
     
-    def load(self, root=""):
+    def load(self, root="", ant=0):
         """ Load the data structure from disk. Raises an AssertionError if there's a mismatch in control data. """
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
-        root += "%s/"%self.fid
+        if isinstance(ant, int):
+            root = [r.path+"/" for r in os.scandir(root) if str(self.fid) in r.path][ant]
+        else:
+            root += f"{self.fid}_{ant}/"
         # Load and check the control data
-        conv = {0: lambda s: katpoint.Target(s), 1: lambda s: eval(s), 2: lambda s: eval(s), 3: lambda s: eval(s), 4: lambda s: eval(s), 5: lambda s: eval(s),
-                6: lambda s: eval(s), 7: lambda s: eval(s), 8: lambda s: eval(s), 9: lambda s: eval(s), 10: lambda s: eval(s)}
+        conv = {c:(lambda s: katpoint.Target(s)) if (c==0) else lambda s: eval(s) for c in range(11)}
         rec = np.loadtxt("%s%s_record.csv"%(root,self.fid), dtype=object, comments="#", delimiter=";", converters=conv)
         tgt, f_MHz, poln, ext, cycles, ol_cycles, flags_hrs, polswap, timingoffset, ignoreantennas, tags = rec
         assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
@@ -490,6 +493,32 @@ class ResultSet(object):
     
     def __repr__(self):
         return self.__dict__.__repr__()
+
+
+
+def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=None, l2_cache="./l2_data"):
+    """ Load data into ResultSets.
+        @param datasets: a list of ResultSet items, to be modified in-place """
+    dMHz = dMHz if (len(np.atleast_1d(dMHz))>1) else [dMHz]*len(datasets)
+    
+    # Either load over the network, or first cache locally
+    cached_url = util.cbid2url if (l1_cache is None) else lambda cbid: f"./{l1_cache}/{cbid}/{cbid}_sdp_l0.full.rdb"
+    
+    for ms,df in zip(datasets, dMHz):
+        # ms.beams.clear(); ms.apmapsH.clear(); ms.apmapsV.clear() # Un-comment to reload all
+        if (len(ms.beams) > 0): continue
+        try:
+            ms.load(l2_cache)
+        except:
+            if (cached_url != util.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
+            b, aH, aV = load_data(cached_url(ms.fid), ms.f_MHz, ant, DISHPARAMS, polswap=ms.polswap, timingoffset=ms.timingoffset,
+                                              findwrap="findwrap" in ms.tags, extralmoffset='auto' if "extralmoffset=auto" in ms.tags else [0,0],
+                                              clipextent=min(ms.clipextent,load_extent), loadscan_cycles=ms.cycles, overlap_cycles=ms.overlap_cycles,
+                                              dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas)
+            ms.beams.extend(b); ms.apmapsH.extend(aH); ms.apmapsV.extend(aV)
+            if (cached_url != util.cbid2url): ds.del_cache()
+            if (l2_cache is not None): ms.save(l2_cache)
+
 
 
 # TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
