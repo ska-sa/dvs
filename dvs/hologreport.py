@@ -462,9 +462,12 @@ class ResultSet(object):
         
         for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
             print("INFO: Saving data to "+root)
-            bm.save("%s%s_beam%d.npz"%(root,self.fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
-            amH.save("%s%s_apmapH%d.npz"%(root,self.fid,f))
-            amV.save("%s%s_apmapV%d.npz"%(root,self.fid,f))
+            bms, amHs, amVs = np.atleast_1d(bm), np.atleast_1d(amH), np.atleast_1d(amV)
+            for c,(bm,amH,amV) in enumerate(zip(bms,amHs,amVs)):
+                fid = self.fid if (len(bms) == 1) else f"{self.fid}[{c}]"
+                bm.save("%s%s_beam%d.npz"%(root,fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
+                amH.save("%s%s_apmapH%d.npz"%(root,fid,f))
+                amV.save("%s%s_apmapV%d.npz"%(root,fid,f))
 
     
     def load(self, root="", ant=0):
@@ -483,15 +486,18 @@ class ResultSet(object):
         assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
         
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
+        cycles = set([r.path[r.path.index("["):r.path.index("]_")+1] for r in os.scandir(root) if f"{self.fid}[" in r.path])
+        if (len(cycles) == 0): cycles = ['']
         for f in f_MHz: # Potentially a subset of what's available!
             print("INFO: Loading data from "+root)
-            bm = katholog.BeamCube(None)
-            bm.load("%s%s_beam%d.npz"%(root,self.fid,f)); bm.target = tgt # Special treatment for target
-            amH = katholog.ApertureMap(None)
-            amH.load("%s%s_apmapH%d.npz"%(root,self.fid,f))
-            amV = katholog.ApertureMap(None)
-            amV.load("%s%s_apmapV%d.npz"%(root,self.fid,f))
-            self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
+            for c in sorted(cycles):
+                bm = katholog.BeamCube(None)
+                bm.load("%s%s%s_beam%d.npz"%(root,self.fid,c,f)); bm.target = tgt # Special treatment for target
+                amH = katholog.ApertureMap(None)
+                amH.load("%s%s%s_apmapH%d.npz"%(root,self.fid,c,f))
+                amV = katholog.ApertureMap(None)
+                amV.load("%s%s%s_apmapV%d.npz"%(root,self.fid,c,f))
+                self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
     
     def __repr__(self):
         return self.__dict__.__repr__()
