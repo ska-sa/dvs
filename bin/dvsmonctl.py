@@ -159,6 +159,38 @@ def set_TiltCorrections(cam_ants, tiltcorr=True):
         time.sleep(3)
 
 
+def check_defaults(cam_ant, reset=False):
+    """ Report on critical default values for the specified dish
+        @param reset: True to also set the minimum critical defaults (default False) """
+    import tango
+    lmc = tango.DeviceProxy(cam_ant.sensors.dsh_tango_address.get_value())
+    dsm = tango.DeviceProxy(cam_ant.sensors.dsm_tango_address.get_value())
+    spfc = tango.DeviceProxy(cam_ant.sensors.spfc_tango_address.get_value())
+    
+    def report_values(device, attr_name='mjdTimeDriftCorrEnabled'):
+        """ Prints out "Read" & "Written" values for a device attribute. """
+        try:
+            log = ""
+            for an in np.atleast_1d(attr_name):
+                attr_val = device.read_attribute(an)
+                log += "%s W:%s [R:%s]\t"%(an,attr_val.w_value,attr_val.value)
+            print(log)
+        except Exception as e:
+            print("\nSkipping over error", e)
+    
+    report_values(lmc, attr_name=['versionId'])
+    report_values(dsm, attr_name=['utcTimeEnabled','trackTableDynBufferingEnabled','trackTableBufferingEnabled','mjdTimeDriftCorrEnabled'])
+    report_values(dsm, attr_name=['pointingModelParams'])
+    report_values(dsm, attr_name=['staticPointCorrEnabled','tiltPointCorrEnabled','tempPointCorrEnabled'])
+    report_values(dsm, attr_name=['interpolationMode'])
+    report_values(spfc, attr_name=['b2DefaultStartState','b2OperatingState','b2LnaHPowerState','b2LnaVPowerState'])
+        
+    if reset: # Set only the critical default values for a dish that are not currently set by default LMC.
+        dsm.utcTimeEnabled = True; dsm.mjdTimeDriftCorrEnabled = False; time.sleep(1) # Messed up by LMC startup and tests
+        dsm.interpolationMode = {'NEWTON':0, 'SPLINE':1}['SPLINE']
+        dsm.trackTableDynBufferingEnabled = True; dsm.trackTableBufferingEnabled = True # These are set-up correctly by LMC
+
+
 def match_ku_siggen_freq(cam, override=False):
     """ The frequency of the Ku-band reference LO signal generator must be changed manually,
         the subarray's "x band" center frequency only updates sensors and metadata.
