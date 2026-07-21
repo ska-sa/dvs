@@ -107,35 +107,35 @@ def release_ACU_authority(cam_ant):
         dsm.ReleaseAuthority()
 
 
-def toggle_LNAs(cam_ant, band=2, also_tempctl=False):
+def set_LNAs(cam_ant, band=2, enable=True, also_tempctl=False):
     """ Toggle the Band's LNA's ON/OFF.
         @param band: (default 2)
         @param also_tempctl: if True then also turn the temperature control system ON/OFF (default False) """
-    assert (band == 2), "TODO: this function is currently only for B2"
     import tango
+    op, lnaH, lnaV, pid = 'b%dOperatingState'%band, 'b%dLnaHPowerState'%band, 'b%dLnaVPowerState'%band, 'b%dLnaPidPowerState'%band
     for ant in np.atleast_1d(cam_ant):
         spfc_addr = ant.sensors.spfc_tango_address.get_value()
         spfc = tango.DeviceProxy(spfc_addr)
-        if (spfc.b2OperatingState != 3): # "OPERATE"
-            print("ERROR: Band%d is not in OPERATE - turn it on manually, just to be safe!"%band)
-            return
         
-        current_on = spfc.b2LnaHPowerState | spfc.b2LnaVPowerState
-        if (current_on):
-            print("INFO: Band%d amplifiers are currently ON, now turning them OFF"%band)
-            spfc.b2LnaHPowerState = False
-            spfc.b2LnaVPowerState = False
+        if (spfc.read_attribute(op).value != 3): # "OPERATE"
+            print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually, to be safe!"%band)
+            continue
+        
+        current = [r.value for r in spfc.read_attributes([lnaH, lnaV])]
+        print("INFO: Band%d amplifiers are currently"%band, current)
+        if enable and not np.all(current):
+            print(" --> turning them ON.")
+            spfc.write_attributes([(lnaH,True), (lnaV,True)])
             if also_tempctl:
-                spfc.b2LnaPidPowerState = False
-        else: # cam.s0002.req.dsh_SetSPFLnaPowerOn(0) # 0 = the "active band" 
-            print("INFO: Band%d amplifiers are currently OFF, now turning them ON"%band)
-            spfc.b2LnaHPowerState = True
-            spfc.b2LnaVPowerState = True
+                spfc.write_attribute(pid,True)
+        elif (not enable) and np.any(current):
+            print(" --> turning them OFF.")
+            spfc.write_attributes([(lnaH,False), (lnaV,False)])
             if also_tempctl:
-                spfc.b2LnaPidPowerState = True
+                spfc.write_attribute(pid,False)
 
 
-def setTiltCorrections(cam_ants, tiltcorr=True):
+def set_TiltCorrections(cam_ants, tiltcorr=True):
     """ Disable SPEM & Temperature corrections, and en/disable Tilt corrections on the specified dishes.
         This command is currently not exposed in enough detail by the CAM proxy, so use the tango interface directly.
         
