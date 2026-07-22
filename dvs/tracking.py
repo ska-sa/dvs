@@ -309,7 +309,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         wind_dynamic = np.percentile(raw_wind_speed, 95) - wind_1000sec # SKA Dish definition, 3*std - mean
         fi_angle = np.median(fi_angles[(ds.timestamps[0]<=fi_timestamps) & (fi_timestamps<=ds.timestamps[-1])])
         _ts_ = (ds.timestamps[0]<=tilt_timestamps) & (tilt_timestamps<=ds.timestamps[-1])
-        tiltx_, tilty_, tiltcorr_az_, tiltcorr_el_ = tiltx[_ts_], tilty[_ts_], tiltcorr_az[_ts_], tiltcorr_el[_ts_]
+        tiltx_, tilty_, tiltcorr_az_, tiltcorr_el_ = np.median(tiltx[_ts_]), np.median(tilty[_ts_]), np.median(tiltcorr_az[_ts_]), np.median(tiltcorr_el[_ts_])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
