@@ -25,40 +25,46 @@ import urllib.request
 
 
 def _ska_tango_(ant, sub, cmd_args, attr_value):
-    """ Either perform a command, or set an attribute value, on the SKA-MID tango device.
+    """ Either perform a command, or set an attribute value, on the SKA-MID Tango device.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param sub: either 'dsh', 'dsm' or 'spfc'
         @param cmd_args: name of command, or (name, args...) for the command to execute, or None.
         @param attr_value: (name, value) for the attribute, or None
+        @return: text representation of the output generated from the Tango
     """
     import subprocess
+    results = None
     addr = "\"%s\"" % eval("ant.sensor.%s_tango_address.get_value()"%sub)
-    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], text=True, shell=False)
     if (cmd_args is not None):
         cmd_args = np.atleast_1d(cmd_args)
         cmd, args = cmd_args[0], cmd_args[1:]
         cmd_args = cmd + ("()" if (len(args) == 0) else "(%s)"%",".join([str(_) for _ in args]))
         if (cmd_args.lower() == "restartserver()"):
             addr = "tango.DeviceProxy(%s).adm_name()"%addr
-        print(tango_dp_instr(addr, "dp."+cmd_args))
+        results = tango_dp_instr(addr, "dp."+cmd_args)
     if (attr_value is not None):
         attr_value = np.atleast_1d(attr_value)
         set_value = "" if (len(attr_value) == 1) else "=%s"%attr_value[1]
-        print(tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0])))
+        ret = tango_dp_instr(addr, "dp.%s%s; print(dp.%s)"%(attr_value[0],set_value,attr_value[0]))
+        results = ret if (results is None) else [results, ret]
+    return results
 def x_dsh(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID dish-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
         @param attr_value: (name, value) for the attribute (default None)
+        @return: text representation of the response
     """
-    _ska_tango_(ant, 'dsh', cmd_args, attr_value)
+    return _ska_tango_(ant, 'dsh', cmd_args, attr_value)
 def x_dsm(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param cmd_args: name of command, or (name, args...) for the command to execute (default None).
         @param attr_value: (name, value) for the attribute (default None)
+        @return: text representation of the response
     """
-    _ska_tango_(ant, 'dsm', cmd_args, attr_value)
+    return _ska_tango_(ant, 'dsm', cmd_args, attr_value)
 
 
 def reset_ACU(cam_ant):
@@ -68,6 +74,12 @@ def reset_ACU(cam_ant):
     if (cam_ant.name[0] == 's'):
         x_dsm(cam_ant, "InterlockAck")
         x_dsh(cam_ant, attr_value=("ignoreSpfrx",True))
+        # Disable unwanted ACU-level pointing corrections
+        x_dsm(cam_ant, attr_value=("pointing_status_staticcorractive",False))
+        x_dsm(cam_ant, attr_value=("pointing_status_ambtempcorractive",False))
+        if (x_dsm(cam_ant, attr_value="pointing_status_staticcorractive") == 'True') or (x_dsm(cam_ant, attr_value="pointing_status_ambtempcorractive") == 'True'):
+            print("WARNING: ACU Static Pointing Model for current band is active & failed to de-activate!")
+        
         if (cam_ant.sensors.mode.get_value() == 'STOW'):
             x_dsm(cam_ant, "UnStow")
     
