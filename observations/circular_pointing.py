@@ -79,10 +79,10 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     return compositex,compositey,compositeslew #these coordinates are such that the upper part of pattern is sampled first; reverse order to sample bottom part first
 
 
-def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_factor=1.0,clip_safety_margin=1.0,min_elevation=15.,max_elevation=90.):
+def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_factor=1.0,clip_safety_margin=1.0,min_elevation=15.,max_elevation=90.,min_az=-180.,max_az=270.):
     """
         high_elevation_slowdown_factor: normal speed up to 60degrees elevation slowed down linearly by said factor at 90 degrees elevation
-        note due to the azimuth branch cut moved to -135 degrees, it gives 45 degrees (center to extreme) azimuth range before hitting limits either side
+        note azimuth is unwrapped to allow the max possible range on either side (center to extreme) before hitting min,max az limit
         for a given 10 degree (5 degree center to extreme) scan, this limits maximum elevation of a target to np.arccos(5./45)*180./np.pi=83.62 degrees before experiencing unachievable azimuth values within a scan arm in the worst case scenario
         note scan arms are unwrapped based on current target azimuth position, so may choose new branch cut for next scan arm, possibly corrupting current cycle.
     """
@@ -93,7 +93,8 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
     attime = lasttime+np.arange(1,num_points+1)*timeperstep
     # arm scan
     targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-    targetaz_rad=((targetaz_rad+135*np.pi/180.)%(2.*np.pi)-135.*np.pi/180.)#valid steerable az is from -180 to 270 degrees so move branch cut to -135 or 225 degrees
+    AZ_CUT = np.mean([min_az+360,max_az])-360 # Centered between the azimuth max limits to minimize the likelihood of triggering an unwrap
+    targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
     scanaz,scanel=plane_to_sphere_holography(targetaz_rad,targetel_rad,az_arm ,el_arm)
     if high_elevation_slowdown_factor>1.0:
         meanscanarmel=np.mean(scanel)*180./np.pi
@@ -101,22 +102,23 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
             slowdown_factor=(meanscanarmel-60.)/(90.-60.)*(high_elevation_slowdown_factor-1.)+1.0#scales linearly from 1 at 60 deg el, to high_elevation_slowdown_factor at 90 deg el
             attime = lasttime+np.arange(1,num_points+1)*timeperstep*slowdown_factor
             targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-            targetaz_rad=((targetaz_rad+135*np.pi/180.)%(2.*np.pi)-135.*np.pi/180.)#valid steerable az is from -180 to 270 degrees so move branch cut to -135 or 225 degrees
+            targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
             scanaz,scanel=plane_to_sphere_holography(targetaz_rad,targetel_rad,az_arm ,el_arm)
     #clipping prevents antenna from hitting hard limit and getting stuck until technician reset it, 
     #but not ideal to reach this because then actual azel could be equal to requested azel even though not right and may falsely cause one to believe everything is ok
     azdata=np.unwrap(scanaz)*180.0/np.pi
     eldata=scanel*180.0/np.pi
     scan_data[:,0] = attime
-    scan_data[:,1] = np.clip(np.nan_to_num(azdata),-180.0+clip_safety_margin,270.0-clip_safety_margin)
+    scan_data[:,1] = np.clip(np.nan_to_num(azdata),min_az+clip_safety_margin,max_az-clip_safety_margin)
     scan_data[:,2] = np.clip(np.nan_to_num(eldata),min_elevation+clip_safety_margin,max_elevation-clip_safety_margin)
     clipping_occurred=(np.sum(azdata==scan_data[:,1])+np.sum(eldata==scan_data[:,2])!=len(eldata)*2)
     return scan_data,clipping_occurred
 
-def gen_track(attime,target):
+def gen_track(attime,target,min_az=-180.,max_az=270.):
     track_data = np.zeros((len(attime),3))
     targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-    targetaz_rad=((targetaz_rad+135*np.pi/180.)%(2.*np.pi)-135.*np.pi/180.)#valid steerable az is from -180 to 270 degrees so move branch cut to -135 or 225 degrees
+    AZ_CUT = np.mean([min_az+360,max_az])-360 # Centered between the azimuth max limits to minimize the likelihood of triggering an unwrap
+    targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
     track_data[:,0] = attime
     track_data[:,1] = np.unwrap(targetaz_rad)*180.0/np.pi
     track_data[:,2] = targetel_rad*180.0/np.pi
@@ -412,7 +414,8 @@ if __name__=="__main__":
                         for iant,scan_ant in enumerate(scan_ants):
                             session.ants = scan_ants_array[iant]
                             target.antenna = scan_observers[iant]
-                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
+                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]] 
+                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az)
                             if not kat.dry_run:
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
@@ -422,7 +425,8 @@ if __name__=="__main__":
                                 continue
                             session.ants = track_ants_array[iant]
                             target.antenna = track_observers[iant]
-                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon)
+                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]] 
+                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az)
                             if not kat.dry_run:
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
