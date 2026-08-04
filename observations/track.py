@@ -37,6 +37,8 @@ parser.add_option('--sunmoon-separation', type="float", default=10,
                   help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
 parser.add_option('--max-elevation', type="float", default=90,
                   help="Maximum elevation angle for targets, in degrees (default=%default)")
+parser.add_option('--strategy', default='nearest',
+                  help='Strategy for arranging the sequence of target visits across the sky (default=%default)')
 
 # Set default value for any option (both standard and experiment-specific options)
 parser.set_defaults(description='Target track', nd_params='off')
@@ -74,7 +76,7 @@ with verify_and_connect(opts) as kat:
             if False: # Iterate through source list, picking the next one that is up
                 sequence_of_targets = targets.iterfilter(el_limit_deg=opts.horizon)
             else: # OR in a nearest-neighbour sequence
-                sequence_of_targets = plan_targets(targets, time.time(), t_observe=opts.track_duration,
+                sequence_of_targets = plan_targets(targets, time.time(), t_observe=opts.track_duration, strategy=opts.strategy,
                                                    antenna=kat.ants[0], el_limit_deg=opts.horizon)[0]
             for n, target in enumerate(sequence_of_targets):
                 # Enforce upper elevation limit
