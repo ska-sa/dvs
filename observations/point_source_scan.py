@@ -28,6 +28,8 @@ parser.add_option('--sunmoon-separation', type="float", default=10,
                   help="Minimum separation angle to enforce between targets and the sun & moon, in degrees (default=%default)")
 parser.add_option('--max-elevation', type="float", default=90,
                   help="Maximum elevation angle for targets, in degrees (default=%default)")
+parser.add_option('--strategy', default='nearest',
+                  help='Strategy for arranging the sequence of target visits across the sky  (default=%default)')
 parser.add_option('-m', '--min-time', type="float", default=-1,
                   help="Minimum duration to run experiment, in seconds (default=one loop through sources)")
 parser.add_option('--switch-indexer-every', type="int", default=-1,
@@ -120,7 +122,7 @@ with verify_and_connect(opts) as kat:
                 # Iterate through source list, picking the next one from the nearest neighbour plan
                 raster_duration = raster_params[0]["num_scans"] * (raster_params[0]["scan_duration"]+5) # Incl. buffer between scans. TODO: Ignoring ND
                 raster_duration *= max([len(_["scan_in_az"]) for _ in raster_params])
-                for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration,
+                for target in plan_targets(pointing_sources, time.time(), t_observe=raster_duration, strategy=opts.strategy,
                                            antenna=kat.ants[0], el_limit_deg=opts.horizon+5.0)[0]:
                     # Enforce upper elevation limit
                     az, el = np.degrees(target.azel(timestamp=time.time()))
