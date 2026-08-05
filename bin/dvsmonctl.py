@@ -73,6 +73,7 @@ def reset_ACU(cam_ant):
     """
     if (cam_ant.name[0] == 's'):
         x_dsm(cam_ant, "InterlockAck")
+        x_dsm(cam_ant, "ResetAxesCommand")
         x_dsh(cam_ant, attr_value=("ignoreSpfrx",True))
         # The following are read-only
         if (x_dsm(cam_ant, attr_value="pointing_status_staticcorractive") == 'True') or (x_dsm(cam_ant, attr_value="pointing_status_ambtempcorractive") == 'True'):
