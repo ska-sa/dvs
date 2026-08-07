@@ -123,27 +123,50 @@ def set_LNAs(cam_ant, band=2, enable=True, also_tempctl=False):
         @param band: (default 2)
         @param also_tempctl: if True then also turn the temperature control system ON/OFF (default False) """
     import tango
-    op, lnaH, lnaV, pid = 'b%dOperatingState'%band, 'b%dLnaHPowerState'%band, 'b%dLnaVPowerState'%band, 'b%dLnaPidPowerState'%band
+    lnaH, lnaV, pid = 'b%dLnaHPowerState'%band, 'b%dLnaVPowerState'%band, 'b%dLnaPidPowerState'%band
     for ant in np.atleast_1d(cam_ant):
-        spfc_addr = ant.sensors.spfc_tango_address.get_value()
-        spfc = tango.DeviceProxy(spfc_addr)
+        if (cam_ant.name[0] == 's'):
+            if ('OPERATE' not in x_dsh(cam_ant, attr_value='b%dCapabilityState'%band)): # "OPERATE_FULL"
+                print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually, to be safe!"%band)
+                continue
+            
+            current = [eval(x_dsh(cam_ant, attr_value=r)) for r in [lnaH, lnaV]]
+            print("INFO: Band%d amplifiers are currently"%band, current)
+            if enable and not np.all(current):
+                print(" --> turning them ON.")
+                x_dsh(cam_ant, attr_value=(lnaH,True)); x_dsh(cam_ant, attr_value=(lnaV,True))
+                if also_tempctl:
+                    ret = x_dsh(cam_ant, attr_value=(pid,True))
+                    if (ret != 'True'): # 08/2026 attribute doesn't seem exposed by SKA-MID's 'dsh'
+                        print("WARNING: Unable to turn on temperature control for Band%d!"%band)
+            elif (not enable) and np.any(current):
+                print(" --> turning them OFF.")
+                x_dsh(cam_ant, attr_value=(lnaH,False)); x_dsh(cam_ant, attr_value=(lnaV,False))
+                if also_tempctl:
+                    ret = x_dsh(cam_ant, attr_value=(pid,False))
+                    if (ret != 'False'): # 08/2026 attribute doesn't seem exposed by SKA-MID's 'dsh'
+                        print("WARNING: Unable to turn off temperature control for Band%d!"%band)
         
-        if (spfc.read_attribute(op).value != 3): # "OPERATE"
-            print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually, to be safe!"%band)
-            continue
-        
-        current = [r.value for r in spfc.read_attributes([lnaH, lnaV])]
-        print("INFO: Band%d amplifiers are currently"%band, current)
-        if enable and not np.all(current):
-            print(" --> turning them ON.")
-            spfc.write_attributes([(lnaH,True), (lnaV,True)])
-            if also_tempctl:
-                spfc.write_attribute(pid,True)
-        elif (not enable) and np.any(current):
-            print(" --> turning them OFF.")
-            spfc.write_attributes([(lnaH,False), (lnaV,False)])
-            if also_tempctl:
-                spfc.write_attribute(pid,False)
+        else:
+            spfc_addr = ant.sensors.spfc_tango_address.get_value()
+            spfc = tango.DeviceProxy(spfc_addr)
+            
+            if (spfc.read_attribute('b%dOperatingState'%band).value != 3): # "OPERATE"
+                print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually, to be safe!"%band)
+                continue
+            
+            current = [r.value for r in spfc.read_attributes([lnaH, lnaV])]
+            print("INFO: Band%d amplifiers are currently"%band, current)
+            if enable and not np.all(current):
+                print(" --> turning them ON.")
+                spfc.write_attributes([(lnaH,True), (lnaV,True)])
+                if also_tempctl:
+                    spfc.write_attribute(pid,True)
+            elif (not enable) and np.any(current):
+                print(" --> turning them OFF.")
+                spfc.write_attributes([(lnaH,False), (lnaV,False)])
+                if also_tempctl:
+                    spfc.write_attribute(pid,False)
 
 
 def set_TiltCorrections(cam_ants, tiltcorr=True):
