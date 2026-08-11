@@ -14,6 +14,8 @@ import os
 
 dB2lin = lambda dB: 10**(dB/10)
 lin2dB = lambda lin: 10*np.log10(lin)
+kB = 1.38e-23 # Botzmann's constant
+T0 = 290 # Thermodynamic reference temperature
 
 
 def load_rs_traces(filename):
@@ -36,7 +38,7 @@ def load_rs_traces(filename):
     xlabels, ylabels = labels[0::4], labels[1::4]
     
     # Load the data - columns are x, y, empty_column, empty_column[, ...]
-    data = np.loadtxt(filename, encoding="UTF-8-SIG", delimiter=",", skiprows=len(header)+2,
+    data = np.loadtxt(filename, encoding="UTF-8-SIG", delimiter=",", skiprows=len(header)+1,
                       usecols=[c for c,l in enumerate(labels) if len(l.strip())>0])
     xdata, ydata = data[:,0::2], data[:,1::2]
     
@@ -87,11 +89,13 @@ class WBGDataset(object):
         self.off_maxhold = None
         self.on_maxhold = None
     
-    def de_embedded(self, instr_freq, instr_mag0, instr_mag1):
+    def de_embedded(self, instr_freq, instr_mag0, instr_mag1, input_ref_noise=False):
         """ Remove the instrument's contribution from the data.
             
             @param instr_freq: frequencies to match or overlap with .freq (same units & overlapping
-            @param instr_mag0,1: the instrument's contribution (same units as .on & .off)
+            @param instr_mag0,1: the instrument's contribution [dB] (same units as .on & .off)
+            @param input_ref_noise: True if the instrumental contribution is "equivalent noise referred to the input",
+                                    or else it is treated as passive loss at room temperature (default False) 
             @return: WBGDataset, with 'on' & 'off' values with the instrumental contribution removed
         """
         # Interpolate as necessary to match frequencies
@@ -100,7 +104,12 @@ class WBGDataset(object):
         
         if ("dB" in self.header["ylabel"]):
             instr_mag = dB2lin(instr_mag)
-            de_embed = lambda dB: lin2dB( dB2lin(dB) - instr_mag )
+            if input_ref_noise: # Equivalent power at input - assume same units!
+                de_embed = lambda dB: lin2dB( dB2lin(dB) - instr_mag )
+            else: # Passive component loss at thermal equilibrium
+                instr_noise = kB*T0*(1 - instr_mag)*self.RBW
+                if ("dBm" in self.header["ylabel"]): instr_noise *= 1e3
+                de_embed = lambda dB: lin2dB( (dB2lin(dB) - instr_noise)/instr_mag )
         else:
             de_embed = lambda lin: lin - instr_mag
         d_on = de_embed(np.asarray(self.on))
@@ -145,9 +154,11 @@ class WBGDataset(object):
         dataset.off_maxhold = [pol0_off[:,1], pol1_off[:,1]]
         
         try:
+            # This dataset format is:
+            #   pol_Instrument is [[Magnitude(dB), ...] by freq]
             freq_i, pol0_i, header_i = load_rs_traces(root_folder+f"/{pols[0]}pol_Instrument.csv")
             freq_i, pol1_i, header_i = load_rs_traces(root_folder+f"/{pols[1]}pol_Instrument.csv")
-            dataset = dataset.de_embedded(freq_i, pol0_i, pol1_i)
+            dataset = dataset.de_embedded(freq_i[:,0], pol0_i[:,0], pol1_i[:,0], input_ref_noise='dBm' in header_i['ylabels'][0])
         except IOError as e:
             print("WARNING: Unable to de-embed the spectrum analyser & cable response!", e)
         
