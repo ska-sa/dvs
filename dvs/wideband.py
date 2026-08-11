@@ -137,7 +137,7 @@ class WBGDataset(object):
         return (self.freq, Tsys_p0, Tsys_p1)
     
     @classmethod
-    def load(cls, root_folder, pols="HV"):
+    def load(cls, root_folder, pols="HV", model_folder=None):
         """ Loads a dataset that was generated using the standard "wizard"
             
             @return: WBGDataset """
@@ -154,10 +154,11 @@ class WBGDataset(object):
         dataset.off_maxhold = [pol0_off[:,1], pol1_off[:,1]]
         
         try:
+            model_folder = model_folder if (model_folder is not None) else root_folder
             # This dataset format is:
             #   pol_Instrument is [[Magnitude(dB), ...] by freq]
-            freq_i, pol0_i, header_i = load_rs_traces(root_folder+f"/{pols[0]}pol_Instrument.csv")
-            freq_i, pol1_i, header_i = load_rs_traces(root_folder+f"/{pols[1]}pol_Instrument.csv")
+            freq_i, pol0_i, header_i = load_rs_traces(model_folder+f"/{pols[0]}pol_Instrument.csv")
+            freq_i, pol1_i, header_i = load_rs_traces(model_folder+f"/{pols[1]}pol_Instrument.csv")
             dataset = dataset.de_embedded(freq_i[:,0], pol0_i[:,0], pol1_i[:,0], input_ref_noise='dBm' in header_i['ylabels'][0])
         except IOError as e:
             print("WARNING: Unable to de-embed the spectrum analyser & cable response!", e)
