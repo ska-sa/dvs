@@ -218,7 +218,7 @@ def band_defs(band_ID):
     return band_freq, nd_lim, GTsys_ref, (mask_f,mask_a)
 
 
-def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
+def process_wbg_set(dataset, band_ID, model_folder=None, flim=None, figsize=None):
     """ Process a set of H & V pol measurements with ND OFF and ON.
         Generates a standard figure to summarise the results.
         
@@ -228,7 +228,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None):
     """
     freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID)
     nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
-    dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset)
+    dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset, model_folder=model_folder)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
     fig = plt.figure(figsize=figsize)
