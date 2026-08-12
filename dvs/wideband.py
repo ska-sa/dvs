@@ -248,7 +248,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None, **load_kwarg):
     for off,on,pol in zip(dataset.off,dataset.on,dataset.pols):
         axs[0].plot(dataset.freq, off, label=pol+"_OFF")
         axs[0].plot(dataset.freq, on, label=pol+"_ON")
-        print("%s pol peak-to-peak %g dB" % (pol, np.max(off[subset_mask])-np.min(off[subset_mask])))
+        print("%s pol peak-to-peak %g dB" % (pol, np.nanmax(off[subset_mask])-np.nanmin(off[subset_mask])))
         # Ratio of T_ND/Tsys
         axs[1].plot(dataset.freq, dB2lin(on)/dB2lin(off) - 1, label=pol)
     axs[0].plot(dataset.freq, np.full_like(dataset.freq,lin2dB(kB*GTsys_ref*dataset.RBW)+30), 'm--', label="Tsys_ref")
