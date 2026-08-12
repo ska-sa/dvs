@@ -16,10 +16,11 @@ cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(c
 
 load_rfi_static_mask = ksl.load_frequency_mask
 
-# HACK 02/2025 Usually kat-flap is contacted first for sensor data; it is offline (12/2024 - ...), so to prevent timeouts:
+# HACK 08/2026 Try to avoid unintended acess of "mkat" portals for DVS work; also kat-flap.mkat. has been offline (12/2024 - ...), so to prevent timeouts:
 for k in ksl.SENSOR_PORTALS.keys():
-    if ("kat-flap" in k):
+    if (".mkat." in k):
         ksl.SENSOR_PORTALS[k] = np.inf
+        print("CAUTION: disabled access to %s - use katselib._reset_SENSOR_PORTALS_() if necessary!"%k)
 
 
 def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache_root=None, **kwargs):
