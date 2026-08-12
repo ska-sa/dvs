@@ -14,7 +14,7 @@ import os
 
 dB2lin = lambda dB: 10**(dB/10)
 lin2dB = lambda lin: 10*np.log10(lin)
-kB = 1.38e-23 # Botzmann's constant
+kB = 1.38e-23 # Boltzmann's constant
 T0 = 290 # Thermodynamic reference temperature
 
 
@@ -137,9 +137,11 @@ class WBGDataset(object):
         return (self.freq, Tsys_p0, Tsys_p1)
     
     @classmethod
-    def load(cls, root_folder, pols="HV", model_folder=None):
+    def load(cls, root_folder, pols="HV", model_folder=None, resample_to=None):
         """ Loads a dataset that was generated using the standard "wizard"
             
+            @param model_folder: folder where "_Instrument.csv" files should be loaded from, if different from root_folder.
+            @Param resample_to: frequency resolution to resample to (not rescaling RBW!) [Hz] (default None)
             @return: WBGDataset """
         # This dataset is generated using a "wizard", so the file format is exactly know
         #   pol* is [[avg(RMS), max_hold(RMS)] by freq]
@@ -148,6 +150,13 @@ class WBGDataset(object):
         freq, pol1_off, header = load_rs_traces(root_folder+f"/{pols[1]}polND_OFF.csv")
         freq, pol1_on, header = load_rs_traces(root_folder+f"/{pols[1]}polND_ON.csv")
         header.update({"xlabel":header['xlabels'][0], "ylabel":header['ylabels'][0]})
+        if (resample_to is not None):
+            new_freq = np.arange(np.min(freq), np.max(freq)+resample_to/2, resample_to)
+            pol0_off = np.transpose([np.interp(new_freq, freq[:,0], _) for _ in np.transpose(pol0_off)])
+            pol0_on = np.transpose([np.interp(new_freq, freq[:,0], _) for _ in np.transpose(pol0_on)])
+            pol1_off = np.transpose([np.interp(new_freq, freq[:,0], _) for _ in np.transpose(pol1_off)])
+            pol1_on = np.transpose([np.interp(new_freq, freq[:,0], _) for _ in np.transpose(pol1_on)])
+            freq = np.transpose([new_freq]*2)
         dataset = WBGDataset(freq[:,0], pol0_off[:,0], pol0_on[:,0], pol1_off[:,0], pol1_on[:,0], pols=pols, header=header)
         # Some extras for this kind of dataset
         dataset.on_maxhold = [pol0_on[:,1], pol1_on[:,1]]
@@ -218,17 +227,18 @@ def band_defs(band_ID):
     return band_freq, nd_lim, GTsys_ref, (mask_f,mask_a)
 
 
-def process_wbg_set(dataset, band_ID, model_folder=None, flim=None, figsize=None):
+def process_wbg_set(dataset, band_ID, flim=None, figsize=None, **load_kwarg):
     """ Process a set of H & V pol measurements with ND OFF and ON.
         Generates a standard figure to summarise the results.
         
         @param dataset: either a WBGDataset or a descriptor that can be padded to WBGDataset.load()
         @param flim: frequency limits for display only, as (f_start,f_stop) in same units as dataset.
+        @param load_kwarg: passed to WBGDataset.load()
         @return: WBGDataset
     """
     freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID)
     nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
-    dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset, model_folder=model_folder)
+    dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset, **load_kwarg)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
     fig = plt.figure(figsize=figsize)
@@ -238,9 +248,9 @@ def process_wbg_set(dataset, band_ID, model_folder=None, flim=None, figsize=None
     for off,on,pol in zip(dataset.off,dataset.on,dataset.pols):
         axs[0].plot(dataset.freq, off, label=pol+"_OFF")
         axs[0].plot(dataset.freq, on, label=pol+"_ON")
+        print("%s pol peak-to-peak %g dB" % (pol, np.max(off[subset_mask])-np.min(off[subset_mask])))
         # Ratio of T_ND/Tsys
         axs[1].plot(dataset.freq, dB2lin(on)/dB2lin(off) - 1, label=pol)
-    kB = 1.38e-23 # Boltzmann's constant
     axs[0].plot(dataset.freq, np.full_like(dataset.freq,lin2dB(kB*GTsys_ref*dataset.RBW)+30), 'm--', label="Tsys_ref")
     axs[0].plot(band_mask[0], band_mask[1], 'k-')
     axs[0].set_ylabel(dataset.header["ylabel"]); axs[0].legend()
