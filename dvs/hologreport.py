@@ -1749,8 +1749,6 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
         @param hod_filter: a function like `lambda hod: hod<4` to select results to keep (default None i.e. no filtering).
                            NB: the time base is defined when the results are generated - generate_results() or standard_report().
         @return: {tag:[HologResults]} """
-    filtered = {}
-    
     # Only include results for which accept_MHz returns True
     accept_MHz = lambda MHz: (fincl_MHz == "*" ) or (np.min(fincl_MHz) <= MHz and MHz <= np.max(fincl_MHz))
     accept_el = lambda el: (elincl_deg == "*" ) or (np.min(elincl_deg) <= el and el <= np.max(elincl_deg))
@@ -1761,10 +1759,13 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
     omit_tagged = list(iter.chain(*[results.get(xt,[]) for xt in exclude_tags])) # HologResults that must be omitted wholesale
     omit_tagged = [str(x) for x in omit_tagged] # Workaround error raised below by 'r not in omit_tagged' - strange python identity issue?
     tags = [t for t in results.keys() if (t not in exclude_tags)] # Must filter through these sets
+    
+    filtered = [] 
     for tag in tags:
-        filtered[tag] = []
         rr = [r for r in results[tag] if (str(r) not in omit_tagged)] # Only continue with HologResults that have not been flagged
         for r in rr: # Select individual measurements in each HologResults based on frequency
+            if (r.fid in [_.fid for _ in filtered]): # Already confirmed to be accepted
+                continue
             f_MHz=[];feedoffsetsH=[];feedoffsetsV=[];rpeffH=[];rpeffV=[];rmsH=[];rmsV=[];errbeamH=[];errbeamV=[]
             # Filter on environment - potentially cycles > 1
             accept_enviro = [accept_el(el) and enviro_filter(e) and hod_filter(h) for el,e,h in zip(np.atleast_1d(r.el_deg),np.atleast_1d(r.info["enviro"]),np.atleast_1d(r.info["time_hod"]))]
@@ -1794,12 +1795,9 @@ def filter_results(results, exclude_tags=None, fincl_MHz="*", elincl_deg="*", en
                                   rpeffH=masked(rpeffH),rpeffV=masked(rpeffV),rmsH=masked(rmsH),rmsV=masked(rmsV),
                                   errbeamH=masked(errbeamH),errbeamV=masked(errbeamV),
                                   info={k:v for k,v in r.info.items()}, tags=r.tags, cycles=r.cycles)
-                filtered[tag].append(hr)
-                
-        if (len(filtered[tag]) == 0):
-            del filtered[tag]
+                filtered.append(hr)
     
-    return filtered
+    return collate_results(filtered)
 
 
 def recalc_eff(apmapsX, apmapsY, freqs_MHz, D=None, save_to=None, band=""):
