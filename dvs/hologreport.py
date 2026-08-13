@@ -457,8 +457,8 @@ class ResultSet(object):
         shutil.os.mkdir(root)
         with open("%s%s_record.csv"%(root,self.fid), "wt") as ds:
             ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
-            ds.write("; ".join([beams_f0[0].target.description, str(self.f_MHz), str(self.beacon_pol), str(self.clipextent), str(self.cycles),
-                                str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(self.ignoreantennas), str(self.tags)]))
+            ds.write("; ".join([beams_f0[0].target.description, str(list(self.f_MHz)), str(list(self.beacon_pol)), str(self.clipextent), str(self.cycles),
+                                str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(list(self.ignoreantennas)), str(self.tags)]))
         
         for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
             print("INFO: Saving data to "+root)
