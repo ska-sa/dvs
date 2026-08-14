@@ -117,17 +117,20 @@ def mask_where(array_nd, domain1d, domainmask, axis=-1):
         @return: masked array representation of array2d
     """
     if (domainmask is not None) and (len(domainmask) > 0):
-        array_nd = np.atleast_1d(array_nd)
-        if (axis < 0):
-            axis = [i for i,n in enumerate(array_nd.shape) if (len(domain1d)==n)]
-            assert (len(axis) > 0), "None of the axes match the mask - you must explicitly pick one."
-            assert (len(axis) == 1), "Multiple axes can match the mask - you must explicitly pick one."
-            axis = axis[0]
-        mask1d = np.full(len(domain1d), False)
-        for minmax in domainmask:
-            mask1d |= _idx(domain1d, minmax)
-        mask = np.full(array_nd.shape, False)
-        mask = np.apply_along_axis(lambda a:mask1d, axis, mask)
+        if isinstance(domainmask, str):
+            mask = util.load_rfi_static_mask(domainmask, domain1d)
+        else:
+            array_nd = np.atleast_1d(array_nd)
+            if (axis < 0):
+                axis = [i for i,n in enumerate(array_nd.shape) if (len(domain1d)==n)]
+                assert (len(axis) > 0), "None of the axes match the mask - you must explicitly pick one."
+                assert (len(axis) == 1), "Multiple axes can match the mask - you must explicitly pick one."
+                axis = axis[0]
+            mask1d = np.full(len(domain1d), False)
+            for minmax in domainmask:
+                mask1d |= _idx(domain1d, minmax)
+            mask = np.full(array_nd.shape, False)
+            mask = np.apply_along_axis(lambda a:mask1d, axis, mask)
         return np.ma.masked_array(array_nd, mask|np.isnan(array_nd), fill_value=np.nan)
     else:
         return np.ma.masked_array(array_nd, np.isnan(array_nd), fill_value=np.nan)
@@ -885,10 +888,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     
     # Combine fitfreqrange and freqmask
     fitchans = _idx(ds.channel_freqs, fitfreqrange)
-    if isinstance(freqmask, str):
-        fitchans &= ~util.load_rfi_static_mask(freqmask, ds.channel_freqs)
-    else:
-        fitchans &= ~mask_where(fitchans, ds.channel_freqs, freqmask).mask
+    fitchans &= ~mask_where(fitchans, ds.channel_freqs, freqmask).mask
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
