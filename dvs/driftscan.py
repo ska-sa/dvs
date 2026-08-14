@@ -866,7 +866,8 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param nulls: pairs of indices of nulls to generate results for, zero-based or None and as (prior to, post transit) (default [(0,0)]).
         @param fitfreqrange: frequency range (start,stop)[Hz] to be used to fit the beam model, or None for all (default None).
-        @param freqmask: list of 2-vectors for frequency bands to mask out for fit and in results (default covers 0-200MHz, MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)).
+        @param freqmask: list of 2-vectors for frequency bands to mask out for fit and in results (default covers 0-200MHz, MUOS(370MHz), GSM(930MHz) & SSR (1090MHz)),
+                         or filename to a text file with such frequency ranges.
         @param rfifilt: median filter lengths for final de-noising over the time & frequency axes (default [1,7]).
         @param saveroot: root folder on filesystem to save files to (default None).
         @param debug_nulls: 1 to plot null traces, 2 to plot advanced statistics (default 1).
@@ -884,7 +885,10 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     
     # Combine fitfreqrange and freqmask
     fitchans = _idx(ds.channel_freqs, fitfreqrange)
-    fitchans &= ~mask_where(fitchans, ds.channel_freqs, freqmask).mask
+    if isinstance(freqmask, str):
+        fitchans &= ~util.load_rfi_static_mask(freqmask, ds.channel_freqs)
+    else:
+        fitchans &= ~mask_where(fitchans, ds.channel_freqs, freqmask).mask
     
     pp = PDFReport("%s_%s_driftscan.pdf"%(filename.split(".")[0], ant.name), save=makepdf)
     try:
