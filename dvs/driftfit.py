@@ -57,8 +57,9 @@ def _fit_bm_(vis, t_axis, force=False, sigmu0=None, debug=True):
     G = lambda ampl,sigma,mu: abs(ampl)*np.exp(-1/2.*(t_axis-mu)**2/sigma**2) # 1/sigma/sqrt(2pi)*... is absorbed in amplitude term
     B = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[oH+sH*t_axis + G(aH,sigmaH,muH),
                                                                oV+sV*t_axis + G(aV,sigmaV,muV)]
-    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[0.4 + G(1,(sigmaH+sigmaV),(muH+muV)/2), # Weights to emphasize the beam peak over the baseline
-                                                               0.4 + G(1,(sigmaH+sigmaV),(muH+muV)/2)]
+    z = lambda mu,sigma: (np.abs(t_axis-mu) < 4.5*sigma).astype(int) # ~cos^2 pattern 3rd null at ~3.9*sigma
+    W = lambda oH,oV,sH,sV, aH,aV,sigmaH,sigmaV,muH,muV: np.c_[z((muH+muV)/2, (sigmaH+sigmaV)/2), # Weights to ensure H & V peak at ~same time
+                                                               z((muH+muV)/2, (sigmaH+sigmaV)/2)]
     
     N_t, N_f, N_p = np.shape(vis)
     assert (N_p==2), "_fit_bm_() is hard-coded for data shaped like (*,*,2), not %s"%np.shape(vis)
@@ -217,11 +218,22 @@ def fit_bm(vis, freqchans, timemask, n_chunks=0, k_size=None, debug=0, debug_lab
     if (debug >= 2):
         axs[0].plot(t_axis, np.nanmean(bl, axis=1))
     
-    # 2. Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
+    # 1.b Fit beam+delta baseline on the integrated (band average) & force a non-NaN solution.
     vis0_nb = np.ma.mean(vis_nb, axis=1) # Integrated power in H & V, over time
     dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
     
-    if (n_chunks <= 0): # Asked for the band average fits are copied across frequency
+    # (1 refined) Update _tmask_ and refine the baseline
+    _tmask_[:] = True; _dt_ = np.abs(t_axis-np.nanmean(mu))
+    # ~cos^2 pattern nulls at 2.136,2.987,...; *1.4 to extrapolate from average to longest wavelength for ~1.8 BW ratio
+    _tmask_[(_dt_ < 2.1*1.4*np.nanmax(sigma)) | (_dt_ > 3.0*1.4*np.nanmax(sigma))] = False
+    bl = _fit_bl_(vis.filled(), (_tmask_,fmask), polyorders=[1,2])
+    vis_nb = vis - bl # The masked data with the fitted baseline subtracted
+    # (1.b refined)
+    vis0_nb = np.ma.mean(vis_nb, axis=1) # Integrated power in H & V, over time
+    dbl, bm, sigma, mu = _fit_bm_(np.moveaxis([vis0_nb],0,1), t_axis, force=True, debug=False) # passing in (time,freq,prod)
+
+    # 2. Refine the provisional fits
+    if (n_chunks <= 0): # Asked for the band average, fits are copied across frequency
         dbl, bm, sigma, mu = np.repeat(dbl,N_f,axis=1), np.repeat(bm,N_f,axis=1), np.repeat(sigma,N_f,axis=0), np.repeat(mu,N_f,axis=0)
         if (debug >= 2):
             axs[1].set_title("Baselines subtracted")
@@ -229,7 +241,7 @@ def fit_bm(vis, freqchans, timemask, n_chunks=0, k_size=None, debug=0, debug_lab
             axs[1].plot(t_axis, np.nanmean(bm,axis=1), label="Fitted models")
             axs[1].set_xlabel("Time [samples]"); axs[1].set_ylabel("Power [linear]"); axs[1].legend(); axs[1].grid(True)
 
-    else: # 2. Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
+    else: # Fit beam+delta baseline on a per-frequency bin basis, using band average as starting estimate
         ch_res = int(len(f_axis[fmask])/n_chunks)
         sigmu0 = [np.nanmean(sigma), np.nanmean(mu)]
         # Reduce resolution before fitting (to speed up)
