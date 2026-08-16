@@ -863,7 +863,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
 def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, swapped_pol=False, strict=False,
             HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
             fitfreqrange=None, freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)], rfifilt=[1,7],
-            saveroot=None, makepdf=False, debug=False, debug_nulls=1):
+            saveroot=None, makesummary=True, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
         @param f: filename string, or an already opened katdal.Dataset or DriftDataset
@@ -949,9 +949,10 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         pp.report_fig([F-1, F], orientation="landscape") # get_SEFD_ND()-> (SEFD, ND flux)
         
         result = [freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg]
-        summarize([result], pol=ds._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
-        # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
-        pp.report_fig([F+1+i for i in [1,2,4,5,6]], orientation="landscape")
+        if makesummary:
+            summarize([result], pol=ds._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
+            # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
+            pp.report_fig([F+1+i for i in [1,2,4,5,6]], orientation="landscape")
         
         duration = (ds.timestamps[-1]-ds.timestamps[0])/60.
         pp.report_text(r"""
