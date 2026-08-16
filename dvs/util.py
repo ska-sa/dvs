@@ -16,7 +16,7 @@ cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(c
 
 load_rfi_static_mask = ksl.load_frequency_mask
 
-# HACK 08/2026 Try to avoid unintended acess of "mkat" portals for DVS work; also kat-flap.mkat. has been offline (12/2024 - ...), so to prevent timeouts:
+# HACK 08/2026 Try to avoid unintended acess of "mkat" portals for DVS work
 for k in ksl.SENSOR_PORTALS.keys():
     if (".mkat." in k):
         ksl.SENSOR_PORTALS[k] = np.inf
