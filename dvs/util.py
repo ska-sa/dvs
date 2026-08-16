@@ -8,8 +8,6 @@ import logging; logging.disable(logging.DEBUG) # Otherwise katdal is unbearable
 import os, subprocess, shutil, pickle
 import numpy as np
 from analysis import katselib as ksl
-from analysis import katsemat as ksm
-from analysis import __res__
 
 
 cbid2url = lambda cbid: "http://archive-gw-1.kat.ac.za/%s/%s_sdp_l0.full.rdb"%(cbid,cbid) # Only works from inside the SARAO firewall
@@ -160,7 +158,7 @@ def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
     
     # Load requant gains from metadata. for timestamp[0] of each scan, assuming it never changes during a scan
     eq_gains = []
-    for scan in dataset.scans():
+    for _ in dataset.scans():
         if (len(dataset.timestamps) < 2): continue # Some buggy observations have such tracks -- applied in troubleshoot() too
         eq_gains.append(dict(zip(["%sh"%a.name for a in dataset.ants]+["%sv"%a.name for a in dataset.ants],
                                  [-1 for a in dataset.ants]+[-1 for a in dataset.ants])))
@@ -210,38 +208,6 @@ def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
     return fft_shift, eq_gains, atten
 
 
-def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
-    """ Remove RFI and smooth over frequency bins. The RFI mask is created by first applying the given static mask
-        to create smooth interpolated reference curves; the RFI mask is then determined as all values which deviate
-        by more than the specified threshold (fraction) from the reference curves.
-    
-        @param freq: list of frequency bins
-        @param x0,x1: 2-D arrays of values, to be transformed
-        @param rfi_mask: identifier for the static mask, passed to `load_rfi_static_mask()`. 
-        @param flag_thresh: the threshold to use to create the RFI mask that is applied, as a fraction of the smooth
-                 interpolated reference curves (default 0.2 i.e. values exceeding +/-20% of the reference curves are removed).
-        @param smoothing: window length over freq axis to apply to the data after flagging - only effective if > 1 (default 0)
-        @param axis: identifies which axis of x0 & x1 corresponds to the `freq` axis (default 0)
-        @return (filt_smooth_x0, filt_smooth_x1) """
-    if isinstance(rfi_mask, str):
-        rfi_mask = ksl.load_frequency_mask(rfi_mask, freq)
-    cleanx = []
-    for msd in [x0, x1]:
-        sms = []
-        # Iterate over the 'non-frequency' axis
-        if (len(np.shape(msd)) == 1): msd = [msd]
-        elif (axis == 0): msd = np.transpose(msd)
-        for m in msd:
-            _m = ksm.interp(freq, freq[~rfi_mask], m[~rfi_mask], 'linear')
-            sm = ksm.smooth(_m, N=smoothing, padlen=len(freq)//2, padtype='even')
-            flags = np.argwhere(np.abs(m/sm-1) > flag_thresh)
-            m[flags] = np.nan
-            sms.append(m if (smoothing <= 1) else ksm.smooth(m, N=smoothing))
-        if (axis == 0): sms = np.transpose(sms)
-        cleanx.append(sms)
-    return np.reshape(cleanx[0], np.shape(x0)), np.reshape(cleanx[1], np.shape(x1))
-
-
 def load_dsc_dataset(fn, delimiter=";", header_len=2):
     """ Load a datset that was recorded using OHB's datalogging recording facility.
     
@@ -272,77 +238,3 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     dFI_angle = np.atan2(delta_Yf, R_FI) * 180/np.pi
     dP4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # In-plane translation, no tilt
     return (dP4, dFI_angle)
-
-
-def add_datalog_entry(ant, dataset, description, center_freq, notes, env_conditions, test_procedures=[],
-                      replace_all=False):
-    """ Update the log messages against a dataset as used for a specific antenna.
-        
-        @param ant: the ID of the antenna that the log message is relevant for, e.g. "SKA119".
-        @param dataset: a specific CaptureBlockId
-        @param description..env_conditions: column entries as text or numbers.
-        @param test_procedures: list of names of test procedures where this dataset has been used.
-        @param replace_all: True to remove all existing log messages for this dataset & antenna before adding the new entry (default False). """
-    assert (isinstance(dataset, int) or isinstance(dataset, str)), "Dataset may not be unspecified!"
-    
-    gs = ksl.GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
-
-    if replace_all:
-        # Find the rows to clear
-        values = gs[f"{ant}!A2:Z"] # Skip the headings and expect no more than 26 columns
-        dataset = str(dataset)
-        rows = [2+i for i,r in enumerate(values) if (str(r[0]).startswith(dataset))]
-        # Clear just those rows
-        gs.clear([f"{ant}!A{r}:Z" for r in rows])
-    
-    entry = [dataset, description, center_freq, notes, env_conditions] + test_procedures
-    gs.append(f"{ant}!A2:Z", [entry])
-    
-
-def get_datalog_entries(ant, dataset="*"):
-    """ Retrieve all log messages against a dataset as used for a specific antenna.
-        
-        @param ant: the ID of the antenna that the log message is relevant for, e.g. "SKA119".
-        @param dataset: a specific CaptureBlockId or "*" for all
-        @return: (headings, values) of entries have been logged against the dataset """
-    gs = ksl.GSheet("1RKre2WGCRxG_DzcmKACbtXrC195Js4YRGcqq6IKPcfw", __res__.dvs_log_auth_token)
-    
-    values = gs[f"{ant}!A1:Z"] # Expect no more than 26 columns
-    headings, values = values[0], values[1:]
-    
-    if (dataset != "*"): # Select the rows to return
-        dataset = str(dataset)
-        selected = [r for r in values if (str(r[0]).startswith(dataset))]
-        values = selected
-    
-    return headings, values
-
-
-def ls_archive(query, min_duration=0, min_night_duration=0, vis_status=False,
-               fields=['CaptureBlockId','StartTime','CenterFrequency','InstructionSet'], field_len=60):
-    """ Query the archive and ensure an entry is added to the DVS data registry.
-    """ + ksl.ls_archive.__doc__
-    
-    recs = ksl.ls_archive(query, min_duration, min_night_duration, vis_status=vis_status, fields=fields, field_len=field_len)
-    
-    # TODO: check & add entries to the data registry spreadsheet
-    
-    return recs
-
-
-
-if __name__ == "__main__":
-    # add_datalog_entry("SKA119", 123456, "description", "center_freq", "notes", "env_conditions")
-    h, v = get_datalog_entries("SKA119", dataset="*")
-    print(h)
-    for r in v:
-        print(r)
-    # add_datalog_entry("SKA119", 1234567890, "description2", "center_freq", "notes", "env_conditions", ["TP 1"])
-    # h, v = get_datalog_entries("SKA119", dataset="123456")
-    # print(h)
-    # for r in v:
-    #     print(r)
-    #
-    # add_datalog_entry("SKA119", 1234567890, "description3", -99, "notes", "supper", ["TP 1", "TP 2"],
-    #                   replace_all=True)
-    
