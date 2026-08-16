@@ -43,7 +43,7 @@ from . import driftfit, util
 from analysis import katsemodels as models
 from analysis.katsemodels import _kB_, _c_
 from analysis import katsemat as mat
-from analysis.katselib import PDFReport
+from analysis.katselib import remove_RFI, PDFReport
 
 
 def _ylim_pct_(data, tail_pct=10, margin_pct=0, snap_to=None):
@@ -138,7 +138,7 @@ def mask_where(array_nd, domain1d, domainmask, axis=-1):
 
 class DriftDataset(object):
     """ A container for the raw measurement data, to optimise data retrieval behaviour. """
-    def __init__(self, ds, ant, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", debug=False, **kwargs):
+    def __init__(self, ds, ant, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, debug=False, **kwargs):
         """
            @param ds: filename string, or an already opened katdal.Dataset
            @param ant: either antenna ID (string) or index (int) in the dataset.ants list
@@ -146,6 +146,8 @@ class DriftDataset(object):
            @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
            @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
+           @param rfi_mask: filename to pairs of frequencies to filter RFI out from (default None)
+           @param rfi_thresh: threshold to apply when removing RFI (default 1 i.e. values exceeding +/-100% of interpolated curves are removed).
            @param kwargs: Passed to utils.open_dataset(). E.g. 'hackedL=True', or 'ant_rx_override={antname:rxband.sn}' to override.
         """
         self._pol = pol_labels.split(",")
@@ -165,8 +167,8 @@ class DriftDataset(object):
         self.start_time = ds.start_time
         self.dump_period = ds.dump_period
         
-        self._load_vis_(swapped_pol, strict, flags, debug)
-        self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags) # If needed by future select()
+        self._load_vis_(swapped_pol, strict, flags, rfi_mask, debug)
+        self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags, rfi_mask=rfi_mask, rfi_thresh=rfi_thresh) # If needed by future select()
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
@@ -177,7 +179,7 @@ class DriftDataset(object):
             self.debug()
 
 
-    def _load_vis_(self, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", verbose=True):
+    def _load_vis_(self, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, verbose=True):
         """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
             Also supplies auxilliary features that are employed in processing steps in this module.
             
@@ -187,6 +189,8 @@ class DriftDataset(object):
            
            @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
+           @param rfi_mask: filename to pairs of frequencies to filter RFI out from (default None)
+           @param rfi_thresh: threshold to apply when removing RFI (default 1 i.e. values exceeding +/-100% of interpolated curves are removed).
            @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
         """
         h5 = self.ds
@@ -240,10 +244,14 @@ class DriftDataset(object):
         for scan in h5.__scans_ND__():
             label = "scan %d: '%s'"%(scan[0],scan[1])
             vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan; vis[:,0,:] = np.nan
+            if (rfi_mask is not None):
+                vis = np.stack(remove_RFI(h5.channel_freqs, vis[...,0], vis[...,1], rfi_mask, flag_thresh=rfi_thresh, axis=1), axis=-1)
             self.nd_vis[label] = vis
         
         h5.__select_SEFD__()
         vis = np.abs(h5.vis[:]); vis[h5.flags[:]] = np.nan; vis[:,0,:] = np.nan
+        if (rfi_mask is not None):
+            vis = np.stack(remove_RFI(h5.channel_freqs, vis[...,0], vis[...,1], rfi_mask, flag_thresh=rfi_thresh, axis=1), axis=-1)
         self.vis = vis
         
         self.channel_freqs = h5.channel_freqs
