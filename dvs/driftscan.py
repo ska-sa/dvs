@@ -1140,7 +1140,15 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_size=None,
         
         # Only use drift scan section to prevent ND jumps from influencing fits, but don't use select()!
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
-        bl,mdl,sigma,mu = driftfit.fit_bm(ds.vis, cleanchans, time_mask, n_chunks=n_chunks, k_size=jump_size, debug=debug)
+        if (jump_size is None): # Conservatively omit the first & last 10 timestamps unless specified
+            time_mask &= np.roll(time_mask, 10) & np.roll(time_mask, -10)
+        for pp in [(0,1), (0,0), (1,1)]:
+            vis = np.stack([ds.vis[...,pp[0]],ds.vis[...,pp[1]]], -1)
+            bl,mdl,sigma,mu = driftfit.fit_bm(vis, cleanchans, time_mask, n_chunks=n_chunks, k_size=jump_size, debug=debug)
+            if (len(np.ma.compressed(sigma)) > 0):
+                break
+            else:
+                print("WARNING: Failed to fit beams to polarisations %s simultaneously! Trying one at a time..."%str(pp))
         
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = ds.target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
