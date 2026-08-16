@@ -167,8 +167,8 @@ class DriftDataset(object):
         self.start_time = ds.start_time
         self.dump_period = ds.dump_period
         
-        self._load_vis_(swapped_pol, strict, flags, rfi_mask, debug)
         self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags, rfi_mask=rfi_mask, rfi_thresh=rfi_thresh) # If needed by future select()
+        self._load_vis_(**self.__loadargs__)
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
         self.band = models.band(self.channel_freqs/1e6, ant=self.ant.name)
