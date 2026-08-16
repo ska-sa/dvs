@@ -225,15 +225,21 @@ def remove_RFI(freq, x0, x1, rfi_mask, flag_thresh=0.2, smoothing=0, axis=0):
         @return (filt_smooth_x0, filt_smooth_x1) """
     if isinstance(rfi_mask, str):
         rfi_mask = ksl.load_frequency_mask(rfi_mask, freq)
-    sm_x0, sm_x1 = [], []
-    for msd,sms in ([x0 if axis==0 else np.transpose(x0),sm_x0],[x1 if axis==0 else np.transpose(x1),sm_x1]):
+    cleanx = []
+    for msd in [x0, x1]:
+        sms = []
+        # Iterate over the 'non-frequency' axis
+        if (len(np.shape(msd)) == 1): msd = [msd]
+        elif (axis == 0): msd = np.transpose(msd)
         for m in msd:
             _m = ksm.interp(freq, freq[~rfi_mask], m[~rfi_mask], 'linear')
             sm = ksm.smooth(_m, N=smoothing, padlen=len(freq)//2, padtype='even')
             flags = np.argwhere(np.abs(m/sm-1) > flag_thresh)
             m[flags] = np.nan
             sms.append(m if (smoothing <= 1) else ksm.smooth(m, N=smoothing))
-    return np.array(sm_x0 if axis==0 else np.transpose(sm_x0)), np.array(sm_x1 if axis==0 else np.transpose(sm_x1))
+        if (axis == 0): sms = np.transpose(sms)
+        cleanx.append(sms)
+    return np.reshape(cleanx[0], np.shape(x0)), np.reshape(cleanx[1], np.shape(x1))
 
 
 def load_dsc_dataset(fn, delimiter=";", header_len=2):
