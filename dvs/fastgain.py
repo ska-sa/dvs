@@ -278,9 +278,12 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     _suptitle2_ = "%s\n BWch,tau~(%.1fHz, %.3fsec)"%(_suptitle_, df,dt)
     # Added figure to visually compare stability in selected channels against major RFI culprits
     _ch_chunks = [("clean",ch_chunks[-1]) # reference clean channel
-                 ] + [(k,c) for (k,c) in [("GSM<40MHz>",np.abs(freqs-940e6)<=20e6), # GSM
-                                          ("GSM<10MHz>",np.abs(freqs-935e6)<=5e6),  # GSM
-                                          ("GSM<10MHz>",np.abs(freqs-955e6)<=5e6),  # GSM
+                 ] + [(k,c) for (k,c) in [("MUOS",np.abs(freqs-370e6)<=20e6), # MUOS 4*5MHz
+                                          ("Vodacom FDD",np.abs(freqs-773e6)<=5e6),
+                                          ("MTN FDD",np.abs(freqs-806e6)<=5e6),
+                                          ("GSM<40MHz>",np.abs(freqs-940e6)<=20e6),
+                                          ("GSM<10MHz>",np.abs(freqs-935e6)<=5e6),
+                                          ("GSM<10MHz>",np.abs(freqs-955e6)<=5e6),
                                           ("SSR-air",np.abs(freqs-1090e6)<=2*2e6)]  # SSR-airTx; 2* opens this up to 1086MHz i.e. alias in UHF-band
                                           if (len(channels[c])>0)]
     axes = subplots(len(_ch_chunks),1,figsize=(16,2+2*len(_ch_chunks)))[1]; suptitle("Compare to known RFI\n%s"%dataset_id)
