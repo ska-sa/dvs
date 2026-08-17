@@ -6,7 +6,19 @@
     
     or:
         fastgain.troubleshoot(util.open_dataset(cbid, ref_ant=ant), [ant])
-        
+    
+    
+    
+    Intermediate products may be saved to CSV files as follows:
+    
+        ds = katdal.open(...)
+        fastgain.analyse(ds, ant, output_filepattern="%s_%s_autocorr.csv.gz")
+    
+        x = np.loadtxt('1234567890_sdp_l0_m099_Hpol_autocorr.csv.gz', delimiter=',')
+        f, p, tp  = x[0,1:], x[1:,1:], x[1:,0]
+        plt.figure(); plt.plot(f/1e6, np.nanmean(p, axis=0), '.'); plt.xlabel("[MHz]")
+        plt.figure(); plt.plot(tp, '.'); plt.xlabel("[timestamp#]")
+    
     @author aph@sarao.ac.za
 """
 
@@ -91,7 +103,7 @@ plot_allanvar = plot_allandev # DEPRECATED!
 
 
 def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
-           xK=[1.03,1.05,1.1,1.15]):
+           xK=[1.03,1.05,1.1,1.15], output_filepattern=None):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
         
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
@@ -103,6 +115,7 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
         @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
         @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
         @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
+        @param output_filepattern: filename pattern like '%s_%s_autocorr.csv.gz' with %s for dataset and antenna names, to save data to (default None)
         @return: (<H>_freq/<H>, <V>_freq/<V>) i.e. the normalised time series total power in H & V.
     """
     filename = h5.name.split()[0].split(" ")[0] # "rdb files are different
@@ -144,15 +157,27 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
     _pol_lbl_ = lambda pol: "%s pol @ gain %s"%(pol,gains[0]["%s%s"%(ant,pol.lower())])
     dataset_id = "%s: %s[%s]"%(filename,ant,h5.receivers[ant])
     _info_ = "with FFT shift %d & atten %sdB" % (fft_shift, atten)
-    savefile = "%s_%s.csv"%(filename[-13:-3],ant)
-    return standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, xK,
-                           dataset_id, _pol_lbl_, _info_, savefile, vs_freq, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
+    P_h, P_v = standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, xK,
+                               dataset_id, _pol_lbl_, _info_, vs_freq, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
+    
+    if (output_filepattern is not None): # Save combined time series data
+        savefile = output_filepattern%(filename,ant+"_?pol")
+        header = f"fastgain.analyse intermediate data.\n" +\
+                 f"dataset={filename}, antenna={ant}, receiver={h5.receivers[ant]}, dt={dt} [sec]\n" +\
+                  "The first row gives the channel frequencies [Hz], rows following that gives the linear detected power at consecutive sample times @dt.\n" +\
+                  "The first column gives the 'total power over quiet channels', the remaining columns the power in the matching frequency channel."
+        ff = np.r_[[[np.nan] + list(h5.freqs)]]
+        pack = lambda P, p: np.concat([ff, np.concat([np.c_[P], p], axis=1)], axis=0)
+        np.savetxt(savefile.replace('?','H'), pack(P_h, p_h), fmt='%2.8f', header=header, delimiter=",")
+        np.savetxt(savefile.replace('?','V'), pack(P_v, p_v), fmt='%2.8f', header=header, delimiter=",")
+        
+    return (P_h, P_v)
 
 analyze = analyse # Alias
 
 
 def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct=False, xK=[1.03,1.05,1.1,1.15],
-                    dataset_id="", _pol_lbl_=lambda pol:pol, _info_="", savefile=None, vs_freq=False, **kwargs):
+                    dataset_id="", _pol_lbl_=lambda pol:pol, _info_="", vs_freq=False, **kwargs):
     """ Perform standard stability analysis on a set of regularly sampled data.
         
         @param dt: the detector averaging time [sec].
@@ -338,10 +363,6 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     psd(np.nanmean(P_v,axis=1)-np.nanmean(P_v), Fs=1/dt, NFFT=len(t));       
     BW = P_h.shape[1] * df
     
-    if savefile: # Save combined time series data
-        np.savetxt(savefile, [np.nanmean(P_h,axis=1), np.nanmean(P_v,axis=1)], delimiter=",",
-                   header="Autocorrelation stability from %s with BW=%gMHz, dT=%gsec. Format: H, V [linear P_sys]"%(dataset_id,BW/1e6,dt))
-
     sfact = 2**-.5 if cycle_50pct else 1. # Scale factor for RMS & std, in case the samples are differences
     
     # RMS measurements in each identified good channel chunk individually
