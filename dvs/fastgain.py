@@ -227,7 +227,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
 
     # Identify pristine chunks of spectrum e.g. from the above
     M = max(int(10/dt),32) # Need something like 20/dt MHz to beat system noise?
-    ch_chunks = [range(100+M*n,100+M*(n+1)) for n in range(1,(len(freqs)-200)//M)] # Omit 100 channels at both edges
+    C = min(100, len(freqs)//16) # Omit at most 100 channels at both frequency edges, to avoid roll-off & aliasing related issues
+    ch_chunks = [range(C+M*n,C+M*(n+1)) for n in range(1,(len(freqs)-2*C)//M)] # Omit channels at both edges
 
     snr_h = [np.mean(np.nanstd(p_h[:,C],axis=0)/np.nanmean(p_h[:,C],axis=0)) for C in ch_chunks]
     snr_v = [np.mean(np.nanstd(p_v[:,C],axis=0)/np.nanmean(p_v[:,C],axis=0)) for C in ch_chunks]
