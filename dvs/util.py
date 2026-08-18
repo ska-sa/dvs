@@ -176,7 +176,7 @@ def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
     atten = {} # Attenuation is not stored in the dataset, need to get it from the sensor database
     # Find the sensor portal, for sensors that are not in the dataset
     ant = dataset.ants[0]
-    for store in ['portal.mkat-rts.karoo.kat.ac.za', 'portal.mkat.karoo.kat.ac.za']:
+    for store in [dataset.sensor.store, 'portal.mkat-rts.karoo.kat.ac.za', 'portal.mkat.karoo.kat.ac.za']:
         try:
             dataset.sensor.store = store
             dataset.sensor.get(ant.name+"_state")[:]    
@@ -185,8 +185,7 @@ def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
         else:
             break
     if dataset.sensor.store:
-        subarray = "subarray_%d" % (dataset.sensor["Observation/subarray_index"][0] + 1)
-        band = dataset.sensor.get(subarray+"_band")[0]
+        band = dataset.sensor["Observation/spw"][0].band.lower()
         try:
             atten_sensor = {"u":"dig_u_band_rfcu_%spol_attenuation",
                             "l":"dig_l_band_rfcu_%spol_attenuation",
