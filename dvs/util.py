@@ -194,7 +194,7 @@ def get_fft_shift_and_gains(dataset, channel=123, verbose=False):
             atten_hv = ["01","02"] if (band=="s") else ["h","v"]
             for ant in dataset.ants:
                 for pol in atten_hv:
-                    atten[ant.name+pol] = dataset.sensor.get(ant.name+"_"+atten_sensor%pol)[0]
+                    atten[ant.name+pol] = float(dataset.sensor.get(ant.name+"_"+atten_sensor%pol)[0])
         except Exception as e:
             print("WARNING: Encountered an error while retrieving attenuation values - continuing.", type(e), e)
         
