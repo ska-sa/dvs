@@ -556,7 +556,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     bore = np.clip((bore.data-T0)/ds.dump_period, t[0], t[-1]) # [samples]
     
     t_bore = int(np.ma.mean(bore) + 0.5) # Representative sample of bore sight transit
-    N_bore = N_bore if isinstance(N_bore,int) else (N_bore, np.inf)
+    N_bore = (N_bore, np.inf) if isinstance(N_bore,int) else N_bore
     N_bore = min(N_bore[1], max(N_bore[0], int(np.nanmedian(HPBW)/(sigma2hpbw*ds.dump_period) / 16.)+1) )# The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
