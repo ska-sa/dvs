@@ -519,7 +519,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on, None for 'all'
         @param HPBW: 'lambda f: x' or 1d array [rad] to override fitted widths from the dataset (default None)
-        @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
+        @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16, or (min,max) (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
         @param hpw_src: the equivalent half-power width [rad] of the target (default 0)
@@ -556,7 +556,8 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     bore = np.clip((bore.data-T0)/ds.dump_period, t[0], t[-1]) # [samples]
     
     t_bore = int(np.ma.mean(bore) + 0.5) # Representative sample of bore sight transit
-    N_bore = max(N_bore, int(np.nanmedian(HPBW)/(sigma2hpbw*ds.dump_period) / 16.)+1) # The beam changes < 1% within +-HPBW/8 interval
+    N_bore = N_bore if isinstance(N_bore,int) else (N_bore, np.inf)
+    N_bore = min(N_bore[1], max(N_bore[0], int(np.nanmedian(HPBW)/(sigma2hpbw*ds.dump_period) / 16.)+1) )# The beam changes < 1% within +-HPBW/8 interval
     print("Transit found at relative time sample %d; averaging %d time samples at each datum." % (t_bore, N_bore))
     
     # Find time indices when the source crosses the k-th null at each frequency
