@@ -519,7 +519,9 @@ def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, l2_cache="../mode
         pred.f_MHz.append(f); pred.beacon_pol.append(p)
     try:
         pred.load(l2_cache+"/cached_"+band)
-        assert (len(pred.f_MHz) == len(pred.beams)), "Need to load some!"
+        if (len(pred.beams) < len(pred.f_MHz)): # Set up to continue in exception block
+            f_MHz, pol = f_MHz[len(pred.beams):], pol[len(pred.beams):]
+            raise Exception("Need to load some more!")
     except:
         for f,p in zip(f_MHz, pol):
             b, aH, aV = load_predicted(f, p, DISHPARAMS, band=band, el_deg=45, clipextent=pred.clipextent, gridsize=512)
