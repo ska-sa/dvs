@@ -508,7 +508,7 @@ class ResultSet(object):
         return self.__dict__.__repr__()
 
 
-def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, l2_cache="../models/beam-patterns/ska"):
+def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, root="../models/beam-patterns/ska"):
     """ Load data into a ResultSet representing predicted patterns.
         @param pred: a ResultSet representing predicted patterns, to be modified in-place """
     pol = pol if (pol is not None) else [None]*len(f_MHz)
@@ -518,15 +518,14 @@ def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, l2_cache="../mode
     for f,p in zip(f_MHz, pol):
         pred.f_MHz.append(f); pred.beacon_pol.append(p)
     try:
-        pred.load(l2_cache+"/cached_"+band)
-        if (len(pred.beams) < len(pred.f_MHz)): # Set up to continue in exception block
-            f_MHz, pol = f_MHz[len(pred.beams):], pol[len(pred.beams):]
-            raise Exception("Need to load some more!")
+        pred.load(root+"/cached_"+band)
+        assert (len(pred.beams) == len(pred.f_MHz)), "Need to load some more!"
     except:
+        f_MHz, pol = pred.f_MHz[len(pred.beams):], pred.beacon_pol[len(pred.beams):]
         for f,p in zip(f_MHz, pol):
-            b, aH, aV = load_predicted(f, p, DISHPARAMS, band=band, el_deg=45, clipextent=pred.clipextent, gridsize=512)
+            b, aH, aV = load_predicted(f, p, DISHPARAMS, band=band, el_deg=45, root=root, clipextent=pred.clipextent, gridsize=512)
             pred.beams.append(b); pred.apmapsH.append(aH); pred.apmapsV.append(aV)
-        pred.save(l2_cache+"/cached_"+band)
+        pred.save(root+"/cached_"+band)
 
 
 def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=None, l2_cache="./l2_data"):
