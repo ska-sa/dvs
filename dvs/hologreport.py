@@ -26,6 +26,7 @@ import shutil, os
 import dvsholog as katholog # (a special release of katholog)
 import katpoint
 from analysis import katselib, katsemat
+from . import util
 import zernike
 
 import pylab as plt
@@ -452,22 +453,24 @@ class ResultSet(object):
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
         beams_f0 = np.atleast_1d(self.beams[0])
         ant = beams_f0[0].scanantennaname
+        target = beams_f0.target if hasattr(beams_f0, 'target') else katpoint.Target("model, azel, 0,45")
         root += f"{self.fid}_{ant}/"
         shutil.rmtree(root, ignore_errors=True) # Delete old data before saving
         shutil.os.mkdir(root)
         with open("%s%s_record.csv"%(root,self.fid), "wt") as ds:
             ds.write("# target; [f] [MHz]; [pol]; clipextent [deg]; [cycles]; overlap_cycles; flags_hrs; polswap; timingoffset; [ignoreantennas]; [tags]\n")
-            ds.write("; ".join([beams_f0[0].target.description, str(list(self.f_MHz)), str(list(self.beacon_pol)), str(self.clipextent), str(self.cycles),
+            ds.write("; ".join([target.description, str(list(self.f_MHz)), str(list(self.beacon_pol)), str(self.clipextent), str(self.cycles),
                                 str(self.overlap_cycles), str(self.flags_hrs), str(self.polswap), str(self.timingoffset), str(list(self.ignoreantennas)), str(self.tags)]))
         
-        for f,bm,amH,amV in zip(self.f_MHz, self.beams, self.apmapsH, self.apmapsV):
+        for f,p,bm,amH,amV in zip(self.f_MHz, self.beacon_pol, self.beams, self.apmapsH, self.apmapsV):
             print("INFO: Saving data to "+root)
+            p = '' if (p is None) else "_%s_"%p # TODO: this doesn't work for linear pol vectors 
             bms, amHs, amVs = np.atleast_1d(bm), np.atleast_1d(amH), np.atleast_1d(amV)
             for c,(bm,amH,amV) in enumerate(zip(bms,amHs,amVs)):
                 fid = self.fid if (len(bms) == 1) else f"{self.fid}[{c}]"
-                bm.save("%s%s_beam%d.npz"%(root,fid,f), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
-                amH.save("%s%s_apmapH%d.npz"%(root,fid,f))
-                amV.save("%s%s_apmapV%d.npz"%(root,fid,f))
+                bm.save("%s%s_beam%d%s.npz"%(root,fid,f,p), strip_keys=['vis','ovis','dvis','gaindata','dataset','colmap']+['target']) # Special treatment for target
+                amH.save("%s%s_apmapH%d%s.npz"%(root,fid,f,p))
+                amV.save("%s%s_apmapV%d%s.npz"%(root,fid,f,p))
 
     
     def load(self, root="", ant=0):
@@ -484,24 +487,43 @@ class ResultSet(object):
         assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
         assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
         assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
+        is_modeled = tgt.name == 'model'
         
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
         cycles = set([r.path[r.path.index("["):r.path.index("]_")+1] for r in os.scandir(root) if f"{self.fid}[" in r.path])
         if (len(cycles) == 0): cycles = ['']
-        for f in f_MHz: # Potentially a subset of what's available!
+        for f,p in zip(f_MHz,poln): # Potentially a subset of what's available!
             print("INFO: Loading data from "+root)
+            p = '' if (p is None or not is_modeled) else "_%s_"%p # TODO: this doesn't work for linear pol vectors 
             for c in sorted(cycles):
                 bm = katholog.BeamCube(None)
-                bm.load("%s%s%s_beam%d.npz"%(root,self.fid,c,f)); bm.target = tgt # Special treatment for target
+                bm.load("%s%s%s_beam%d%s.npz"%(root,self.fid,c,f,p)); bm.target = tgt # Special treatment for target
                 amH = katholog.ApertureMap(None)
-                amH.load("%s%s%s_apmapH%d.npz"%(root,self.fid,c,f))
+                amH.load("%s%s%s_apmapH%d%s.npz"%(root,self.fid,c,f,p))
                 amV = katholog.ApertureMap(None)
-                amV.load("%s%s%s_apmapV%d.npz"%(root,self.fid,c,f))
+                amV.load("%s%s%s_apmapV%d%s.npz"%(root,self.fid,c,f,p))
                 self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
     
     def __repr__(self):
         return self.__dict__.__repr__()
 
+
+def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, l2_cache="../models/beam-patterns/ska"):
+    """ Load data into a ResultSet representing predicted patterns.
+        @param pred: a ResultSet representing predicted patterns, to be modified in-place """
+    pol = pol if (pol is not None) else [None]*len(f_MHz)
+    to_add = [i for i,f in enumerate(f_MHz) if (f not in pred.f_MHz)]
+    f_MHz, pol = np.take(f_MHz, to_add), np.take(pol, to_add)
+    
+    for f,p in zip(f_MHz, pol):
+        pred.f_MHz.append(f); pred.beacon_pol.append(p)
+    try:
+        pred.load(l2_cache+"/cached_"+band)
+    except:
+        for f,p in zip(f_MHz, pol):
+            b, aH, aV = load_predicted(f, p, DISHPARAMS, band=band, el_deg=45, clipextent=pred.clipextent, gridsize=512)
+            pred.beams.append(b); pred.apmapsH.append(aH); pred.apmapsV.append(aV)
+        pred.save(l2_cache+"/cached_"+band)
 
 
 def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=None, l2_cache="./l2_data"):
@@ -510,7 +532,7 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
     dMHz = dMHz if (len(np.atleast_1d(dMHz))>1) else [dMHz]*len(datasets)
     
     # Either load over the network, or first cache locally
-    cached_url = util.cbid2url if (l1_cache is None) else lambda cbid: f"./{l1_cache}/{cbid}/{cbid}_sdp_l0.full.rdb"
+    cached_url = katselib.cbid2url if (l1_cache is None) else lambda cbid: f"./{l1_cache}/{cbid}/{cbid}_sdp_l0.full.rdb"
     
     for ms,df in zip(datasets, dMHz):
         # ms.beams.clear(); ms.apmapsH.clear(); ms.apmapsV.clear() # Un-comment to reload all
@@ -518,15 +540,14 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
         try:
             ms.load(l2_cache)
         except:
-            if (cached_url != util.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
+            if (cached_url != katselib.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
             b, aH, aV = load_data(cached_url(ms.fid), ms.f_MHz, ant, DISHPARAMS, polswap=ms.polswap, timingoffset=ms.timingoffset,
-                                              findwrap="findwrap" in ms.tags, extralmoffset='auto' if "extralmoffset=auto" in ms.tags else [0,0],
-                                              clipextent=min(ms.clipextent,load_extent), loadscan_cycles=ms.cycles, overlap_cycles=ms.overlap_cycles,
-                                              dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas)
+                                  findwrap="findwrap" in ms.tags, extralmoffset='auto' if "extralmoffset=auto" in ms.tags else [0,0],
+                                  clipextent=min(ms.clipextent,load_extent), loadscan_cycles=ms.cycles, overlap_cycles=ms.overlap_cycles,
+                                  dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas)
             ms.beams.extend(b); ms.apmapsH.extend(aH); ms.apmapsV.extend(aV)
-            if (cached_url != util.cbid2url): ds.del_cache()
+            if (cached_url != katselib.cbid2url): ds.del_cache()
             if (l2_cache is not None): ms.save(l2_cache)
-
 
 
 # TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
