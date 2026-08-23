@@ -454,6 +454,7 @@ class ResultSet(object):
         beams_f0 = np.atleast_1d(self.beams[0])
         ant = beams_f0[0].scanantennaname
         target = beams_f0.target if hasattr(beams_f0, 'target') else katpoint.Target("model, azel, 0,45")
+        is_modeled = target.name == 'model'
         root += f"{self.fid}_{ant}/"
         shutil.rmtree(root, ignore_errors=True) # Delete old data before saving
         shutil.os.mkdir(root)
@@ -464,7 +465,7 @@ class ResultSet(object):
         
         for f,p,bm,amH,amV in zip(self.f_MHz, self.beacon_pol, self.beams, self.apmapsH, self.apmapsV):
             print("INFO: Saving data to "+root)
-            p = '' if (p is None) else "_%s_"%p # TODO: this doesn't work for linear pol vectors 
+            p = '' if (p is None or not is_modeled) else "_%s_"%p # TODO: this doesn't work for linear pol vectors 
             bms, amHs, amVs = np.atleast_1d(bm), np.atleast_1d(amH), np.atleast_1d(amV)
             for c,(bm,amH,amV) in enumerate(zip(bms,amHs,amVs)):
                 fid = self.fid if (len(bms) == 1) else f"{self.fid}[{c}]"
