@@ -33,7 +33,9 @@ parser.add_option('--rfi-mask', type='string', default=None,
                   help="Mask file for frequency channels to ignore, default is %default")
 parser.add_option('-p', '--pol', type='choice', choices=['H', 'V'], default='H',
                   help="Polarisation term to use ('H' or 'V'), default is %default")
-parser.add_option('-r', '--ref', dest='ref_ant', help="Reference antenna, default is first antenna in file")
+parser.add_option('--activities-ref-ant', type='string', default=None,
+                  help="Reference antenna for activity flags, if unspecified will default to --ref.")
+parser.add_option('-r', '--ref', dest='ref_ant', help="Reference antenna, MUST be specified.")
 parser.add_option('-s', '--max-sigma', type='float', default=0.2,
                   help="Threshold on std deviation of normalised group delay, default is %default")
 parser.add_option("-t", "--time-offset", type='float', default=0.0,
@@ -57,6 +59,7 @@ parser.add_option('-v', '--verbose', action="store_true", default=False,
 parser.add_option('--make-plots', action="store_true", default=False,
                   help="False to only generate text output, True to also make plots (default=%default)")
 (opts, args) = parser.parse_args()
+opts.activities_ref_ant = opts.activities_ref_ant if (opts.activities_ref_ant is not None) else opts.ref_ant
 
 # Quick way to set options for use with cut-and-pasting of script bits
 # opts = optparse.Values()
@@ -81,7 +84,7 @@ def log(*args, **kwargs):
 
 
 print("\nLoading and processing data...\n")
-data = katdal.open(args, ref_ant=opts.ref_ant, time_offset=opts.time_offset)
+data = katdal.open(args, ref_ant=opts.activities_ref_ant, time_offset=opts.time_offset)
 center_freq = data.freqs[data.shape[1] // 2]
 
 # Select frequency channel range and only keep cross-correlation products and single pol in data set
@@ -102,7 +105,7 @@ if opts.rfi_mask:
     rfi_mask = dvs.util.load_rfi_static_mask(opts.rfi_mask, data.freqs)
 else:
     rfi_mask = np.full(np.shape(data.channel_freqs), False)
-ref_ant_ind = [ant.name for ant in data.ants].index(data.ref_ant)
+ref_ant_ind = [ant.name for ant in data.ants].index(opts.ref_ant)
 inputs = [ant.name + (active_pol[0] if ant.name==data.ref_ant else active_pol[-1]) for ant in data.ants]
 baseline_inds = [(inputs.index(inpA), inputs.index(inpB)) for inpA, inpB in data.corr_products]
 baseline_names = [('%s - %s' % (inpA[:-1], inpB[:-1])) for inpA, inpB in data.corr_products]
