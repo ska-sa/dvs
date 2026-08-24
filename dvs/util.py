@@ -217,6 +217,38 @@ def load_dsc_dataset(fn, delimiter=";", header_len=2):
     return d
 
 
+def save_filterbankfile(outfile, freqs, data_timefreq, data_time=None, time_keys=None, fmt='%2.8f', delimiter=',', headline="", metadata={}):
+    """ Saves a CSV file of 2D time,frequency numerical data. Each row represents a consecutive timestamp; time series data may also be
+        given, which is then located in the first set of columns.
+        
+        @param data_timefreq: numerical data, ordered as (time, freq)
+        @param data_time: one or more lists of numerical data, ordered as (time, time, ...)
+        @param time_keys: the keys that explain the data_time columns, printed in second last line of the header.
+        @param headline: the very first line in the header
+        @param metadata: key:value pairs to print in the header
+    """
+    header = headline + "\n"
+    header += "\n".join([str(k)+": "+str(v) for k,v in metadata.items()])
+    header += "\n"
+    
+    ff = list(freqs)
+    data = data_timefreq
+    if (time_keys is not None) and (data_time is not None):
+        time_keys = list(np.atleast_1d(time_keys).reshape(-1))
+        ff = [np.concat([[np.nan]*len(time_keys), ff], axis=0)]
+        header += "Initial %d column(s) represent: %s\n"%(len(time_keys), delimiter.join(time_keys))
+        header += "Each of the remaining columns give the power in the matching frequency channel."
+        data_time = data_time if (np.shape(data_time)[1]==len(time_keys)) else np.transpose(data_time)
+        data = np.concat([data_time, data], axis=1)
+    else:
+        ff = [ff]
+        header += "Each of the columns give the power in the matching frequency channel."
+    header += "\nThe first row gives the channel frequencies [Hz], rows following that gives the linear detected power at consecutive sample times @dt."
+    
+    packed = np.concat([ff, data], axis=0)
+    np.savetxt(outfile, packed, fmt=fmt, delimiter=delimiter, header=header)
+
+
 def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     """ Calculate adjustments to SKA Dish pointing model and FI angle, given a Yf offset from hologreport.
 
