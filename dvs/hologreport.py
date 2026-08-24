@@ -478,7 +478,7 @@ class ResultSet(object):
         """ Load the data structure from disk. Raises an AssertionError if there's a mismatch in control data. """
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
         if isinstance(ant, int):
-            root = [r.path+"/" for r in os.scandir(root) if str(self.fid) in r.path][ant]
+            root = sorted([r.path+"/" for r in os.scandir(root) if str(self.fid) in r.path])[ant]
         else:
             root += f"{self.fid}_{ant}/"
         # Load and check the control data
