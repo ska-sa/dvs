@@ -238,6 +238,7 @@ def save_filterbankfile(outfile, freqs, data_timefreq, data_time=None, time_keys
         ff = [np.concat([[np.nan]*len(time_keys), ff], axis=0)]
         header += "Initial %d column(s) represent: %s\n"%(len(time_keys), delimiter.join(time_keys))
         header += "Each of the remaining columns give the power in the matching frequency channel."
+        data_time = np.atleast_2d(data_time)
         data_time = data_time if (np.shape(data_time)[-1]==len(time_keys)) else np.transpose(data_time)
         data = np.concat([data_time, data], axis=1)
     else:
