@@ -164,8 +164,8 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
         savefile = output_filepattern%(filename,ant+"_?pol")
         metadata = dict(dataset=filename, antenna=ant, receiver=h5.receivers[ant],
                         attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dt,
-                        timestamp=np.nanmedian(h5.timestamps), azimuth="%.1f [deg]"%np.nanmedian(h5.az), elevation="%.1f [deg]"%np.nanmedian(h5.el),
-                        wind_speed="%.1f [m/s]"%np.mean(h5.wind_speed), air_temp="%.1f C"%np.mean(h5.temperature), air_pressure="%.f [hPa]"%np.mean(h5.pressure), rel_humidity=np.mean(h5.humidity))
+                        timestamp=int(np.nanmedian(h5.timestamps)), azimuth="%.1f [deg]"%np.nanmedian(h5.az), elevation="%.1f [deg]"%np.nanmedian(h5.el),
+                        wind_speed="%.1f [m/s]"%np.mean(h5.wind_speed), air_temp="%.1f C"%np.mean(h5.temperature), air_pressure="%.f [hPa]"%np.mean(h5.pressure), rel_humidity="%.1f [%%]"%np.mean(h5.humidity))
         
         save_filterbankfile(savefile.replace('?','H'), freqs=h5.freqs, data_timefreq=p_h, data_time=P_h, time_keys='Total power over quiet channels',
                             headline="fastgain.analyse intermediate data.", fmt='%2.8f', metadata=metadata)
