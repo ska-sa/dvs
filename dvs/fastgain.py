@@ -24,7 +24,7 @@
 
 import numpy as np
 import allantools
-from .util import open_dataset, get_fft_shift_and_gains
+from .util import open_dataset, get_fft_shift_and_gains, save_filterbankfile
 from pylab import figure, subplots, plot, psd, imshow, colorbar, legend, xlabel, ylabel, subplot, ylim, title, suptitle
 import pylab as plt
 
@@ -162,17 +162,15 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
     
     if (output_filepattern is not None): # Save combined time series data
         savefile = output_filepattern%(filename,ant+"_?pol")
-        header = f"fastgain.analyse intermediate data.\n" +\
-                 f"dataset={filename}, antenna={ant}, receiver={h5.receivers[ant]}, dt={dt} [sec]\n" +\
-                  "The first row gives the channel frequencies [Hz], rows following that gives the linear detected power at consecutive sample times @dt.\n" +\
-                  "The first column gives the 'total power over quiet channels', the remaining columns the power in the matching frequency channel."
-        ff = np.r_[[[np.nan] + list(h5.freqs)]]
-        pack = lambda P, p: np.concat([ff, np.concat([np.c_[P], p], axis=1)], axis=0)
-        np.savetxt(savefile.replace('?','H'), pack(P_h, p_h), fmt='%2.8f', header=header, delimiter=",")
-        np.savetxt(savefile.replace('?','V'), pack(P_v, p_v), fmt='%2.8f', header=header, delimiter=",")
-        
+        save_filterbankfile(savefile.replace('?','H'), freqs=h5.freqs, data_timefreq=p_h, data_time=P_h, time_keys='Total power over quiet channels',
+                            headline="fastgain.analyse intermediate data.", fmt='%2.8f',
+                            metadata=dict(dataset=filename, antenna=ant, receiver=h5.receivers[ant], dt="%g [sec]"%dt))
+        save_filterbankfile(savefile.replace('?','V'), freqs=h5.freqs, data_timefreq=p_v, data_time=P_v, time_keys='Total power over quiet channels',
+                            headline="fastgain.analyse intermediate data.", fmt='%2.8f',
+                            metadata=dict(dataset=filename, antenna=ant, receiver=h5.receivers[ant], dt="%g [sec]"%dt))
     return (P_h, P_v)
 
+    
 analyze = analyse # Alias
 
 
