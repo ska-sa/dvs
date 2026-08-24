@@ -493,7 +493,7 @@ class ResultSet(object):
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
         cycles = set([r.path[r.path.index("["):r.path.index("]_")+1] for r in os.scandir(root) if f"{self.fid}[" in r.path])
         if (len(cycles) == 0): cycles = ['']
-        for f,p in zip(f_MHz,poln): # Potentially a subset of what's available!
+        for f,p in zip(self.f_MHz, self.beacon_pol): # Potentially a subset of what's available!
             print("INFO: Loading data from "+root)
             p = '' if (p is None or not is_modeled) else "_%s_"%p # TODO: this doesn't work for linear pol vectors 
             for c in sorted(cycles):
