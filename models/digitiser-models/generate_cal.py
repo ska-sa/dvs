@@ -9,7 +9,7 @@ import pylab as plt
 import numpy as np
 
 from dvs.wideband import load_rs_traces, load_dig_spectra
-from analysis import katsepnt as ksp
+from analysis.katselib import find_files
 
 
 def convert_dig_spectra_to_gain(PN, SN, f_sample=1712e6, NYQ=1, debug=False):
@@ -18,7 +18,7 @@ def convert_dig_spectra_to_gain(PN, SN, f_sample=1712e6, NYQ=1, debug=False):
     for pol in 'HV':
         freq, pp = [], []
         
-        spec_files = ksp.find_files(f"M0_{SN}_{pol}_Pol*.csv", root_dir=f"./{PN}")
+        spec_files = find_files(f"M0_{SN}_{pol}_Pol*.csv", root_dir=f"./{PN}")
         for fn in spec_files:
             freq, psd = load_dig_spectra(fn, f_sample=f_sample, NYQ=NYQ)
             TS = fn.split('.')[-2].split('_')[-1]
@@ -29,6 +29,10 @@ def convert_dig_spectra_to_gain(PN, SN, f_sample=1712e6, NYQ=1, debug=False):
         
         # Reference to de-embed from digitiser output power spectrum: this was recorded using the exact same set-up as the T0015-002-noise_spectra
         freq_ref, psd_ref, header_ref = load_rs_traces(f"./WBG8GHz_DIG_QTP/{pol}polND_OFF.csv")
+        if True: # MANUALLY edit out the single channel dips
+            for f_dip in [413084507.042254,1995084507.04225,5805253521.12676,6874774647.88732]: # Identified by eye
+                dip = np.argwhere(freq_ref==f_dip)[0,0]
+                psd_ref[dip,:] = (psd_ref[dip-1,:]+psd_ref[dip+1,:])/2
         # Interpolate as necessary to match digitiser frequencies
         instr_mag = np.interp(freq, freq_ref[:,0], psd_ref[:,0]) # dB RMS
         axs_p[1].plot(freq_ref, psd_ref, {'H':'-', 'V':'--'}[pol])
