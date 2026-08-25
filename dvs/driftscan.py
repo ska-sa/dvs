@@ -566,7 +566,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=2)
     f, bore, sigma = beamfits[:3]
     HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
-    sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi)/(24*60*60.) # rad/sec, as used in fit_hpbw()
+    sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi*(1+1/365.28))/(24*60*60.) # rad/sec, as used in fit_hpbw()
     
     if (HPBW is None): # HPBW not forced, so use the fitted positions, filling it in with the fitted function where it is masked
         HPBW = np.nanmean(sigma*sigma2hpbw, axis=1) # Average over products
@@ -1229,7 +1229,7 @@ def fit_hpbw(f,mu,sigma, D, hpw_src=0, fitchans=None, debug=True):
     
     # Basic model and constants
     hpbw = lambda f, p,q: ((p*(_c_/f)**q/D)**2 + hpw_src**2)**.5 # rad
-    omega_e = 2*np.pi/(24*60*60.) # rad/sec
+    omega_e = (2*np.pi*(1+1/365.28))/(24*60*60.) # rad/sec
     K = np.sqrt(8*np.log(2)) # hpbw = K*sigma
      
     if debug:
