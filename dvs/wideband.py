@@ -192,7 +192,7 @@ class WBGDataset(object):
         return dataset
 
 
-def band_defs(band_ID):
+def band_defs(band_ID, RBW=3e6):
     """ Returns the appropriate frequency endpoints and the related MeerKAT WBG limit lines
         for the specified frequency band.
         GTsys_ref represents 18K plus 56dB gain, in linear scale.
@@ -200,7 +200,7 @@ def band_defs(band_ID):
         @param band_ID: 'u'|'l'|'B1'...
         @return: freq_band, fracnd_limits, GTsys_ref, band_mask """
     if ('l' in band_ID) or ("B2" in band_ID):
-        ulim=-124.3+10*np.log10(3e6)
+        ulim=-124.3+10*np.log10(RBW) # 18K + (56+6)dB gain
         mask_f = [0,200e6,420e6,2150e6,2900e6,3600e6]
         mask_a = [ulim-21, ulim-21, ulim, ulim, ulim-21, ulim-21]
         if ('l' in band_ID): # MK L 
@@ -210,15 +210,15 @@ def band_defs(band_ID):
             band_freq = (950e6, 1760e6)
             nd_lim = (0.05,0.13)
     elif ('u' in band_ID): # MK UHF
-        ulim=-122.7+10*np.log10(3e6)
+        ulim=-122.7+10*np.log10(RBW) # 24K + (56+6)dB gain
         mask_f = [0,100e6,300e6,1200e6,np.nan,1610e6,3600e6]
         mask_a = [ulim-13, ulim-13, ulim, ulim,np.nan, ulim-13, ulim-13]
         band_freq = (580e6,1015e6)
         nd_lim = (0.5,1.5)
     elif ('B1' in band_ID): # SPFB1
-        ulim=-122.7+10*np.log10(3e6) # TODO
+        ulim=-118+10*np.log10(RBW) # 60K + (56+6)dB gain
         mask_f = [0,100e6, 350e6,1050e6, np.nan, 1400e6,3600e6] # TODO
-        mask_a = [ulim-13,ulim-13, ulim,ulim, np.nan, ulim-13,ulim-13]
+        mask_a = [ulim-21,ulim-13, ulim,ulim, np.nan, ulim-21,ulim-21]
         band_freq = (350e6,1050e6)
         nd_lim = (0.05,0.13)
     
@@ -236,9 +236,9 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None, **load_kwarg):
         @param load_kwarg: passed to WBGDataset.load()
         @return: WBGDataset
     """
-    freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID)
-    nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
     dataset = dataset if isinstance(dataset, WBGDataset) else WBGDataset.load(dataset, **load_kwarg)
+    freq_band, nd_lims, GTsys_ref, band_mask = band_defs(band_ID, dataset.RBW)
+    nlim = nd_lims[-1] - nd_lims[0]; nlim = (np.mean(nd_lims)-2*nlim, np.mean(nd_lims)+2*nlim)
     subset_mask = (dataset.freq>=freq_band[0]) & (dataset.freq<=freq_band[-1])
     
     fig = plt.figure(figsize=figsize)
