@@ -1091,8 +1091,6 @@ def load_results(fids, product="SEFD", root="", also_el=False):
     # Re-grid all results onto a common range
     f, d_H = combine(f_, d_H)
     f, d_V = combine(f_, d_V)
-    d_H = np.transpose(d_H)
-    d_V = np.transpose(d_V)
     if not also_el:
         return f, d_H, d_V
     else: # Parse elevation from first line of header
