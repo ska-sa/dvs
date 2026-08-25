@@ -253,7 +253,7 @@ def process_wbg_set(dataset, band_ID, flim=None, figsize=None, **load_kwarg):
         axs[1].plot(dataset.freq, dB2lin(on)/dB2lin(off) - 1, label=pol)
     axs[0].plot(dataset.freq, np.full_like(dataset.freq,lin2dB(kB*GTsys_ref*dataset.RBW)+30), 'm--', label="Tsys_ref")
     axs[0].plot(band_mask[0], band_mask[1], 'k-')
-    axs[0].set_ylabel(dataset.header["ylabel"] + ("\nRBW: %.f kHz" % (dataset.header["RBW"]/1e3))); axs[0].legend()
+    axs[0].set_ylabel(dataset.header["ylabel"] + ("\nRBW: %.f kHz" % (dataset.RBW/1e3))); axs[0].legend()
     axs[1].set_ylabel("TND/Tsys [frac]"); axs[1].legend()
     axs[1].hlines(nd_lims, np.min(dataset.freq), np.max(dataset.freq), 'r')
     axs[1].set_ylim(*nlim)
