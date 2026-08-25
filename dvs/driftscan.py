@@ -296,7 +296,7 @@ class DriftDataset(object):
     def export(self, root):
         savefileroot = f"{root}/{self.name}"
         fft_shift, gains, atten = util.get_fft_shift_and_gains(self.ds)
-        metadata = dict(dataset=self.name, antenna=ant, receiver=self.RxSN,
+        metadata = dict(dataset=self.name, antenna=self.ant.description, receiver=self.RxSN,
                         attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%self.dump_period,
                         target=self.target.description)
         
@@ -1059,8 +1059,8 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
     if ('dataset' in nored.keys()):
         dataset = nored['dataset']; ds = dataset.ds
         fft_shift, gains, atten = util.get_fft_shift_and_gains(ds)
-        metadata.update(dict(receiver=dataset.RxSN, attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dataset.dump_period,
-                target=dataset.target.description,
+        metadata.update(dict(antenna=dataset.ant.description, target=dataset.target.description,
+                receiver=dataset.RxSN, attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dataset.dump_period,
                 wind_speed="%.1f [m/s]"%np.mean(ds.wind_speed), air_temp="%.1f C"%np.mean(ds.temperature), air_pressure="%.f [hPa]"%np.mean(ds.pressure), rel_humidity="%.1f [%%]"%np.mean(ds.humidity)))
     metadata = "\n".join([str(k)+": "+str(v) for k,v in metadata.items()])
     origin = "Recorded with <%s> at %.fdegEl\n%s\n" % (target, el_deg, metadata)
