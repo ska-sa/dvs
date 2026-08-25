@@ -218,7 +218,7 @@ class DriftDataset(object):
         # Current observe script generates compscans with blank labels - these are spurious
         # Current observe script generates two (s="track", cs="drift") scans, but the first one is spurious and sometimes is on the
         # other side of the azimuth wrap, which causes issues with tangent plane projection in find_nulls()
-        spurious_scans = [] # Scan indices that should always be ignored
+        spurious_scans = list(np.concat(ND_scans)) # Scan indices that should always be ignored
         h5.select(reset="T")
         for cs in h5.compscans(): # (index,label,target)
             if (cs[1].strip() == ''):
@@ -292,6 +292,33 @@ class DriftDataset(object):
             alt_x = ax[1][i].secondary_xaxis('top', functions=(lambda c:freqs[0]+(freqs[-1]-freqs[0])/(chans[-1]-chans[0])*(c-chans[0]),
                                                                lambda f:chans[0]+(chans[-1]-chans[0])/(freqs[-1]-freqs[0])*(f-freqs[0])))
             alt_x.set_xlabel("Frequency [MHz]")
+    
+    def export(self, root):
+        savefileroot = f"{root}/{self.name}"
+        fft_shift, gains, atten = util.get_fft_shift_and_gains(self.ds)
+        metadata = dict(dataset=self.name, antenna=ant, receiver=self.RxSN,
+                        attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%self.dump_period,
+                        target=self.target.description)
+        
+        ds = self.ds
+        # Save each ND segment to its own file
+        for i,_ in enumerate(ds.__scans_ND__()):
+            metadata.update(dict(wind_speed="%.1f [m/s]"%np.mean(ds.wind_speed), air_temp="%.1f C"%np.mean(ds.temperature), air_pressure="%.f [hPa]"%np.mean(ds.pressure), rel_humidity="%.1f [%%]"%np.mean(ds.humidity)))
+            savefile = savefileroot+"_?pol_ND%d.csv.gz"%i
+            for j,p in enumerate('HV'):
+                util.save_filterbankfile(savefile.replace('?',p), freqs=ds.channel_freqs, data_timefreq=np.abs(ds.vis[:,:,j]),
+                                    data_time=(ds.timestamps, ds.az.squeeze(), ds.el.squeeze()), time_keys=('Timestamp','Az [deg]','El [deg]'),
+                                    headline="driftscan intermediate data: ND on/off", fmt='%2.8f', metadata=metadata)
+        
+        # Save the drift scan segment to its own file
+        ds.__select_SEFD__()
+        metadata.update(dict(wind_speed="%.1f [m/s]"%np.mean(ds.wind_speed), air_temp="%.1f C"%np.mean(ds.temperature), air_pressure="%.f [hPa]"%np.mean(ds.pressure), rel_humidity="%.1f [%%]"%np.mean(ds.humidity)))
+        savefile = savefileroot+"_?pol_drift.csv.gz"
+        for j,p in enumerate('HV'):
+            util.save_filterbankfile(savefile.replace('?',p), freqs=ds.channel_freqs, data_timefreq=np.abs(ds.vis[:,:,j]),
+                                data_time=(ds.timestamps, ds.az.squeeze(), ds.el.squeeze()), time_keys=('Timestamp','Az [deg]','El [deg]'),
+                                headline="driftscan intermediate data: drift", fmt='%2.8f', metadata=metadata)
+        
 
 
 def pred_SEFD(freqs, Tcmb, Tgal, Tatm, el_deg, RxID, band):
@@ -1015,7 +1042,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         pp.close()
     
     if saveroot:
-        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg)
+        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg, dataset=ds)
     return result
 
 
@@ -1023,16 +1050,27 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
     """ Saves data products to CSV files named as 'root/dataset-ant-product.csv
         @param root: root folder on filesystem to save files to.
         @param dataset_fname: the filename of the raw dataset.
-        @param antname, target: identifies the antenna and target that the dat awas collected from.
+        @param antname, target: identifies the antenna and target that the data was collected from.
         @param freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg: data products as returned by 'get_SEFD_ND()'.
+        @param dataset (optional): a DriftDataset, so supply metadata
     """
     fnroot = "%s/%s-%s-"%(root,dataset_fname.split("/")[-1].split(".")[0],antname)
-    origin = "Recorded with <%s> at %.fdegEl\nDataset %s" % (target, el_deg, dataset_fname)
+    metadata = dict(dataset=dataset_fname, antenna=antname, target=target, elevation="%.f [deg]"%el_deg)
+    if ('dataset' in nored.keys()):
+        dataset = nored['dataset']; ds = dataset.ds
+        fft_shift, gains, atten = util.get_fft_shift_and_gains(ds)
+        metadata.update(dict(receiver=dataset.RxSN, attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dataset.dump_period,
+                target=dataset.target.description,
+                wind_speed="%.1f [m/s]"%np.mean(ds.wind_speed), air_temp="%.1f C"%np.mean(ds.temperature), air_pressure="%.f [hPa]"%np.mean(ds.pressure), rel_humidity="%.1f [%%]"%np.mean(ds.humidity)))
+    metadata = "\n".join([str(k)+": "+str(v) for k,v in metadata.items()])
+    origin = "Recorded with <%s> at %.fdegEl\n%s\n" % (target, el_deg, metadata)
+    
     for fn,data,descr,unit in [("counts2Jy",np.c_[freqs, counts2Jy[:,0], counts2Jy[:,1]],"(Source Flux)/(P_src_on_boresight-P_src_in_null)","Jy/#"),
                                ("SEFD",np.c_[freqs, SEFD_meas[:,0], SEFD_meas[:,1]],"SEFD at calibrator background","Jy"),
                                ("S_ND",np.c_[freqs, S_ND[:,0], S_ND[:,1]],"Noise Diode equivalent Flux","Jy")]:
         np.savetxt(fnroot+fn+".csv", data, delimiter=",",
                    header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
+
 
 def load_results(fids, product="SEFD", root="", also_el=False):
     """ Loads the results stored when analyse() completes. Re-grids all data onto a common frequency grid.
