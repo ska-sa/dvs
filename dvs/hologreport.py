@@ -428,6 +428,16 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
     return beams, apmapsH, apmapsV
 
 
+def str2kwargs(tags):
+    kwargs = [t.split('=') for t in np.atleast_1d(tags) if '=' in t] if (tags is not None) else []
+    def cast(s):
+        try:
+            return float(s.strip())
+        except:
+            return s
+    return {t[0].strip():cast(t[1]) for t in kwargs}
+
+
 class ResultSet(object):
     """ Data structure for intermediate processed datasets, typically populated using `load_data()` """
 
@@ -488,6 +498,10 @@ class ResultSet(object):
         assert ((self.polswap == polswap) and (self.timingoffset==timingoffset)), "Inconsistent polswap and/or timingoffset!"
         assert ((self.cycles==cycles) and (self.overlap_cycles == ol_cycles)), "Inconsistent cycles and / or overlap of cycles!"
         assert ((self.flags_hrs==flags_hrs) and (self.ignoreantennas==ignoreantennas)), "Inconsistent flagging and / or ignoreantennas!"
+        self_kwargs, loaded_kwargs = str2kwargs(self.tags), str2kwargs(tags)
+        delta_a = {k:v for k,v in self_kwargs.items() if v!=loaded_kwargs.get(k,'MISSING')}
+        delta_b = {k:v for k,v in loaded_kwargs.items() if v!=self_kwargs.get(k,'MISSING')}
+        assert (len(delta_a)+len(delta_b) == 0), "Inconsistent keywords in tags! %s !=! %s"%(delta_a,delta_b)
         is_modeled = tgt.name == 'model'
         
         self.beams.clear(); self.apmapsH.clear(); self.apmapsV.clear()
@@ -545,9 +559,9 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
         except:
             if (cached_url != katselib.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
             b, aH, aV = load_data(cached_url(ms.fid), ms.f_MHz, ant, DISHPARAMS, polswap=ms.polswap, timingoffset=ms.timingoffset,
-                                  findwrap="findwrap" in ms.tags, extralmoffset='auto' if "extralmoffset=auto" in ms.tags else [0,0],
                                   clipextent=min(ms.clipextent,load_extent), loadscan_cycles=ms.cycles, overlap_cycles=ms.overlap_cycles,
-                                  dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas)
+                                  dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas,
+                                  findwrap="findwrap" in ms.tags, **str2kwargs(ms.tags))
             ms.beams.extend(b); ms.apmapsH.extend(aH); ms.apmapsV.extend(aV)
             if (cached_url != katselib.cbid2url): ds.del_cache()
             if (l2_cache is not None): ms.save(l2_cache)
