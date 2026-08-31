@@ -246,10 +246,11 @@ def match_ku_siggen_freq(cam, override=False):
         print("WARNING: MANUAL OVERRIDE REQUIRED. Multiple x band subarrays are active at present with different center frequencies.") 
 
 
-def trk(pointables, tgt):
+def trk(pointables, tgt, tiltcorr=None):
     """ Track the specified target in a "manual control session"
         @param pointables: list of control objects e.g. [cam.ant1, cam.ant2, cam.cbf_1]
         @param tgt: target object or description e.g. cam.sources['3C 279']
+        @param tiltcorr: True|False|None, with None to leave unchanged (default None)
     """
     pointables = np.atleast_1d(pointables)
     tgt = tgt if isinstance(tgt, str) else tgt.description
@@ -260,8 +261,11 @@ def trk(pointables, tgt):
             proxy.req.mode("POINT")
     # HACK for MKE Dishes as of 08/2025
     for proxy in pointables:
-        if hasattr(proxy.req, 'dsm_DisablePointingCorrections'):
-            proxy.req.dsm_DisablePointingCorrections()
+        if (tiltcorr in [True,False]) and hasattr(proxy.req, 'dsm_DisablePointingCorrections'):
+            if tiltcorr:
+                proxy.req.dsm_EnablePointingCorrections()
+            else:
+                proxy.req.dsm_DisablePointingCorrections()
      
 
 def tle_cat(cam, tags="geo,intelsat", savefn="~/tles.txt"):
