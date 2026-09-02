@@ -536,7 +536,7 @@ def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, root="../models/b
     try:
         pred.load(root+"/cached_"+band)
         assert (len(pred.beams) == len(pred.f_MHz)), "Need to load some more!"
-    except (AssertionError, IOError) as e:
+    except (AssertionError, Exception) as e:
         if isinstance(e, AssertionError): print(e)
         f_MHz, pol = pred.f_MHz[len(pred.beams):], pred.beacon_pol[len(pred.beams):]
         for f,p in zip(f_MHz, pol):
@@ -558,8 +558,8 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
         if (len(ms.beams) > 0): continue
         try:
             ms.load(l2_cache)
-            assert (len(pred.beams) == len(pred.f_MHz)), "Need to load some more!"
-        except (AssertionError, IOError) as e:
+            assert (len(ms.beams) == len(ms.f_MHz)), "Need to load some more!"
+        except (AssertionError, Exception) as e:
             if isinstance(e, AssertionError): print(e)
             if (cached_url != katselib.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
             f_MHz = ms.f_MHz[len(ms.beams):] # Skip those already loaded
