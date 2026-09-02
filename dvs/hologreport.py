@@ -513,6 +513,7 @@ class ResultSet(object):
             for c in sorted(cycles):
                 bm = katholog.BeamCube(None)
                 bm.load("%s%s%s_beam%d%s.npz"%(root,self.fid,c,f,p)); bm.target = tgt # Special treatment for target
+                bm.colmap = plt.cm.colors.ListedColormap(katholog.utilities.sqrcolmap(),'sqr') # TODO: update BeamCube.load() to set this last, not first
                 amH = katholog.ApertureMap(None)
                 amH.load("%s%s%s_apmapH%d%s.npz"%(root,self.fid,c,f,p))
                 amV = katholog.ApertureMap(None)
@@ -535,7 +536,8 @@ def load_predicted_records(pred, band, DISHPARAMS, f_MHz, pol, root="../models/b
     try:
         pred.load(root+"/cached_"+band)
         assert (len(pred.beams) == len(pred.f_MHz)), "Need to load some more!"
-    except:
+    except (AssertionError, IOError) as e:
+        if isinstance(e, AssertionError): print(e)
         f_MHz, pol = pred.f_MHz[len(pred.beams):], pred.beacon_pol[len(pred.beams):]
         for f,p in zip(f_MHz, pol):
             b, aH, aV = load_predicted(f, p, DISHPARAMS, band=band, el_deg=45, root=root, clipextent=pred.clipextent, gridsize=512)
@@ -556,9 +558,12 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
         if (len(ms.beams) > 0): continue
         try:
             ms.load(l2_cache)
-        except:
+            assert (len(pred.beams) == len(pred.f_MHz)), "Need to load some more!"
+        except (AssertionError, IOError) as e:
+            if isinstance(e, AssertionError): print(e)
             if (cached_url != katselib.cbid2url): ds = util.open_dataset(ms.fid, cache_root=l1_cache) # Cache locally
-            b, aH, aV = load_data(cached_url(ms.fid), ms.f_MHz, ant, DISHPARAMS, polswap=ms.polswap, timingoffset=ms.timingoffset,
+            f_MHz = ms.f_MHz[len(ms.beams):] # Skip those already loaded
+            b, aH, aV = load_data(cached_url(ms.fid), f_MHz, ant, DISHPARAMS, polswap=ms.polswap, timingoffset=ms.timingoffset,
                                   clipextent=min(ms.clipextent,load_extent), loadscan_cycles=ms.cycles, overlap_cycles=ms.overlap_cycles,
                                   dMHz=df, gridsize=512, flag_slew=True, flags_hrs=ms.flags_hrs, ignoreantennas=ms.ignoreantennas,
                                   findwrap="findwrap" in ms.tags, **str2kwargs(ms.tags))
