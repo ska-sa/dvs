@@ -40,8 +40,8 @@ git clone https://github.com/ska-sa/dvs.git
 git clone https://github.com/ska-sa/katsdpscripts.git
 # git clone git@github.com:ska-sa/systems-analysis.git
 # TODO: At present, the above package is private - a temporary situation. The workaround is the following:
-gdown 1Ep3o1mElx2YsJM_B4Hh6j_LKU4mkFYpU && unzip systems-analysis-master.zip -d systems-analysis && rm systems-analysis-master.zip
-ln -f -s `pwd`/systems-analysis/analysis dvs/libraries/analysis
+gdown 1Iqupp2BapgMjNLcz_mjQD0oC9l53zOzh && tar -xf systems-analysis-QTR03092026.tar && rm systems-analysis*.tar
+ln -f -s `pwd`/systems-analysis-QTR03092026/analysis dvs/libraries/analysis
 ln -f -s `pwd`/katsdpscripts/katsdpscripts dvs/libraries/katsdpscripts
 
 ipython3 kernel install --name "dvs" --user
