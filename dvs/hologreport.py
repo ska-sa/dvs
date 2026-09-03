@@ -513,11 +513,11 @@ class ResultSet(object):
             for c in sorted(cycles):
                 bm = katholog.BeamCube(None)
                 bm.load("%s%s%s_beam%d%s.npz"%(root,self.fid,c,f,p)); bm.target = tgt # Special treatment for target
-                bm.colmap = plt.cm.colors.ListedColormap(katholog.utilities.sqrcolmap(),'sqr') # TODO: update BeamCube.load() to set this last, not first
                 amH = katholog.ApertureMap(None)
                 amH.load("%s%s%s_apmapH%d%s.npz"%(root,self.fid,c,f,p))
                 amV = katholog.ApertureMap(None)
                 amV.load("%s%s%s_apmapV%d%s.npz"%(root,self.fid,c,f,p))
+                for _ in [bm,amH,amV]: _.colmap = plt.cm.colors.ListedColormap(katholog.utilities.sqrcolmap(),'sqr') # TODO: update BeamCube.load() to set this last, not first
                 self.beams.append(bm); self.apmapsH.append(amH); self.apmapsV.append(amV)
     
     def __repr__(self):
