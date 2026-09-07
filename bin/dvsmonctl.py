@@ -259,13 +259,20 @@ def trk(pointables, tgt, tiltcorr=None):
     for proxy in pointables:
         if hasattr(proxy.req, 'mode'):
             proxy.req.mode("POINT")
-    # HACK for MKE Dishes as of 08/2025
-    for proxy in pointables:
-        if (tiltcorr in [True,False]) and hasattr(proxy.req, 'dsm_DisablePointingCorrections'):
-            if tiltcorr:
-                proxy.req.dsm_EnablePointingCorrections()
-            else:
-                proxy.req.dsm_DisablePointingCorrections()
+    
+    if (tiltcorr in [True,False]):
+        import tango
+        for proxy in pointables:
+            if hasattr(proxy.req, 'dsm_DisablePointingCorrections'):# HACK for MKE Dishes as of 08/2025 not exposed via proxy 
+                dsm = tango.DeviceProxy(proxy.sensors.dsm_tango_address.get_value())
+                dsm.staticPointCorrEnabled = False
+                dsm.tempPointCorrEnabled = False
+                if tiltcorr:
+                    # proxy.req.dsm_EnablePointingCorrections()
+                    dsm.tiltPointCorrEnabled = True
+                else:
+                    # proxy.req.dsm_DisablePointingCorrections()
+                    dsm.tiltPointCorrEnabled = False
      
 
 def tle_cat(cam, tags="geo,intelsat", savefn="~/tles.txt"):
