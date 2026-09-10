@@ -1581,11 +1581,12 @@ def plot_enviro(recs, label, what="elev,wind,temp,humidity", tzoffset=0, figsize
     katpoint.projection.set_out_of_range_treatment(prev_oort)
 
 
-def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
+def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
     """ Generates a figure to show the differences between maps.
         @param map0, map1: instances of either katholog.ApertureMap or katholog.BeamCube - not allowed to mix types!
         @param what: the attribute of the maps to represent - e.g. 'nopointingphasemap' or 'Gx'
         @param vlim: limit the range of values of 'what' displayed, either None or (min,max) (default None).
+        @param overlay: True to plot the maps as contours on a single axis, False to plot on separate axes (default True).
         @return: the figure's axes (always a 2D list)
     """
     maps0 = np.atleast_1d(np.squeeze(map0))
@@ -1594,14 +1595,17 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
         is_beam = maps0[0].Gx is not None
     except:
         is_beam = False
-    fig, axs = plt.subplots(len(maps0),3, width_ratios=[1.8,2,.7], figsize=(4*3,4*len(maps0)))
+    if overlay:
+        fig, axs = plt.subplots(len(maps0),3, width_ratios=[1,1,.7], layout='constrained', figsize=(4*3,4.3*len(maps0)))
+    else:
+        fig, axs = plt.subplots(len(maps0),4, width_ratios=[1,1,1,.7], layout='constrained', figsize=(4*4,4*len(maps0)))
     axs = [axs] if (len(np.shape(axs))==1) else axs # Undo auto squeeze
     fig.suptitle("%s [%s]"%(title, what))
     unit = "dB" if is_beam else ("mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl"))
     
     for i,(ax_,map0,map1) in enumerate(zip(axs,maps0,maps1)):
         subtitle = "%s - %s" % (map0.cbid, map1.cbid)
-        ax_[1].set_title(subtitle)
+        ax_[-2].set_title(subtitle)
         
         what0, what1 = map0.__getattribute__(what), map1.__getattribute__(what)
         if is_beam: # Only first freq if the BeamCube, complex voltage converted to real power
@@ -1612,20 +1616,28 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
         diff = what0 - what1
         if masked and not is_beam: # Beams don't have maskmap
             diff[map0.maskmap * map1.maskmap == 1] = np.nan
-        ax_[0].contour(domain[0], domain[1], what0, colors='k', alpha=0.2)
-        ax_[0].contour(domain[0], domain[1], what1, colors='r', alpha=0.2)
-        ax_[0].set_ylabel("Y"); ax_[0].set_xlabel("X")
         
-        vlim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
-        im = ax_[1].imshow(diff, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
-                           vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[1])
-        ax_[1].set_ylabel("Y"); ax_[1].set_xlabel("X")
-
+        if overlay:
+            ax_[0].contour(domain[0], domain[1], what0, colors='k', alpha=0.2)
+            ax_[0].contour(domain[0], domain[1], what1, colors='r', alpha=0.2)
+        else:
+            for ax,d in zip(ax_, [what0, what1]):
+                lim = (np.nanmin(d), np.nanmax(d)) if vlim is None else vlim
+                im = ax.imshow(d, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
+                               vmin=lim[0], vmax=lim[1]); plt.colorbar(im, ax=ax)
+                ax.contour(domain[0], domain[1], d, colors='k', alpha=0.2)
+        lim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
+        im = ax_[-2].imshow(diff, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
+                            vmin=lim[0], vmax=lim[1]); plt.colorbar(im, ax=ax_[-2])
+        ax_[-2].contour(domain[0], domain[1], diff, colors='k', alpha=0.2)
+        for ax in ax_[:-1]:
+            ax.set_ylabel("Y"); ax.set_xlabel("X")
+        
         diff = np.reshape(diff, (-1,))
         std_sq2 = np.nanstd(diff)/2**.5
         diff = np.clip(diff, vlim[0], vlim[1])
-        ax_[2].hist(diff[np.isfinite(diff)], bins=100, range=vlim, orientation='horizontal', log=True); ax_[2].set_ylabel(unit)
-        ax_[2].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
+        ax_[-1].hist(diff[np.isfinite(diff)], bins=100, range=vlim, orientation='horizontal', log=True); ax_[-1].set_ylabel(unit)
+        ax_[-1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
         
     return axs
 
