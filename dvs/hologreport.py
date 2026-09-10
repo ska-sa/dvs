@@ -574,64 +574,6 @@ def load_records(datasets, ant, DISHPARAMS, dMHz, load_extent=np.inf, l1_cache=N
             if (l2_cache is not None): ms.save(l2_cache)
 
 
-# TODO EVENTUALLY: incorporate the following modification to katholog.aperture.ApertureMap.analyse()?
-def re_analyse(self, feedoffset=None, feedphasemap=0):
-    """ Exactly katholog.ApertureMap.analyse() but with modifications marked as "[2]".
-        
-        Conceptually
-                               phasemap = feedphasemap + (feedoffsetphasemap + opticsphasemap) + pointingphasemap
-                      unwrappedphasemap = unwrap(phasemap)
-                     nopointingphasemap = flatphase(unwrappedphasemap,'nopointing') ~ feedphasemap + smallscale_aperturephasemap + collimationphasemap
-                           flatphasemap = flatphase(unwrappedphasemap,'flat') ~ feedphasemap + smallscale_aperturephasemap
-        The reason for this is that flatphase(unwrappedphasemap,'flat') solves for both pointing & feed offsets simultaneously,
-        but they are degenerate and so may yield artificial results that cancel to some extent.
-        
-        Interpretation seems to be consistent everywhere that
-           (a) nopointingphasemap == opticsphasemap == reflector surfaces + collimation errors
-           (b) flatphasemap == reflector surfaces
-        (completely neglecting the feed contribution i.e. assumes feedphasemap = 0.)
-        
-        We introduce 'feedphasemap' as the total phase of the actual feed when perfectly installed on perfect optics & perfectly pointed.
-        Modification [2] changes the analysis like so
-                      unwrappedphasemap = unwrap(phasemap) - feedphasemap
-        
-        The interpretation remains unchanged, and the contribution of the feed can now truly be neglected.
-        
-        
-        Use like 'mod_apmap = re_analyse(apmap, feedphasemap=simulated.unwrappedphasemap)'.
-        This does not modify the state of 'self' ('apmap' in example usage).
-        Re-analysis can be un-done by calling 'mod_apmap.analyse()'.
-        
-        @param feedoffset: None or a list (solver prints an error message if np.array?)
-        @param feedphasemap: If not None or 0, subtract this pattern before deriving flatphasemap (default 0)
-        @return: a modified (shallow) copy of 'self'
-    """
-    # TODO replace with: return copy.copy(self).analyse(feedoffset=feedoffset, feedphasemap=feedphasemap)
-    # Some trivial added code
-    mod = 2 # 0=original, 2=modification developed in 2020.
-    self = copy.copy(self) # Don't need deep copy, and visibilities datasets cannot be deep copied
-    feedphasemap = 0 if (feedphasemap is None) else feedphasemap
-    
-    self.ampmap=np.abs(self.apert)
-    self.phasemap=np.angle(self.apert)
-    self.unwrappedphasemap=katholog.aperture.unwrap(self.ampmap,self.phasemap,self.unwrapmaskmap)
-    
-    if (mod == 2): # Latest modified code: remove feed phase in the unwrappedphasemap
-        self.unwrappedphasemap=self.unwrappedphasemap - feedphasemap
-    
-    self.ampmodelmap=katholog.aperture.ampmodel(self.ampmap,self.blockdiameter,self.dishdiameter,self.mapsize,self.gridsize)
-    self.nopointingphasemap,self.nopointingphaseoffset,self.nopointingphasegradient,dud,self.nopointingphaseoffsetstd,self.nopointingphasegradientstd,dud,self.nopointingfuncs=katholog.aperture.flatphase(self.ampmap if (self.fitampmap is None) else self.fitampmap,self.unwrappedphasemap,self.flatmaskmap,self.blockdiameter,self.dishdiameter,self.mapsize,self.gridsize,self.wavelength,self.focallength,self.xmag,feedoffset,self.parabolaoffset,self.flatmode,self.copolmap,self.crosspolmap)
-    self.flatphasemap,self.phaseoffset,self.phasegradient,self.feedoffset,self.phaseoffsetstd,self.phasegradientstd,self.feedoffsetstd,self.funcs=katholog.aperture.flatphase(self.ampmap if (self.fitampmap is None) else self.fitampmap,self.unwrappedphasemap,self.flatmaskmap,self.blockdiameter,self.dishdiameter,self.mapsize,self.gridsize,self.wavelength,self.focallength,self.xmag,feedoffset,self.parabolaoffset,'flat')
-    self.modelmap=self.unwrappedphasemap-self.flatphasemap
-    self.nopointingmodelmap=self.unwrappedphasemap-self.nopointingphasemap
-    self.nopointingdevmap=self.blank(katholog.aperture.getdeviation(self.nopointingphasemap,self.mapsize,self.gridsize,self.wavelength,self.focallength,self.parabolaoffsetdev))
-    self.devmap=self.blank(katholog.aperture.getdeviation(self.flatphasemap,self.mapsize,self.gridsize,self.wavelength,self.focallength,self.parabolaoffsetdev))
-    self.rms0_mm=self.halfpatherrorms(self.ampmap,self.nopointingphasemap)
-    self.rms_mm=self.halfpatherrorms(self.ampmap,self.flatphasemap)
-    self.gain(None,1.0)
-    return self
-
-
 def BDF(apmap, D, f, k=0.36):
     """ Computes the Beam Deviation Factor [Y.T. Lo "On the BDF of a Parabolic Reflector] as quoted in [Ruze "Small Displacements of Parabolic Reflectors"].
         Employs only aperture plane amplitude, so does not depend on the focal length & magnification factor with which the aperture map
@@ -1202,6 +1144,14 @@ def geterrorbeam(measuredG, modelG, meas_extent=1, contourdB=-20, centered=True)
 #     errorbeam[20*np.log10(measuredG) > -0.01] = np.nan # Some error patterns have a spike at bore sight, an artefact from fitpoly?
     
     return errorbeam
+
+
+def re_analyse(map0, feedoffset=None, feedphasemap=0):
+    # A minor elaboration of katholog.aperture.ApertureMap.analyse()
+    map0 = copy.copy(map0) # Don't need deep copy, and visibilities datasets cannot be deep copied
+    map0.analyse(feedoffset=feedoffset, feedphasemap=feedphasemap)
+    return map0
+
 
 def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000], tzoffset=2, contourdB=-20, beampolydegree=28, beamsmoothing='fourier', eb_extent=(-0.2,0.2), coords="SKA", debug=False, makefigs=True, makepdf=True, pdfprefix="", **devkwargs):
     """ Makes standard plots and prints information for the supplied holography result set.
