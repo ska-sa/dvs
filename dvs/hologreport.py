@@ -1615,7 +1615,8 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True):
         ax_[0].set_ylabel("Y"); ax_[0].set_xlabel("X")
         
         vlim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
-        im = ax_[1].imshow(diff, vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[1])
+        im = ax_[1].imshow(diff, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
+                           vmin=vlim[0], vmax=vlim[1]); plt.colorbar(im, ax=ax_[1])
         ax_[1].set_ylabel("Y"); ax_[1].set_xlabel("X")
 
         diff = np.reshape(diff, (-1,))
