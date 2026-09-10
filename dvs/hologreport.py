@@ -433,11 +433,14 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
 def str2kwargs(tags):
     kwargs = [t.split('=') for t in np.atleast_1d(tags) if '=' in t] if (tags is not None) else []
     def cast(s):
-        try:
-            return float(s.strip())
-        except:
-            return s
-    return {t[0].strip():cast(t[1]) for t in kwargs}
+        s = s.replace("'","")
+        for xform in [float, lambda b:(b=='True') if (b in 'True,False') else 1/0]:
+            try:
+                return xform(s)
+            except:
+                continue
+        return s
+    return {t[0].strip():cast(t[1].strip()) for t in kwargs}
 
 
 class ResultSet(object):
