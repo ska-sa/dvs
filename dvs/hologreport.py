@@ -234,7 +234,7 @@ def e_bn(pol, tilt_deg=0, obs_lon=21.4438888,obs_lat=-30.7110555):
 
 
 def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dMHz=0.1, load_cycles=None, overlap_cycles=0,
-              loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', gridsize=256, debug=False, **kwargs):
+              loadscan_cycles=None, flag_slew=False, flags_hrs=None, applypointing='perfeed', fitampmap=None, gridsize=256, debug=False, **kwargs):
     """ Loads measured holography datasets for the specified telescope, projected to physical geometry as specified.
         
         @param fn: the filename or URL for the dataset.
@@ -247,6 +247,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         @param loadscan_cycles: similar to 'load_cycles', but specifically for "loadscan" style datasets and NOT affected by 'overlap_cycles' (default None)
         @param flag_slew: True to ensure "slew" activities are always flagged out, otherwise may include "slew" if quality is OK (default False).
         @param flags_hrs: explicit time-based flagging, as lists of (hrs_start,hrs_end) with 'hrs' the time since the start of the measurement (default None)
+        @param applypointing: control BeamCube centering, 'perfeed' if H & V patterns are allowed to have different centroids (default 'perfeed')
+        @param fitampmap: control ApertureMap weighting, None to weight it with the measured amplitude (default None)
         @param kwargs: passed to katholog.Dataset e.g. 'timingoffset', 'clipextent', 'select_loadscan_group'
         @return: [beams], [apmapsH], [apmapsV] to match dimensions of freqMHz, and if present, cycles. NB: beams "x"=H-pol, "y"=V-pol
                  Note: each beam is given the following extra attributes: {time_avg, deg_per_sec, el_deg, sun_deg, sun_rel_deg, temp_C, wind_mps, wind_rel_deg, feedindexer_deg, rawonboresight}
@@ -356,8 +358,8 @@ def load_data(fn, freqMHz, scanant, DISHPARAMS, timingoffset=0, polswap=None, dM
         # With this approach the only sensible applypointing seems to be 'perfeed' for everything (see note under 'load_predicted()').
         # NB: katholog's x,y polarisations correspond to H & V-pol (IAU Y & X), as can be seen in e.g. katholog.BeamCube.plot() & katholog.ApertureMap()
         b_buf.append(katholog.BeamCube(dataset, scanantennaname=scanant, freqMHz=f_MHz, dMHz=dMHz, applypointing=applypointing, interpmethod='scipy', xyzoffsets=xyzoffsets, gridsize=gridsize))
-        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
-        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
+        aH_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='H', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, fitampmap=fitampmap, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
+        aV_buf.append(katholog.ApertureMap(dataset, scanantennaname=scanant, xyzoffsets=xyzoffsets, feed='V', freqMHz=f_MHz, dMHz=dMHz, xmag=xmag,focallength=focallength, fitampmap=fitampmap, gridsize=gridsize, ndftproc=ndftproc, voronoimaxweight=1.1, **flip))
         _load_extrainfo_(dataset, f_MHz, dMHz*1.1, out=b_buf[-1]) # *1.1 to be similar to rounding applied in BeamCube & ApertureMap - without this sometimes we get the single channel adjacent to the beacon!
         b_buf[-1].cbid = aH_buf[-1].cbid = aV_buf[-1].cbid = cbid
         dataset.mm = -dataset.mm # WIP: restore original sense of "mm" so that we don't break 'Dataset.findcycles()'
