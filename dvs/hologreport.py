@@ -468,7 +468,7 @@ class ResultSet(object):
         root = root if (len(root)==0 or root[-1]=='/') else root+"/"
         beams_f0 = np.atleast_1d(self.beams[0])
         ant = beams_f0[0].scanantennaname
-        target = beams_f0.target if hasattr(beams_f0, 'target') else katpoint.Target("model, azel, 0,45")
+        target = beams_f0[0].target if hasattr(beams_f0[0], 'target') else katpoint.Target("model, azel, 0,45")
         is_modeled = target.name == 'model'
         root += f"{self.fid}_{ant}/"
         shutil.rmtree(root, ignore_errors=True) # Delete old data before saving
