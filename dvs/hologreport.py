@@ -1684,7 +1684,7 @@ def collate_results(results_a, *results_b):
         results_b = collate_results(*results_b)
         for k,v in results_b.items():
             try:
-                collated[k].extend(v)
+                collated[k] = collated[k] + list(v)
             except:
                 collated[k] = list(v)
     
