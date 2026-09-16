@@ -360,6 +360,7 @@ if (not opts.pre_average):
     plt.figure(1).set_figwidth(14)
     plt.clf()
     scan_freqinds = [np.arange(num_bls * num_chans)] * len(scan_timestamps)
+    for sp in scan_phase: sp[np.isnan(sp)] = 0 # Nans cause issues with diagnostic plot scape.plots_basic.plot_segments()
     segms, labels, lines = scape.plots_basic.plot_segments(scan_timestamps, scan_freqinds, scan_phase, labels=scan_targets)
     for label in labels:
         label.set_rotation('vertical')
