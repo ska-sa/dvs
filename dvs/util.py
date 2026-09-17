@@ -272,3 +272,16 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     dFI_angle = np.atan2(delta_Yf, R_FI) * 180/np.pi
     dP4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # In-plane translation, no tilt
     return (dP4, dFI_angle)
+
+
+def dms2deg(d,m,s):
+    """ @return: arcseconds for an angle given in 'd:m:s' text format """ 
+    abs(d)+abs(m)/60+abs(s)/3600
+
+def asec2dms(asec):
+    """ @return: text representation of an angle in d:m:s format """
+    d = np.trunc(asec/3600) # Signed float
+    asec = abs(asec - d*3600) # Lose the sign
+    m = int(asec/60)
+    s = asec - m*60
+    return f"{d:+03.0f}:{m:02d}:{s:02.1f}"
