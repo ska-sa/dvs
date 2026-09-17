@@ -250,23 +250,25 @@ def save_filterbankfile(outfile, freqs, data_timefreq, data_time=None, time_keys
     np.savetxt(outfile, packed, fmt=fmt, delimiter=delimiter, header=header)
 
 
-def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None, shape_factor=0.73):
+def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     """ Calculate adjustments to SKA Dish pointing model and FI angle, given a Yf offset from hologreport.
 
         If both 'delta_XX' are given, only delta_P4 will be used!
         @param delta_Yf: Y_f from holography analysis as per SKA Dish coordinate system [mm]
         @param delta_P4: P4 in katpoint model [deg]
-        @param shape_factor: scale factor due to reflector shaping (default 0.73, for SKA-MID Dishes)
         @return (P4_adjust_angle, FI_adjust_angle) [deg] to be added to the current P4 and FI angle """
     BDF=0.894; R_FI=1400; F_eq=8507 # [], mm, mm for SKA-MID
 
+    # 'shape_factor' relations are empirically derived from pointing vs dvsholog (parabolic functions) vs katholog (ray tracing)
+    shape_factor = 0.73 # Scale factor due to shaped reflector, for SKA-MID Dishes
+    F_eq = F_eq * shape_factor
     if (delta_P4 is not None): # Convert P4 pointing term to equivalent translation
         delta_Yf = np.tan(delta_P4*np.pi/180 / BDF) * F_eq
-
+    delta_Yf = delta_Yf*shape_factor
+    
     # Change in Feed effective in-plane translation
     # If feed is pointed right of SR (Yf>0), correction should decrease FI angle (ICD)
     delta_Yf *= -1
-    delta_Yf = delta_Yf*shape_factor
     dFI_angle = np.atan2(delta_Yf, R_FI) * 180/np.pi
     dP4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # In-plane translation, no tilt
     return (dP4, dFI_angle)
