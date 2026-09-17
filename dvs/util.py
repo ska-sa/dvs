@@ -256,7 +256,7 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None, shape_factor=0.73):
         If both 'delta_XX' are given, only delta_P4 will be used!
         @param delta_Yf: Y_f from holography analysis as per SKA Dish coordinate system [mm]
         @param delta_P4: P4 in katpoint model [deg]
-        @param shape_factor: scale factor for delta_Yf due to factors not modeled correctly by holography, e.g. shaped refletor (default 0.73, for dvsholog with SKA-MID Dishes)
+        @param shape_factor: scale factor due to reflector shaping (default 0.73, for SKA-MID Dishes)
         @return (P4_adjust_angle, FI_adjust_angle) [deg] to be added to the current P4 and FI angle """
     BDF=0.894; R_FI=1400; F_eq=8507 # [], mm, mm for SKA-MID
 
@@ -266,7 +266,7 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None, shape_factor=0.73):
     # Change in Feed effective in-plane translation
     # If feed is pointed right of SR (Yf>0), correction should decrease FI angle (ICD)
     delta_Yf *= -1
-    # Shape factor only applies to measured Yf, not P4
-    dFI_angle = np.atan2(delta_Yf*shape_factor, R_FI) * 180/np.pi
+    delta_Yf = delta_Yf*shape_factor
+    dFI_angle = np.atan2(delta_Yf, R_FI) * 180/np.pi
     dP4 = BDF * np.arctan2(delta_Yf, F_eq) * 180/np.pi # In-plane translation, no tilt
     return (dP4, dFI_angle)
