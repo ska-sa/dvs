@@ -1391,9 +1391,9 @@ def standard_report(measured, predicted=None, DF=5, spec_freq_MHz=[15000,20000],
             pp.report_fig(max(plt.get_fignums()))
         
             if (_predicted_ is None):
-                plot_diffs(_apmapH, _apmapV, "'Re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+                plot_diffs(_apmapH, _apmapV, title="'Re-collimated'", labels=('H','V'), what="devmap", vlim=(-1,1), masked=True)
             else:
-                plot_diffs([_apmapH, apmapH], [_apmapV, apmapV], "'Re-collimated' & 'Feed removed&re-collimated' H-V of %s"%measured.fid, what="devmap", vlim=(-1,1), masked=True)
+                plot_diffs([_apmapH, apmapH], [_apmapV, apmapV], title="'Re-collimated' & 'Feed removed&re-collimated'", labels=('H','V'), what="devmap", vlim=(-1,1), masked=True)
             pp.report_fig(max(plt.get_fignums()))
         
         results = HologResults(measured.fid, el_deg, measured.f_MHz, np.ma.masked_array(feedoffsetsH, fill_value=np.nan), np.ma.masked_array(feedoffsetsV, fill_value=np.nan),
@@ -1590,7 +1590,7 @@ def plot_diffs(map0, map1, what, vlim=None, masked=True, overlay=True, title="",
         ax_[-2].contour(domain[0], domain[1], diff, colors='k', alpha=0.2)
         ax_[-2].set_title("%s - %s" % (lbl0, lbl1))
         for ax in ax_[:-1]:
-            ax.set_ylabel("Y"); ax.set_xlabel("X")
+            ax.set_ylabel("Y"); ax.set_xlabel("X"); ax.set_aspect('equal')
         
         diff = np.reshape(diff, (-1,))
         std_sq2 = np.nanstd(diff)/2**.5
@@ -1598,7 +1598,6 @@ def plot_diffs(map0, map1, what, vlim=None, masked=True, overlay=True, title="",
         ax_[-1].hist(diff[np.isfinite(diff)], bins=100, range=lim, orientation='horizontal', log=True); ax_[-1].set_ylabel(unit)
         ax_[-1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
     
-    for ax in axs[:-1]: ax.set_aspect('equal')
     return axs
 
 
