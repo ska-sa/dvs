@@ -1558,7 +1558,7 @@ def plot_diffs(map0, map1, what, vlim=None, masked=True, overlay=True, title="",
     unit = "dB" if is_beam else ("mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl"))
     
     for i,(ax_,map0,map1) in enumerate(zip(axs,maps0,maps1)):
-        lbl0, lbl1 = map0.cbid, map1.cbid
+        lbl0, lbl1 = str(map0.cbid), str(map1.cbid)
         if add_labels:
             lbl0, lbl1 = lbl0+':'+labels[0], lbl1+':'+labels[1]
         
