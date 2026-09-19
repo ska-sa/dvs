@@ -1591,7 +1591,8 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
         diff = np.clip(diff, vlim[0], vlim[1])
         ax_[-1].hist(diff[np.isfinite(diff)], bins=100, range=vlim, orientation='horizontal', log=True); ax_[-1].set_ylabel(unit)
         ax_[-1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
-        
+    
+    for ax in axs[:-1]: ax.set_aspect('equal')
     return axs
 
 
