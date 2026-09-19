@@ -1534,7 +1534,7 @@ def plot_enviro(recs, label, what="elev,wind,temp,humidity", tzoffset=0, figsize
     katpoint.projection.set_out_of_range_treatment(prev_oort)
 
 
-def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
+def plot_diffs(map0, map1, what, vlim=None, masked=True, overlay=True, title="", labels=None):
     """ Generates a figure to show the differences between maps.
         @param map0, map1: instances of either katholog.ApertureMap or katholog.BeamCube - not allowed to mix types!
         @param what: the attribute of the maps to represent - e.g. 'nopointingphasemap' or 'Gx'
@@ -1544,6 +1544,7 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
     """
     maps0 = np.atleast_1d(np.squeeze(map0))
     maps1 = np.atleast_1d(np.squeeze(map1))
+    add_labels = labels is not None and len(labels) == 2
     try:
         is_beam = maps0[0].Gx is not None
     except:
@@ -1557,8 +1558,9 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
     unit = "dB" if is_beam else ("mm" if ("dev" in what) else ("rad" if "phase" in what else "ampl"))
     
     for i,(ax_,map0,map1) in enumerate(zip(axs,maps0,maps1)):
-        subtitle = "%s - %s" % (map0.cbid, map1.cbid)
-        ax_[-2].set_title(subtitle)
+        lbl0, lbl1 = map0.cbid, map1.cbid
+        if add_labels:
+            lbl0, lbl1 = lbl0+':'+labels[0], lbl1+':'+labels[1]
         
         what0, what1 = map0.__getattribute__(what), map1.__getattribute__(what)
         if is_beam: # Only first freq if the BeamCube, complex voltage converted to real power
@@ -1573,23 +1575,27 @@ def plot_diffs(map0, map1, title, what, vlim=None, masked=True, overlay=True):
         if overlay:
             ax_[0].contour(domain[0], domain[1], what0, colors='k', alpha=0.2)
             ax_[0].contour(domain[0], domain[1], what1, colors='r', alpha=0.2)
+            if add_labels: ax_[0].set_title("%s | %s" % (lbl0, lbl1))
         else:
             for ax,d in zip(ax_, [what0, what1]):
                 lim = (np.nanmin(d), np.nanmax(d)) if vlim is None else vlim
                 im = ax.imshow(d, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
                                vmin=lim[0], vmax=lim[1]); plt.colorbar(im, ax=ax)
                 ax.contour(domain[0], domain[1], d, colors='k', alpha=0.2)
+            if add_labels:
+                for ax,l in zip(ax_,[lbl0,lbl1]): ax.set_title(l)
         lim = (np.nanmin(diff), np.nanmax(diff)) if vlim is None else vlim
         im = ax_[-2].imshow(diff, origin='lower', extent=(domain[0][0],domain[0][-1], domain[1][0],domain[1][-1]),
                             vmin=lim[0], vmax=lim[1]); plt.colorbar(im, ax=ax_[-2])
         ax_[-2].contour(domain[0], domain[1], diff, colors='k', alpha=0.2)
+        ax_[-2].set_title("%s - %s" % (lbl0, lbl1))
         for ax in ax_[:-1]:
             ax.set_ylabel("Y"); ax.set_xlabel("X")
         
         diff = np.reshape(diff, (-1,))
         std_sq2 = np.nanstd(diff)/2**.5
-        diff = np.clip(diff, vlim[0], vlim[1])
-        ax_[-1].hist(diff[np.isfinite(diff)], bins=100, range=vlim, orientation='horizontal', log=True); ax_[-1].set_ylabel(unit)
+        diff = np.clip(diff, lim[0], lim[1])
+        ax_[-1].hist(diff[np.isfinite(diff)], bins=100, range=lim, orientation='horizontal', log=True); ax_[-1].set_ylabel(unit)
         ax_[-1].legend(["$\\frac{\sigma}{\sqrt{2}}=%.2f$"%std_sq2])
     
     for ax in axs[:-1]: ax.set_aspect('equal')
