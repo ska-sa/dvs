@@ -280,6 +280,12 @@ def dms2deg(d,m,s):
 
 def asec2dms(asec):
     """ @return: text representation of an angle in d:m:s format """
+    if (len(np.shape(asec)) > 0):
+        return [asec2dms(_) for _ in asec]
+    
+    if not np.isfinite(asec):
+        return 'nan'
+    
     d = np.trunc(asec/3600) # Signed float
     asec = abs(asec - d*3600) # Lose the sign
     m = int(asec/60)
