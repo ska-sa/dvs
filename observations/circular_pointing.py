@@ -79,7 +79,19 @@ def generatepattern(totextent=10,tottime=1800,sampletime=1,scanspeed=0.15,slewsp
     return compositex,compositey,compositeslew #these coordinates are such that the upper part of pattern is sampled first; reverse order to sample bottom part first
 
 
-def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_factor=1.0,clip_safety_margin=1.0,min_elevation=15.,max_elevation=90.,min_az=-180.,max_az=270.):
+def wrap_az(az_rad, min_az_rad, max_az_rad, wrap_sign=1):
+    """ Wraps azimuth to be continuous and at least starting in the desired wrap """
+    # Make it continuous
+    az_rad = np.unwrap(az_rad)
+    # Place in correct wrap
+    az_rad = az_rad % (2*np.pi*np.sign(wrap_sign))
+    # Enforce limits (by wrapping!)
+    az_rad[az_rad < min_az_rad] += 2*np.pi
+    az_rad[az_rad > max_az_rad] -= 2*np.pi
+    return az_rad
+    
+
+def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_factor=1.0,clip_safety_margin=1.0,min_elevation=15.,max_elevation=90.,min_az=-180.,max_az=270.,wrap_sign=1):
     """
         high_elevation_slowdown_factor: normal speed up to 60degrees elevation slowed down linearly by said factor at 90 degrees elevation
         note azimuth is unwrapped to allow the max possible range on either side (center to extreme) before hitting min,max az limit
@@ -93,8 +105,7 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
     attime = lasttime+np.arange(1,num_points+1)*timeperstep
     # arm scan
     targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-    AZ_CUT = np.mean([min_az+360,max_az])-360 # Centered between the azimuth max limits to minimize the likelihood of triggering an unwrap
-    targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
+    targetaz_rad = wrap_az(targetaz_rad, min_az*np.pi/180, max_az*np.pi/180, wrap_sign)
     scanaz,scanel=plane_to_sphere_holography(targetaz_rad,targetel_rad,az_arm ,el_arm)
     if high_elevation_slowdown_factor>1.0:
         meanscanarmel=np.mean(scanel)*180./np.pi
@@ -102,7 +113,7 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
             slowdown_factor=(meanscanarmel-60.)/(90.-60.)*(high_elevation_slowdown_factor-1.)+1.0#scales linearly from 1 at 60 deg el, to high_elevation_slowdown_factor at 90 deg el
             attime = lasttime+np.arange(1,num_points+1)*timeperstep*slowdown_factor
             targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-            targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
+            targetaz_rad=wrap_az(targetaz_rad, min_az*np.pi/180, max_az*np.pi/180, wrap_sign)
             scanaz,scanel=plane_to_sphere_holography(targetaz_rad,targetel_rad,az_arm ,el_arm)
     #clipping prevents antenna from hitting hard limit and getting stuck until technician reset it, 
     #but not ideal to reach this because then actual azel could be equal to requested azel even though not right and may falsely cause one to believe everything is ok
@@ -114,13 +125,12 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
     clipping_occurred=(np.sum(azdata==scan_data[:,1])+np.sum(eldata==scan_data[:,2])!=len(eldata)*2)
     return scan_data,clipping_occurred
 
-def gen_track(attime,target,min_az=-180.,max_az=270.):
+def gen_track(attime,target,min_az=-180.,max_az=270., wrap_sign=1):
     track_data = np.zeros((len(attime),3))
     targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
-    AZ_CUT = np.mean([min_az+360,max_az])-360 # Centered between the azimuth max limits to minimize the likelihood of triggering an unwrap
-    targetaz_rad=((targetaz_rad-AZ_CUT*np.pi/180.)%(2.*np.pi)+AZ_CUT*np.pi/180.) # Wrap azimuth to be continuous across the cut
+    targetaz_rad=wrap_az(targetaz_rad, min_az*np.pi/180, max_az*np.pi/180, wrap_sign)
     track_data[:,0] = attime
-    track_data[:,1] = np.unwrap(targetaz_rad)*180.0/np.pi
+    track_data[:,1] = targetaz_rad*180.0/np.pi
     track_data[:,2] = targetel_rad*180.0/np.pi
     return track_data
 
@@ -395,6 +405,7 @@ if __name__=="__main__":
                         session.label("track") # Compscan label
                         if not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
                         session.track(target, duration=opts.cycle_tracktime, announce=False) # Slew if necessary, then track_ants keep tracking
+                    current_wrap = 1 # Used with unwrap_every
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
@@ -417,7 +428,7 @@ if __name__=="__main__":
                             session.ants = scan_ants_array[iant]
                             target.antenna = scan_observers[iant]
                             min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]] 
-                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az)
+                            scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az,wrap_sign=current_wrap)
                             if not kat.dry_run:
                                 if clipping_occurred:
                                     user_logger.info("Warning unexpected clipping occurred in scan pattern")
@@ -455,11 +466,7 @@ if __name__=="__main__":
                     # Force the azimuth wrap to change for all scan ants, if requested
                     if (opts.unwrap_every > 0) and (cycle%opts.unwrap_every == 0):
                         user_logger.info("Changing azimuth wrap")
-                        session.ants = scan_ants
-                        current_el = np.median([ant.sensor.pos_actual_scan_elev.get_value() for ant in scan_ants])
-                        current_az = np.median([ant.sensor.pos_actual_scan_azim.get_value() for ant in scan_ants])
-                        wrapped_az = current_az + 360 if (current_az<0) else current_az - 360
-                        session.track(katpoint.Target("azel, %.1f, %.1f"%(wrapped_az,current_el)), duration=0, announce=False)
+                        current_wrap *= -1
                     
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
