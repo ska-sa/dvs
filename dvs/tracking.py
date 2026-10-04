@@ -260,10 +260,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     tck = katsepnt._TILT_CORR_KEYS_(ant)
     tilt_timestamps = ds.timestamps[:]
     try:
-        tiltx = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['tiltx'])
-        tilty = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['tilty'])
-        tiltcorr_az = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['azCorr'], max_upsample=np.inf)
-        tiltcorr_el = katsepnt._getsensorvalues_(ant, tilt_timestamps, **tck['elCorr'], max_upsample=np.inf)
+        tiltx = katsepnt._getsensorvalues_(tilt_timestamps, ant, **tck['tiltx'])
+        tilty = katsepnt._getsensorvalues_(tilt_timestamps, ant, **tck['tilty'])
+        tiltcorr_az = katsepnt._getsensorvalues_(tilt_timestamps, ant, **tck['azCorr'], max_upsample=np.inf)
+        tiltcorr_el = katsepnt._getsensorvalues_(tilt_timestamps, ant, **tck['elCorr'], max_upsample=np.inf)
     except AssertionError as e: # Sensor not defined
         print("WARNING: failed to load tilt-related values, setting to nan!", e)
         tiltx = tilty = tiltcorr_az = tiltcorr_el = np.nan+tilt_timestamps
