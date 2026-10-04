@@ -404,8 +404,8 @@ if __name__=="__main__":
                     # Force the azimuth wrap to change for all scan ants, if requested
                     if (opts.unwrap_every > 0) and ((cycle+1)%opts.unwrap_every == 0):
                         user_logger.info("Performing azimuth unwrap (cycling)")
-                        current_wrap *= -1 # Used to ensure wrap of session.track is same as being used in load_scan
-                        targetazel = gen_track([time.time()+opts.tracktime], target, wrap_sign=current_wrap)[0][1:]
+                        current_wrap *= -1 # Ensure wrap of session.track is same as being used in load_scan
+                        targetazel = gen_track([time.time()+opts.cycle_tracktime], target, wrap_sign=current_wrap)[0][1:]
                         unwrap_tgt = katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
                         session.track(unwrap_tgt, duration=0, announce=False)
                     else:
