@@ -396,8 +396,7 @@ if __name__=="__main__":
                             continue
                     else:
                         targets.remove(target)
-                        user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
-                        user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
+                    user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
                     target.tags = target.tags[:1] # Strip superfluous tags to avoid unnecessarily loading the cal pipeline
                     session.set_target(target)
                     
@@ -417,6 +416,8 @@ if __name__=="__main__":
                         session.label("track") # Compscan label
                         if not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
                         session.track(target, duration=opts.cycle_tracktime, announce=False) # Slew if necessary, then track_ants keep tracking
+                    
+                    user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
