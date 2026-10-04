@@ -368,6 +368,10 @@ if __name__=="__main__":
                     for iant,ant in enumerate(all_ants):
                         currentaz[iant]=ant.sensor.pos_actual_scan_azim.get_value()
                         currentel[iant]=ant.sensor.pos_actual_scan_elev.get_value()
+                    # Force the azimuth wrap to change, if requested
+                    if (opts.unwrap_every > 0) and ((cycle+1)%(opts.unwrap_every+1) == 0): # Only if we've just passed the count
+                        current_wrap *= -1 # Used to ensure wrap of session.track is same as used in load_scan
+                        # Note: unwrap is applied further below, after target is selected
                     #choose target
                     target=None
                     target_rising=False
@@ -400,18 +404,17 @@ if __name__=="__main__":
                     target.tags = target.tags[:1] # Strip superfluous tags to avoid unnecessarily loading the cal pipeline
                     session.set_target(target)
                     
-                    # Force the azimuth wrap to change for all scan ants, if requested
+                    # Apply the azimuth wrap change
                     if (opts.unwrap_every > 0) and ((cycle+1)%(opts.unwrap_every+1) == 0): # Only if we've just passed the count
                         user_logger.info("Performing azimuth unwrap (cycling)")
-                        current_wrap *= -1 # Ensure wrap of session.track is same as being used in load_scan
                         targetazel = gen_track([time.time()+opts.cycle_tracktime], target, wrap_sign=current_wrap)[0][1:]
                         unwrap_tgt = katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
                         session.track(unwrap_tgt, duration=0, announce=False)
                     else:
                         unwrap_tgt = None
                     
-                    # Perform the cycle_track if requested 
-                    if (target != prev_target) or (opts.cycle_tracktime > 0) or (unwrap_tgt is not None):
+                    # Perform the cycle_track if requested or if there was a slew
+                    if (target != prev_target) or (unwrap_tgt is not None) or (opts.cycle_tracktime > 0):
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         if not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
