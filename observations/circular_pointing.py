@@ -459,7 +459,7 @@ if __name__=="__main__":
                         current_el = np.median([ant.sensor.pos_actual_scan_elev.get_value() for ant in scan_ants])
                         current_az = np.median([ant.sensor.pos_actual_scan_azim.get_value() for ant in scan_ants])
                         wrapped_az = current_az + 360 if (current_az<0) else current_az - 360
-                        session.track(katpoint.Target("azel, %.1f, %.1f"%(wrapped_az,current_el)), slew_only=True, duration=0, announce=False)
+                        session.track(katpoint.Target("azel, %.1f, %.1f"%(wrapped_az,current_el)), duration=0, announce=False)
                     
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
