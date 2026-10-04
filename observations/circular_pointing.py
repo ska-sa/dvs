@@ -125,7 +125,7 @@ def gen_scan(lasttime,target,az_arm,el_arm,timeperstep,high_elevation_slowdown_f
     clipping_occurred=(np.sum(azdata==scan_data[:,1])+np.sum(eldata==scan_data[:,2])!=len(eldata)*2)
     return scan_data,clipping_occurred
 
-def gen_track(attime,target,min_az=-180.,max_az=270., wrap_sign=1):
+def gen_track(attime,target,min_az=-180.,max_az=270.,wrap_sign=1):
     track_data = np.zeros((len(attime),3))
     targetaz_rad,targetel_rad=target.azel(attime)#gives targetaz in range 0 to 2*pi
     targetaz_rad=wrap_az(targetaz_rad, min_az*np.pi/180, max_az*np.pi/180, wrap_sign)
@@ -135,9 +135,9 @@ def gen_track(attime,target,min_az=-180.,max_az=270., wrap_sign=1):
     return track_data
 
 
-def test_target_azel_limits(target,clip_safety_margin,min_elevation,max_elevation,cycle_tracktime,sampletime,high_elevation_slowdown_factor):
+def test_target_azel_limits(target,clip_safety_margin,min_elevation,max_elevation,cycle_tracktime,sampletime,high_elevation_slowdown_factor,wrap_sign=1):
     now=time.time()
-    targetazel=gen_track([now],target)[0][1:]
+    targetazel=gen_track([now],target,wrap_sign=wrap_sign)[0][1:]
     slewtotargettime=np.max([0.5*np.abs(currentaz-targetazel[0]),1.*np.abs(currentel-targetazel[1])])+1.0#antenna can slew at 2 degrees per sec in azimuth and 1 degree per sec in elev
     starttime=now+slewtotargettime+cycle_tracktime
     targetel=np.array(target.azel([starttime,starttime+1.])[1])*180.0/np.pi
@@ -377,7 +377,7 @@ if __name__=="__main__":
                     target_histindex=0
                     targetinfotext=[]
                     for testtarget in targets:
-                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,
+                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,wrap_sign=current_wrap,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,
                                                                                                 cycle_tracktime=opts.cycle_tracktime,sampletime=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor)
                         targetinfotext.append('%s (elev %.1f%s)'%(testtarget.name,meanelev,'' if suitable else ', unsuitable'))
                         if suitable:
