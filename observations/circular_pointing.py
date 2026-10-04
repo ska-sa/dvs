@@ -196,6 +196,8 @@ if __name__=="__main__":
     parser.add_option('--cluster-repeats', type="float", default=0,
                       help="Number of times to re-visit targets in each cluster after the first round (default=%default)")
     
+    parser.add_option('--unwrap-every', type="int", default=-1,
+                      help="Forcibly unwrap azimuth every few scans (default=never)")
     parser.add_option('--switch-indexer-every', type="int", default=-1,
                       help="Switch the feed indexer out & back again after every few scans, alternating directions if possible (default=never)")
     parser.add_option('--switch-indexer-avoid-x', action='store_true',
@@ -447,10 +449,19 @@ if __name__=="__main__":
                     time.sleep(lasttime-time.time()) #wait until last coordinate's time value elapsed
                     prev_target = target
                     
-                    #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
-                    session.ants = all_ants
-                    user_logger.info("Safe to interrupt script now if necessary")
-                    
                     cycle+=1
                     # Switch the indexer out & back, if requested
                     cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run, avoid_x=opts.switch_indexer_avoid_x)
+                    # Force the azimuth wrap to change for all scan ants, if requested
+                    if (opts.unwrap_every > 0) and (cycle%opts.unwrap_every == 0):
+                        user_logger.info("Changing azimuth wrap")
+                        session.ants = scan_ants
+                        current_el = np.median([ant.sensor.pos_actual_scan_elev.get_value() for ant in scan_ants])
+                        current_az = np.median([ant.sensor.pos_actual_scan_azim.get_value() for ant in scan_ants])
+                        wrapped_az = current_az + 360 if (current_az<0) else current_az - 360
+                        session.track(katpoint.Target("azel, %.1f, %.1f"%(wrapped_az,current_el)), slew_only=True, duration=0, announce=False)
+                    
+                    
+                    #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
+                    session.ants = all_ants
+                    user_logger.info("Safe to interrupt script now if necessary")
