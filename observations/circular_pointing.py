@@ -343,6 +343,7 @@ if __name__=="__main__":
                 cycle = 0
                 targets = []
                 prev_target = None # To keep track of changes in targets
+                current_wrap = 1 # Keep track of azimuth wrap, for unwrap_every
                 while cycle<opts.num_cycles or opts.num_cycles<0: # Override exit conditions are coded in the next ten lines
                     fresh_plan = False
                     if (len(targets) == 0): # Re-initialise the list in case there's more time & cycles left
@@ -397,15 +398,25 @@ if __name__=="__main__":
                         targets.remove(target)
                         user_logger.info("Using target '%s' (mean elevation %.1f degrees)",target.name,target_meanelev)
                         user_logger.info("Current scan estimated to complete at UT %s (in %.1f minutes)",time.ctime(time.time()+target_expected_duration+time.timezone),target_expected_duration/60.)
+                    target.tags = target.tags[:1] # Strip superfluous tags to avoid unnecessarily loading the cal pipeline
                     session.set_target(target)
                     
+                    # Force the azimuth wrap to change for all scan ants, if requested
+                    if (opts.unwrap_every > 0) and ((cycle+1)%opts.unwrap_every == 0):
+                        user_logger.info("Performing azimuth unwrap (cycling)")
+                        current_wrap *= -1 # Used to ensure wrap of session.track is same as being used in load_scan
+                        targetazel = gen_track([time.time()+opts.tracktime], target, wrap_sign=current_wrap)[0][1:]
+                        unwrap_tgt = katpoint.Target('azimuthunwrap,azel,%s,%s'%(targetazel[0], targetazel[1]))
+                        session.track(unwrap_tgt, duration=0, announce=False)
+                    else:
+                        unwrap_tgt = None
+                    
                     # Perform the cycle_track if requested 
-                    if (target != prev_target) or (opts.cycle_tracktime > 0):
+                    if (target != prev_target) or (opts.cycle_tracktime > 0) or (unwrap_tgt is not None):
                         user_logger.info("Performing initial track")
                         session.label("track") # Compscan label
                         if not kat.dry_run: hack_SetPointingCorrections(all_ants) # Especially for scan_ants - mode changes!
                         session.track(target, duration=opts.cycle_tracktime, announce=False) # Slew if necessary, then track_ants keep tracking
-                    current_wrap = 1 # Used with unwrap_every
                     
                     if (target_rising):#target is rising - scan top half of pattern first
                         cx=compositex
@@ -463,11 +474,6 @@ if __name__=="__main__":
                     cycle+=1
                     # Switch the indexer out & back, if requested
                     cycle_feedindexer(scan_ants, cycle, opts.switch_indexer_every, kat.dry_run, avoid_x=opts.switch_indexer_avoid_x)
-                    # Force the azimuth wrap to change for all scan ants, if requested
-                    if (opts.unwrap_every > 0) and (cycle%opts.unwrap_every == 0):
-                        user_logger.info("Changing azimuth wrap")
-                        current_wrap *= -1
-                    
                     
                     #set session antennas to all so that stow-when-done option will stow all used antennas and not just the scanning antennas
                     session.ants = all_ants
