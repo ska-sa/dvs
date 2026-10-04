@@ -402,7 +402,7 @@ if __name__=="__main__":
                     session.set_target(target)
                     
                     # Force the azimuth wrap to change for all scan ants, if requested
-                    if (opts.unwrap_every > 0) and ((cycle+1)%opts.unwrap_every == 0):
+                    if (opts.unwrap_every > 0) and ((cycle+1)%(opts.unwrap_every+1) == 0): # Only if we've just passed the count
                         user_logger.info("Performing azimuth unwrap (cycling)")
                         current_wrap *= -1 # Ensure wrap of session.track is same as being used in load_scan
                         targetazel = gen_track([time.time()+opts.cycle_tracktime], target, wrap_sign=current_wrap)[0][1:]
