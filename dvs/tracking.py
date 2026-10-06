@@ -270,7 +270,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     
     sun = katpoint.Target('Sun, special')
     rc = katpoint.RefractionCorrection()
-    wrap_angle = lambda angle, period=360: (angle + 0.5*period) % period - 0.5*period
+    wrapped_angle_diff = lambda a_rad, b_rad: np.angle(np.exp(1j*a_rad - 1j*b_rad)) # Difference between two angles forced onto a 2pi domain
     # Fit offsets to an "intensity map"
     for (cs_no, cs_label, target) in ds.compscans():
         if chans:
@@ -372,11 +372,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         # Now correct the measured (az, el) for refraction and then apply the old pointing model
         aEl = rc.apply(aEl, temperature, pressure, humidity)
         # Get a "raw" measured (az, el) at the output of the pointing model
-        mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl)
+        mAz, mEl = scan_ant.pointing_model.apply(katpoint.wrap_angle(aAz), aEl)
         
         # The difference between requested & measured, as a small angle around 0 degrees
-        dAz, dEl = (mAz - rAz)*R2D, (mEl - rEl)*R2D
-        dAz, dEl = wrap_angle(dAz), wrap_angle(dEl)
+        dAz, dEl = wrapped_angle_diff(mAz, rAz)*R2D, (mEl - rEl)*R2D
         
         if debug or verbose:
             print(f"Scan #{cs_no}: {cs_label}, on {target.name}")
