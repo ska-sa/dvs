@@ -46,6 +46,7 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
                   If this is an integer (or string representation of an integer) it is converted using `cbid2url`.
         @param ref_ant: the name of reference antenna, used to partition data set into scans (essential if you
                   are interpreting the data for SKA-type Dishes, because their activities have a time offset from MeerKAT).
+                  Should start with 'm' to force non-MeerKAT antennas to have the same offset as MeerKAT antennas.
         @param hackedL: True if the dataset was generated with the hacked L-band digitiser i.e. sampled in 1st Nyquist zone.
         @param ant_rx_override: {ant:rx_serial} to override (default None)
         @param cache_root: None, or the folder to download the dataset to, until the cache is deleted (default None).
@@ -91,22 +92,18 @@ def open_dataset(dataset, ref_ant='', hackedL=False, ant_rx_override=None, cache
     
     # Take care of activity boundary time mismatches
     try:
-        _time_offset = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
-        if (1738674000 < cbid): # From 4/02/2025 ~13h00 UTC, the Receptor & Dish proxies have the same lead time offset
-            t_o = 5 # https://github.com/ska-sa/katmisc/blob/release/karoocamv30/katmisc/app/dish_proxy/katproxy/proxy/mke_dsh_model.py#L39
-            if (1760000000 < cbid) and ref_ant.startswith('s'): # TODO: SkaoDishProxy seems to require this - get it back to 5sec!
-                t_o = 6.2
-            katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
-        elif ref_ant:
-            if ref_ant.startswith("s"):
+        _time_offset = t_o = katdal.visdatav4.SENSOR_PROPS['*activity'].get('time_offset', 0)
+        if not ref_ant.startswith("m"): # Deviate from default
+            if (1738674000 < cbid): # From 4/02/2025 ~13h00 UTC, the Receptor & Dish proxies have the same lead time offset
+                t_o = 5 # https://github.com/ska-sa/katmisc/blob/release/karoocamv30/katmisc/app/dish_proxy/katproxy/proxy/mke_dsh_model.py#L39
+                if (1760000000 < cbid) and ref_ant.startswith('s'): # TODO: SkaoDishProxy seems to require this - get it back to 5sec!
+                    t_o = 6.2
+            elif ref_ant.startswith("s"): # Prior to 1738674000, 'sXXXX' are MKE antennas with different time offsets
                 # https://github.com/ska-sa/katproxy/blob/master/katproxy/proxy/ska_mpi_dsh_model.py#L34
                 if ("/159" in dsname): t_o = 18 # 06/2020 - 09/2020
                 elif ("/162" in dsname) or ("/163" in dsname): t_o = 10 # 06/2021 - 12/2021
                 else: t_o = 5 # https://github.com/ska-sa/katproxy/pull/702/files
-                katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
-            # elif ref_ant.startswith("m"): # Taken care of by default?
-            #     katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = 1.2 # https://github.com/ska-sa/katproxy/blob/master/katproxy/proxy/base_receptor_model.py#L46
-        
+        katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = t_o
         dataset = katdal.open(dataset, **kwargs) if isinstance(dataset,str) else dataset
     finally: # It is "baked in" when katdal.open() completes
         katdal.visdatav4.SENSOR_PROPS['*activity']['time_offset'] = _time_offset
