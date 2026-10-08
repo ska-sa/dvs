@@ -160,6 +160,8 @@ if opts.pre_average:
 augmented_targetdir, group_delay, sigma_delay = [], [], []
 scan_targets, scan_mid_az, scan_mid_el, scan_timestamps, scan_phase = [], [], [], [], []
 for scan_ind, state, target in data.scans():
+    if (target.body_type == 'azel'): # Avoid processing targets with poorly defined positions
+        continue
     ts = data.timestamps[:]
     if np.isfinite(opts.truncate_tracklength):
         ts = ts[:int(opts.truncate_tracklength/(ts[1]-ts[0])+0.5)]
