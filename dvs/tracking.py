@@ -313,9 +313,6 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
         rAz, rEl_unrefracted = target.azel(t_ref, antenna=scan_ant) # [rad]
-        # NB! To treat P12 correctly the azimuth angle must be explicitly on the **antenna mechanical azimuth** range
-        discAz = rAz - np.median(ds.sensor[ant+'_pos_request_scan_azim'][mask])/R2D
-        if (abs(discAz) > np.pi): rAz -= np.sign(discAz)*2*np.pi
         # Correct for refraction, which becomes the requested value at input of pointing model
         rEl = rc.apply(rEl_unrefracted, temperature, pressure, humidity)
 
@@ -375,7 +372,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         # Now correct the measured (az, el) for refraction and then apply the old pointing model
         aEl = rc.apply(aEl, temperature, pressure, humidity)
         # Get a "raw" measured (az, el) at the output of the pointing model
-        mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl) # NB! For P12 the azimuth angle is explicitly on the **antenna mechanical azimuth** range 
+        # NB! To treat P12 correctly the azimuth angle must be explicitly on the **antenna mechanical azimuth** range
+        discAz = aAz - np.median(ds.sensor[ant+'_pos_request_scan_azim'][mask])/R2D
+        if (abs(discAz) > np.pi): aAz -= np.sign(discAz)*2*np.pi
+        mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl)
         
         # The difference between requested & measured, as a small angle around 0 degrees
         dAz, dEl = wrapped_angle_diff(mAz, rAz)*R2D, (mEl - rEl)*R2D
