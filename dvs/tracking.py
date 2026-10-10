@@ -312,9 +312,12 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         tiltx_, tilty_, tiltcorr_az_, tiltcorr_el_ = np.median(tiltx[_ts_]), np.median(tilty[_ts_]), np.median(tiltcorr_az[_ts_]), np.median(tiltcorr_el[_ts_])
         
         # The requested (az, el) coordinates, as they apply at the middle time for a moving target
-        rAz, rEl = target.azel(t_ref, antenna=scan_ant) # [rad]
+        rAz, rEl_unrefracted = target.azel(t_ref, antenna=scan_ant) # [rad]
+        # NB! To treat P12 correctly the azimuth angle must be explicitly on the **antenna mechanical azimuth** range
+        discAz = rAz - np.median(ds.sensor[ant+'_pos_request_scan_azim'][mask])/R2D
+        if (abs(discAz) > np.pi): rAz -= np.sign(discAz)*2*np.pi
         # Correct for refraction, which becomes the requested value at input of pointing model
-        rEl = rc.apply(rEl, temperature, pressure, humidity)
+        rEl = rc.apply(rEl_unrefracted, temperature, pressure, humidity)
 
         try: # Fit the beam
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
@@ -368,11 +371,11 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         
         # Convert this offset back to spherical (az, el) coordinates
         with katpoint.projection.out_of_range_context('nan'):
-            aAz, aEl = target.plane_to_sphere(xoff/R2D, yoff/R2D, t_ref, antenna=scan_ant, coord_system='azel') # [rad]
+            aAz, aEl = katpoint.projection.plane_to_sphere['ARC'](rAz, rEl_unrefracted, xoff/R2D, yoff/R2D) # [rad]
         # Now correct the measured (az, el) for refraction and then apply the old pointing model
         aEl = rc.apply(aEl, temperature, pressure, humidity)
         # Get a "raw" measured (az, el) at the output of the pointing model
-        mAz, mEl = scan_ant.pointing_model.apply(katpoint.wrap_angle(aAz), aEl)
+        mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl) # NB! For P12 the azimuth angle is explicitly on the **antenna mechanical azimuth** range 
         
         # The difference between requested & measured, as a small angle around 0 degrees
         dAz, dEl = wrapped_angle_diff(mAz, rAz)*R2D, (mEl - rEl)*R2D
