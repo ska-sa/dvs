@@ -250,6 +250,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     
     scan_ant_ix = [a.name for a in ds.ants].index(ant)
     scan_ant = ds.ants[scan_ant_ix]
+    req_timestamps, req_az = katselib.getsensorvalues("%s_pos_request_pointm_azim"%ant, ds.timestamps) # TODO: get this added to ds.sensor
     gust_timestamps, gust_wind_speed = katselib.getsensorvalues("%s_enviro_gust_wind_speed"%ant, ds.timestamps)
     avgws_timestamps, avgws = ds.timestamps[:], sliding_window(ds.timestamps, ds.wind_speed, int(1000/(ds.timestamps[1]-ds.timestamps[0])+0.5), np.mean)
     ant_type = 'e' if ((ant[0] == 's') and (ds.timestamps[-1] < 1756490000)) else ant[0] # Determine whether it's MKE(prior to 28/08/2025) or SKA
@@ -315,6 +316,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         rAz, rEl_unrefracted = target.azel(t_ref, antenna=scan_ant) # [rad]
         # Correct for refraction, which becomes the requested value at input of pointing model
         rEl = rc.apply(rEl_unrefracted, temperature, pressure, humidity)
+        # NB! To treat P12 correctly the azimuth angle must be explicitly on the **antenna mechanical azimuth** range
+        _ts_ = (ds.timestamps[0]<=req_timestamps) & (req_timestamps<=ds.timestamps[-1])
+        discAz = rAz - np.median(req_az[_ts_][mask])/R2D
+        if (abs(discAz) > np.pi): rAz -= np.sign(discAz)*2*np.pi
 
         try: # Fit the beam
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
@@ -372,9 +377,6 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         # Now correct the measured (az, el) for refraction and then apply the old pointing model
         aEl = rc.apply(aEl, temperature, pressure, humidity)
         # Get a "raw" measured (az, el) at the output of the pointing model
-        # NB! To treat P12 correctly the azimuth angle must be explicitly on the **antenna mechanical azimuth** range
-        discAz = aAz - np.median(ds.sensor[ant+'_pos_request_scan_azim'][mask])/R2D
-        if (abs(discAz) > np.pi): aAz -= np.sign(discAz)*2*np.pi
         mAz, mEl = scan_ant.pointing_model.apply(aAz, aEl)
         
         # The difference between requested & measured, as a small angle around 0 degrees
