@@ -135,9 +135,9 @@ def gen_track(attime,target,min_az=-180.,max_az=270.,wrap_sign=1):
     return track_data
 
 
-def test_target_azel_limits(target,clip_safety_margin,min_elevation,max_elevation,cycle_tracktime,sampletime,high_elevation_slowdown_factor,wrap_sign=1):
+def test_target_azel_limits(target,clip_safety_margin,min_elevation,max_elevation,min_az,max_az,cycle_tracktime,sampletime,high_elevation_slowdown_factor,wrap_sign=1):
     now=time.time()
-    targetazel=gen_track([now],target,wrap_sign=wrap_sign)[0][1:]
+    targetazel=gen_track([now],target,min_az,max_az,wrap_sign)[0][1:]
     slewtotargettime=np.max([0.5*np.abs(currentaz-targetazel[0]),1.*np.abs(currentel-targetazel[1])])+1.0#antenna can slew at 2 degrees per sec in azimuth and 1 degree per sec in elev
     starttime=now+slewtotargettime+cycle_tracktime
     targetel=np.array(target.azel([starttime,starttime+1.])[1])*180.0/np.pi
@@ -381,7 +381,9 @@ if __name__=="__main__":
                     target_histindex=0
                     targetinfotext=[]
                     for testtarget in targets:
-                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,wrap_sign=current_wrap,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,
+                        _ = [{'m':(-180,270),'e':(-270,270),'s':(-270,270)}[ant.name[0]] for ant in all_ants]
+                        min_az,max_az = np.min(_), np.max(_)
+                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,wrap_sign=current_wrap,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,min_az=min_az,max_az=max_az,
                                                                                                 cycle_tracktime=opts.cycle_tracktime,sampletime=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor)
                         targetinfotext.append('%s (elev %.1f%s)'%(testtarget.name,meanelev,'' if suitable else ', unsuitable'))
                         if suitable:
@@ -442,7 +444,7 @@ if __name__=="__main__":
                         for iant,scan_ant in enumerate(scan_ants):
                             session.ants = scan_ants_array[iant]
                             target.antenna = scan_observers[iant]
-                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]] 
+                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]]
                             scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az,wrap_sign=current_wrap)
                             if not kat.dry_run:
                                 if clipping_occurred:
@@ -453,7 +455,7 @@ if __name__=="__main__":
                                 continue
                             session.ants = track_ants_array[iant]
                             target.antenna = track_observers[iant]
-                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]] 
+                            min_az,max_az = {'m':(-180,270),'e':(-270,270),'s':(-270,270)}[scan_ant.name[0]]
                             scan_data, clipping_occurred = gen_scan(lasttime,target,armx,army,timeperstep=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor,clip_safety_margin=1.0,min_elevation=opts.horizon,min_az=min_az,max_az=max_az)
                             if not kat.dry_run:
                                 if clipping_occurred:
