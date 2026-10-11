@@ -150,7 +150,8 @@ def test_target_azel_limits(target,clip_safety_margin,min_elevation,max_elevatio
         cy=[com[::-1] for com in compositey[::-1]]
     meanelev=np.zeros(len(cx))
     for iarm in range(len(cx)):# arm index
-        scan_data,clipping_occurred = gen_scan(starttime,target,cx[iarm],cy[iarm],timeperstep=sampletime,high_elevation_slowdown_factor=high_elevation_slowdown_factor,clip_safety_margin=clip_safety_margin,min_elevation=min_elevation,max_elevation=max_elevation)
+        scan_data,clipping_occurred = gen_scan(starttime,target,cx[iarm],cy[iarm],timeperstep=sampletime,high_elevation_slowdown_factor=high_elevation_slowdown_factor,
+                                               clip_safety_margin=clip_safety_margin,min_elevation=min_elevation,max_elevation=max_elevation,min_az=min_az,max_az=max_az,wrap_sign=wrap_sign)
         meanelev[iarm]=np.mean(scan_data[:,2])
         starttime=scan_data[-1,0]
         if clipping_occurred:
@@ -383,7 +384,7 @@ if __name__=="__main__":
                     for testtarget in targets:
                         _ = [{'m':(-180,270),'e':(-270,270),'s':(-270,270)}[ant.name[0]] for ant in all_ants]
                         min_az,max_az = np.min(_), np.max(_)
-                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,wrap_sign=current_wrap,clip_safety_margin=2.0,min_elevation=opts.horizon,max_elevation=opts.max_elevation,min_az=min_az,max_az=max_az,
+                        suitable, rising, expected_duration, meanelev = test_target_azel_limits(testtarget,wrap_sign=current_wrap,clip_safety_margin=0.2,min_elevation=opts.horizon,max_elevation=opts.max_elevation,min_az=min_az,max_az=max_az,
                                                                                                 cycle_tracktime=opts.cycle_tracktime,sampletime=opts.sampletime,high_elevation_slowdown_factor=opts.high_elevation_slowdown_factor)
                         targetinfotext.append('%s (elev %.1f%s)'%(testtarget.name,meanelev,'' if suitable else ', unsuitable'))
                         if suitable:
