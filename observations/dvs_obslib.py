@@ -400,7 +400,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
         if avoid_x: indexer_positions, indices = ["B6","B2"], [7,2]
         for ant in ants[2]:
             try:
-                index0[2] = indexer_positions.index(ant.sensor.dsm_indexerPosition.get_value())
+                index0[2] = indexer_positions.index(ant.sensor.dsh_configuredBand.get_value())
                 break
             except:
                 if dry_run:
