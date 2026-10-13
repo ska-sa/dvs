@@ -198,7 +198,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
 
 
 def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, phased_up=False, flags='cam,data_lost', scans="~slew", compscans="~slew",
-                          polswap=None, kind=None, min_len=20, clip_radius=None, strict=True, output_filepattern="%s_%s_circular_pointing.csv",
+                          polswap=None, usepols=(0,1), kind=None, min_len=20, clip_radius=None, strict=True, output_filepattern="%s_%s_circular_pointing.csv",
                           verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technique (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
@@ -211,6 +211,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         @param phased_up: True if the phase slope between ant & track_ant products is <<180deg (default False)
         @param flags: the katdal flags to apply to the data, or None (default 'cam,data_lost') 
         @param polswap: a comma-separated list of antenna IDs where the polarisation is swapped (default None)
+        @param usepols: in case of malfunction of a polarisation channel, specify (0,0) to only use data from H, or (1,1) for only V (default (0,1))
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
         @param min_len: the minimum number of data points required to fit a centroid on (default 20).
         @param clip_radius: maximum radius around target to use for fit, or None for 'median+std' [deg] (default None)
@@ -239,10 +240,10 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
     track_ant = "" if track_ant is None else track_ant
     pols = {a:"HV" if (a not in polswap) else "VH" for a in [ant,track_ant]}
     if (track_ant):
-        pols_to_use = [pols[ant][i]+pols[track_ant][i] for i in (0,1)]
+        pols_to_use = [pols[ant][i]+pols[track_ant][i] for i in usepols]
         ds.select(corrprods="cross", pol=pols_to_use, ants=[ant,track_ant])
     else:
-        pols_to_use = [pols[ant][i]+pols[ant][i] for i in (0,1)]
+        pols_to_use = [pols[ant][i]+pols[ant][i] for i in usepols]
         ds.select(pol=pols_to_use, ants=[ant])
     if flags:
         ds.select(flags=flags)
@@ -344,7 +345,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
             if debug: # Prepare figure for debugging
                 fig, axs = plt.subplots(1,3, figsize=(14,3))
                 mu_sigma = np.mean(hv_mag, axis=0)/np.std(hv_mag, axis=0) # Identify non-gaussian processes e.g. RFI
-                axs[0].plot(ds.channels, mu_sigma[:,0], '.', ds.channels, mu_sigma[:,1], '.') # H & V separately
+                axs[0].plot(ds.channels, mu_sigma[:,0], '.', ds.channels, mu_sigma[:,-1], '.') # H & V separately
                 axs[0].set_xlabel("Frequency [channels]"); axs[0].set_ylabel("$\mu/\sigma$")
                 axs[1].plot(target_x, '.', target_y, '.') # Also plots track antenna if present
                 axs[1].set_xlabel("Time [#]"); axs[1].set_ylabel("target y [deg]")
