@@ -67,7 +67,7 @@ def _ska_tango_(ant, sub, cmd_args, attr_value=None):
     """
     import subprocess
     addr = "\"%s\"" % eval("ant.sensor.%s_tango_address.get_value()"%sub)
-    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); %s'"%(dp_addr,instr)], shell=False)
+    tango_dp_instr = lambda dp_addr,instr: subprocess.check_output(["ssh","kat@10.97.8.2","python","-c","'import tango; dp=tango.DeviceProxy(%s); dp.set_timeout_millis(5000); %s'"%(dp_addr,instr)], shell=False)
     if (cmd_args is not None):
         cmd_args = np.atleast_1d(cmd_args)
         cmd, args = cmd_args[0], cmd_args[1:]
@@ -437,7 +437,6 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
             index = indexer_sequence[2][i_cycle]
             user_logger.info("Switching SKA Feed Indexer to index %s"%index)
             if not dry_run:
-                time.sleep(2) # Appears necessary to avoid "Timeout (3000 mS) exceeded on device mid-dish/ds-manager/skaXXX, command SetIndexPosition"
                 for ant in ants[2]: _ska_tango_(ant, 'dsm', ("SetIndexPosition",index))
             duration_ = max(duration_, duration[2])
         
