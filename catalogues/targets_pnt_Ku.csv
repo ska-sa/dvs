@@ -157,7 +157,7 @@ J2253+1608 | PKS 2251+158 | 3C 454.3, radec gaincal, 22:53:57.747932, 16:08:53.5
 
 #J2341-3506 | PKS 2339-353, radec gaincal, 23:41:45.8910, -35:06:22.130, (80.  20000. -1.6575 3.4649 -1.2586 0.1128)
 
-#J2353-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25,  z=0.96,  Sy 2                              no   ~6'; FRII 2 compact outer lobes                                   
+#J2358-6054 | PKS 2356-61,                                    radec, 23:59:04.36,  -60:54:59.3,  (200.0 12000.0 -3.752 4.341 -0.8574),                           1.25x1.25  Molonglo 408 MHz,    14.02, -55.07,     25,  z=0.096, Sy 2                              no   ~6'; FRII 2 compact outer lobes
 
 # Suggested by MdV - good for L to Ku-band
 # Added from katconfig/user/catalogues/Sband-gain-calibrators.csv
