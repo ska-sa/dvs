@@ -437,6 +437,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
             index = indexer_sequence[2][i_cycle]
             user_logger.info("Switching SKA Feed Indexer to index %s"%index)
             if not dry_run:
+                time.sleep(2) # Appears necessary to avoid "Timeout (3000 mS) exceeded on device mid-dish/ds-manager/skaXXX, command SetIndexPosition"
                 for ant in ants[2]: _ska_tango_(ant, 'dsm', ("SetIndexPosition",index))
             duration_ = max(duration_, duration[2])
         
