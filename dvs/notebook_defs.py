@@ -8,8 +8,8 @@
 import pylab as plt
 import numpy as np
 from . import util, tracking
-import sys
-sys.path.append(__file__+'/../../bin')
+import sys, os
+sys.path.append(os.path.dirname(__file__)+'/../bin')
 import baseline_cal_reduction
 
 
