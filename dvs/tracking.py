@@ -198,7 +198,7 @@ def _demo_fit_gaussianoffset_(hpbw=11, ampl=1, SEFD=200, cycles=100):
 
 
 def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, phased_up=False, flags='cam,data_lost', scans="~slew", compscans="~slew",
-                          polswap=None, usepols=(0,1), kind=None, min_len=20, clip_radius=None, strict=True, output_filepattern="%s_%s_circular_pointing.csv",
+                          polswap=None, usepols=(0,1), kind=None, min_len=24, clip_radius=None, strict=True, output_filepattern="%s_%s_circular_pointing.csv",
                           verbose=True, debug=False):
     """ Generates pointing offsets for a dataset created with (any) intensity mapping technique (point_source_scan.py, circular_pointing.py etc),
         exactly equivalent to how `analyse_point_source_scans.py` calculates it.
@@ -213,7 +213,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
         @param polswap: a comma-separated list of antenna IDs where the polarisation is swapped (default None)
         @param usepols: in case of malfunction of a polarisation channel, specify (0,0) to only use data from H, or (1,1) for only V (default (0,1))
         @param kind: specifically used with 'circle','cardioid','epicycle' from "circular_pointing.py"
-        @param min_len: the minimum number of data points required to fit a centroid on (default 20).
+        @param min_len: the minimum number of data points required to fit a centroid on (default 24).
         @param clip_radius: maximum radius around target to use for fit, or None for 'median+std' [deg] (default None)
         @param strict: True to set invalid fits to nan (default True)
         @param output_filepattern: filename pattern (with %s for dataset and antenna names) for CSV file to store results to (default '%s_%s_circular_pointing.csv')
