@@ -124,7 +124,7 @@ def plot_delay_convergence(rr, ant, update_ref=None):
     return mean_pos
 
 
-def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", strict=True,
+def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", strict=True, mkat_array=False,
                   rfi_mask_fn="../catalogues/rfi_mask.txt", root='./l2_data', debug=False, **kwargs):
     """ Fit centroids to pointing datasets with the `dvs.tracking` module.
     
@@ -132,12 +132,15 @@ def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", str
         @param root: path string or function like root(ant) => f'../{ant}/tmp'
         @param mkat_array: True if data was recorded in MeerKAT instead of DVS array.
         @param mask_S4: True to omit 3.0-3.4GHz (default False). """
+    if mkat_array:
+        for k in util.ksl.SENSOR_PORTALS.keys(): # Undo the block that's currently activated in 'util'
+            if (".mkat." in k): util.ksl.SENSOR_PORTALS[k] = 1
     for cbid in np.atleast_1d(cbids):
         ants = [ant] if (ant != 'scan_ants') else util.open_dataset(cbid).obs_params['track_ants'].split(',')
         for _ant in ants:
             print(_ant, cbid)
             _root = root(_ant) if callable(root) else root
-            cacheds = ds = util.open_dataset(cbid, _ant, cache_root="./l1_data")
+            cacheds = ds = util.open_dataset(cbid, 'm' if mkat_array else _ant, cache_root="./l1_data")
             phased_up = kwargs.get('phased_up', np.max(ds.freqs)<4e9) # Typically no advantage for Ku-band
             if ('chans' in kwargs.keys()) or ('freq_MHz' in kwargs.keys()):
                 chans = kwargs.get('chans', None)
