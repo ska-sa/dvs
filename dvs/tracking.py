@@ -324,7 +324,7 @@ def reduce_pointing_scans(ds, ant, chans=None, freq_MHz=None, track_ant=None, ph
 
         try: # Fit the beam
             target_x, target_y = ds.target_x[mask,scan_ant_ix], ds.target_y[mask,scan_ant_ix]
-            assert (min_len <= 0) or (len(target_x) > min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
+            assert (min_len <= 0) or (len(target_x) >= min_len), f"This scan has fewer than the minimum number of data points required to fit: {len(target_x)} < {min_len}." 
             hv = ds.vis[mask]
             hv[np.abs(hv)==0] = np.nan # Under-quantised channels may be zero - must not contribute to height!
             f_ref = np.mean(ds.freqs[~np.any(np.isnan(hv),axis=(0,2))])
