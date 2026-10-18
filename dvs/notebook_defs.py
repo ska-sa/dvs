@@ -144,7 +144,7 @@ def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", str
             _root = root(_ant) if callable(root) else root
             cacheds = ds = util.open_dataset(cbid, 'm' if mkat_array else _ant, cache_root="./l1_data")
             _chans = chans
-            if ('freq_MHz' not in kwargs.keys()):
+            if (not callable(_chans)) and ('freq_MHz' not in kwargs.keys()):
                 rfi_mask = (ds.channels<10) | (len(ds.channels)-10 < ds.channels)
                 if mask_S4: # S-band beam features
                     rfi_mask |= (3000e6 < ds.freqs) & (ds.freqs <=3500e6)
