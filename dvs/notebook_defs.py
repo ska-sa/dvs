@@ -135,26 +135,26 @@ def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", str
     if mkat_array:
         for k in util.ksl.SENSOR_PORTALS.keys(): # Undo the block that's currently activated in 'util'
             if (".mkat." in k): util.ksl.SENSOR_PORTALS[k] = 1
+    phased_up = kwargs.pop('phased_up', None)
+    chans = kwargs.pop('chans', None)
     for cbid in np.atleast_1d(cbids):
-        ants = [ant] if (ant != 'scan_ants') else util.open_dataset(cbid).obs_params['track_ants'].split(',')
+        ants = [ant] if (ant != 'scan_ants') else util.open_dataset(cbid).obs_params['scan_ants'].split(',')
         for _ant in ants:
             print(_ant, cbid)
             _root = root(_ant) if callable(root) else root
             cacheds = ds = util.open_dataset(cbid, 'm' if mkat_array else _ant, cache_root="./l1_data")
-            phased_up = kwargs.get('phased_up', np.max(ds.freqs)<4e9) # Typically no advantage for Ku-band
-            if ('chans' in kwargs.keys()) or ('freq_MHz' in kwargs.keys()):
-                chans = kwargs.get('chans', None)
-            else:
+            _chans = chans
+            if ('freq_MHz' not in kwargs.keys()):
                 rfi_mask = (ds.channels<10) | (len(ds.channels)-10 < ds.channels)
                 if mask_S4: # S-band beam features
                     rfi_mask |= (3000e6 < ds.freqs) & (ds.freqs <=3500e6)
                 if (rfi_mask_fn):
                     rfi_mask |= util.load_rfi_static_mask(rfi_mask_fn, ds.freqs)
-                chans = ~rfi_mask
-            track_ants = ds.obs_params['track_ants'].split(',') # Assumes interferometric type!
+                _chans = ~rfi_mask if (_chans is None) else (_chans & ~rfi_mask)
+            track_ants = ds.obs_params['track_ants'].split(',') if ('track_ants' in ds.obs_params.keys()) else [None]
             for track_ant in track_ants:
-                output_filepattern = f"%s_%s_{track_ant}_circular_pointing.csv"
-                tracking.reduce_pointing_scans(ds, _ant, track_ant=track_ant, kind=kind,scans=scans, chans=chans, strict=strict,
-                                               phased_up=phased_up,
+                output_filepattern = f"%s_%s_{track_ant}_circular_pointing.csv" if (track_ant is not None) else f"%s_%s_point_source_scans.csv" 
+                tracking.reduce_pointing_scans(ds, _ant, track_ant=track_ant, kind=kind,scans=scans, chans=_chans, strict=strict,
+                                               phased_up=(phased_up==True) or ((phased_up==None) and np.max(ds.freqs)<4e9), # Typically no advantage for Ku-band
                                                output_filepattern=_root+'/'+output_filepattern, debug=debug, verbose=True, **kwargs)
         cacheds.del_cache()
