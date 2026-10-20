@@ -1,5 +1,5 @@
 #!/usr/bin/python
-""" A basic sequence using load_scan mechanism to steer the antennas - without any data capturing.
+""" A basic sequence using load_scan mechanism to steer the antennas.
     @author: aph@sarao.ac.za
 """
 
@@ -85,6 +85,7 @@ with verify_and_connect(opts) as kat:
         next_start = (time.time() + opts.prepopulatetime) if T0<0 else T0
         assert (next_start + max(1,opts.num_cycles)*cycle_expected_duration > time.time()), "All track timestamps are in the past - aborting!"
         
+        session.capture_start()
         user_logger.info("Initiating load_scan cycles (%s %g-second cycles)", 
                          ('unlimited' if opts.num_cycles<0 else '%d'%opts.num_cycles), cycle_expected_duration)
         
