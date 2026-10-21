@@ -190,7 +190,7 @@ if __name__=="__main__":
                       help='speed at which to slew in degrees per second, or if negative number then this multiplied by scanspeed (default=%default)')
     parser.add_option('--high-elevation-slowdown-factor', type='float', default=2.0,
                       help='factor by which to slow down nominal scanning speed at 90 degree elevation, linearly scaled from factor of 1 at 60 degrees elevation (default=%default)')
-    parser.add_option('--prepopulatetime', type='float', default=5.0,
+    parser.add_option('--prepopulatetime', type='float', default=7.0,
                       help='time in seconds to prepopulate buffer in advance (default=%default)')
                   
     parser.add_option('--min-separation', type="float", default=1.0,
