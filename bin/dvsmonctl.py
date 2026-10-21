@@ -113,9 +113,12 @@ def release_ACU_authority(cam_ant):
     """ Release control authority on the ACUs """
     import tango
     for ant in np.atleast_1d(cam_ant):
-        dsm_addr = ant.sensors.dsm_tango_address.get_value()
-        dsm = tango.DeviceProxy(dsm_addr)
-        dsm.ReleaseAuthority()
+        if (cam_ant.name[0] == 's'):
+            x_dsm(cam_ant, "ReleaseAuth")
+        else:
+            dsm_addr = ant.sensors.dsm_tango_address.get_value()
+            dsm = tango.DeviceProxy(dsm_addr)
+            dsm.ReleaseAuthority()
 
 
 def set_LNAs(cam_ant, band=2, enable=True, also_tempctl=False):
