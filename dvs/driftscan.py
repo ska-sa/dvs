@@ -1097,7 +1097,10 @@ def load_results(fids, product="SEFD", root="", also_el=False, also_meta=False):
         # Extract items from the first header line
         i = header[0].find("degEl")
         el.append(float(header[0][header[0].rfind(" ", 0,i):i]))
-        metadata['flux_key'] = header[0].split('[')[1].split(']')[0]
+        try:
+            metadata['flux_key'] = header[0].split('[')[1].split(']')[0]
+        except:
+            metadata['flux_key'] = 'UNKNOWN'
     # Re-grid all results onto a common range
     f, d_H = combine(f_, d_H)
     f, d_V = combine(f_, d_V)
