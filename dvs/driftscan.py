@@ -1074,29 +1074,39 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
                    header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
 
 
-def load_results(fids, product="SEFD", root="", also_el=False):
+def load_results(fids, product="SEFD", root="", also_el=False, also_meta=False):
     """ Loads the results stored when analyse() completes. Re-grids all data onto a common frequency grid.
         @param fids: list of file ID's (e.g. "{epoch seconds}_sdp_l0-s0000")
         @param product: "SEFD"|"S_ND"|"counts2Jy" (default "SEFD")
-        @return: (freq_Hz, H_data, V_data) and el_deg if also_el.
+        @return: (freq_Hz, H_data, V_data) and (el_deg) if also_el and (metadata) if also_meta.
     """
-    f_,d_H,d_V,el = [],[],[],[]
+    f_,d_H,d_V,el,meta = [],[],[],[],[]
     for i in fids:
         f,x_h,x_v = np.loadtxt("%s/%s-%s.csv"%(root,i,product), delimiter=",", unpack=True)
         d_H.append(x_h)
         d_V.append(x_v)
         f_.append(f)
+        header = []
         with open("%s/%s-%s.csv"%(root,i,product)) as file:
-            header = file.readline()
-        i = header.find("degEl")
-        el.append(float(header[header.rfind(" ", 0,i):i]))
+            for hl in file.readlines():
+                if not hl.startswith('#'): break
+                hl = hl[1:].strip()
+                if (len(hl) > 0): header.append(hl)
+        metadata = {k:v for k,v in [_.split(':',maxsplit=1) for _ in header[1:-1]]} # Drop first & last lines, not metadata
+        meta.append(metadata)
+        # Extract items from the first header line
+        i = header[0].find("degEl")
+        el.append(float(header[0][header[0].rfind(" ", 0,i):i]))
+        metadata['flux_key'] = header[0].split('[')[1].split(']')[0]
     # Re-grid all results onto a common range
     f, d_H = combine(f_, d_H)
     f, d_V = combine(f_, d_V)
-    if not also_el:
-        return f, d_H, d_V
-    else: # Parse elevation from first line of header
+    if also_meta:
+        return f, d_H, d_V, el, meta
+    elif also_el:
         return f, d_H, d_V, el
+    else:
+        return f, d_H, d_V
 
 
 def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=False):
