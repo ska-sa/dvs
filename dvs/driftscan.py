@@ -1042,16 +1042,18 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         pp.close()
     
     if saveroot:
-        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg, dataset=ds)
+        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg,
+                     model_ref=S_src.flux_key, dataset=ds)
     return result
 
 
-def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, *ig, **nored):
+def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, model_ref, *ig, **nored):
     """ Saves data products to CSV files named as 'root/dataset-ant-product.csv
         @param root: root folder on filesystem to save files to.
         @param dataset_fname: the filename of the raw dataset.
         @param antname, target: identifies the antenna and target that the data was collected from.
         @param freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg: data products as returned by 'get_SEFD_ND()'.
+        @param model_ref: a key to identify the model used for flux scale.
         @param dataset (optional): a DriftDataset, so supply metadata
     """
     fnroot = "%s/%s-%s-"%(root,dataset_fname.split("/")[-1].split(".")[0],antname)
@@ -1063,7 +1065,7 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
                 receiver=dataset.RxSN, attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dataset.dump_period,
                 wind_speed="%.1f [m/s]"%np.mean(ds.wind_speed), air_temp="%.1f C"%np.mean(ds.temperature), air_pressure="%.f [hPa]"%np.mean(ds.pressure), rel_humidity="%.1f [%%]"%np.mean(ds.humidity)))
     metadata = "\n".join([str(k)+": "+str(v) for k,v in metadata.items()])
-    origin = "Recorded with <%s> at %.fdegEl\n%s\n" % (target, el_deg, metadata)
+    origin = "Recorded with <%s> [%s] at %.fdegEl\n%s\n" % (target, model_ref, el_deg, metadata)
     
     for fn,data,descr,unit in [("counts2Jy",np.c_[freqs, counts2Jy[:,0], counts2Jy[:,1]],"(Source Flux)/(P_src_on_boresight-P_src_in_null)","Jy/#"),
                                ("SEFD",np.c_[freqs, SEFD_meas[:,0], SEFD_meas[:,1]],"SEFD at calibrator background","Jy"),
