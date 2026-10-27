@@ -203,7 +203,7 @@ class DriftDataset(object):
             print("Receivers:", {self.ant.name: h5.receivers[self.ant.name]})
         
         # Current observe script sometimes mislabels the first ND scan as "slew"
-        h5.select(compscans="noise diode", scans="~stop")
+        h5.select(compscans="noise diode", scans="~slew"); h5.select(reset="", scans="~stop")
         ND_scans = h5.scan_indices # Converted from list -> tuple of lists below
         if (len(ND_scans) == 3):
             ND_scans = (ND_scans[:2],ND_scans[-1:]) if (np.diff(ND_scans)[0]==1) else (ND_scans[:1],ND_scans[1:])
@@ -236,7 +236,7 @@ class DriftDataset(object):
                 if (len(sscan_indices) < len(h5.scan_indices)):
                     h5.select(reset='', scans=sscan_indices) # Ideally (scans=~spurious_scans)  but that doesn't work. This workaround has draw back that it resets dumps & timerange. 
             else:
-                h5.select(scans="~slew", **selectkwargs)
+                h5.select(scans="~slew"); h5.select(reset="", scans="~stop", **selectkwargs)
         h5.__select_SEFD__ = __select_SEFD__
         
         # Cache the raw data to avoid costly network access
