@@ -719,28 +719,30 @@ def target_offset(target, timestamp, az, el, freq, label="observation", debug=Tr
         @param ant: the katpoint.Antenna acting as observer.
         @param az, el: azimuth & elevation look angles [deg] of the antenna.
         @param freq: the frequency [Hz] to use for determining the antenna's beam width.
-        @return on_delta: the offset of the source from bore sight [deg]
+        @return on_delta: the great circle offset of the source from bore sight [deg]
     """
     t_obs = katpoint.Timestamp(timestamp)
     ant = target.antenna
     on_sky = np.asarray(target.radec(t_obs, antenna=ant))*180/np.pi
-    on_exp = np.asarray(target.azel(t_obs))*180/np.pi
+    on_exp = np.asarray(target.azel(t_obs, antenna=ant))*180/np.pi
     on_rec = np.squeeze([az, el])
     
     on_delta = np.squeeze([np.abs(on_exp[0]-on_rec[0]), np.abs(on_exp[1]-on_rec[1])])
     on_delta[0] = np.angle(np.exp(1j*on_delta[0]*np.pi/180)) * 180/np.pi # Remove 360deg ambiguity from Az angle
+    on_delta[0] *= np.cos(on_rec[1]*np.pi/180) # Cross-elevation
+    on_dgc = np.sum(on_delta**2)**.5
     if debug:
         print("UTC for %s of target: %s" % (label, t_obs))
         print("    Antenna pointing to RA %.3f hrs, DEC %.3f deg" % (on_sky[0]*24/360., on_sky[1]))
         print("    Target Az,El: %s deg"%(on_exp))
         print("    Antenna Az,El: %s deg"%(on_rec))
         HPBW = 1.22*(_c_/freq)/ant.diameter *180/np.pi # Standard illumination of circular aperture
-        print("    Source within %s deg of beam bore sight (<%.3f HPBW)" % (on_delta,np.max(np.abs(on_delta)/HPBW)))
+        print("    Source within %s deg of beam bore sight (<%.3f HPBW)" % (on_delta,np.max(on_dgc/HPBW)))
         # Report on the proximity to some special targets
         for special in ["Sun", "Moon"]:
             tgt = katpoint.Target("%s, special"%special.lower(), antenna=ant)
             print("    Distance from target to the %s %.f deg" % (special, tgt.separation(target, t_obs)*180/np.pi))
-    return np.max(on_delta)
+    return on_dgc
 
 
 def combine(x, y, x_common=None, pctmask=100):
