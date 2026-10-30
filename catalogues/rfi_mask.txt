@@ -1,19 +1,26 @@
 # Range of frequencies to flag in MHz
 # start_freq, stop_freq
 #
-927.0, 929.0 # E-GSM900
-933.0, 960.5 # GSM900
+144, 146 # Primary ZA amateur VHF band for FM voice, repeaters and packet radio
+360, 380 # Military MUOS satellite downlinks; 4 distinct 5MHz sub-bands
+420, 430 # Fixed base station & point-to-point for critical communications e.g. SAPS, Transnet & Eskom
+768, 778 # Vodacom FDD downlink - https://www.spectrum-tracker.com/South-Africa
+801, 811 # MTN FDD downlink - https://www.spectrum-tracker.com/South-Africa
+925.0, 931.0 # E-GSM900 +2MHz edges
+931.0, 960.5 # GSM900 + 2MHz edges
 1086.5, 1092.5 # SSR
 1100.0, 1113.5 # DME?
 1125, 1227 # GPS L5 4th nulls, GALILEO E5 & Beidou B2
 1176, 1309.5 # GLONASS L2 & GPS L2 4th nulls, GALILEO B6 & Beidou B3
 1374, 1386 # GPS L3 & L4
 1418, 1422 # Galactic HI
-#1457, 1518 # Seen in 1739441015 scan#16
-1519, 1610 # GLONASS L1 & GPS L1 4th nulls, GALILEO L1,E1,E2 & Beidou B1 4th nulls
+#1457, 1518 # TODO Recorded in 1739441015 scan#16
+1515, 1518 # TODO Recorded in 1777031581
+1518, 1610 # GLONASS L1 & GPS L1 4th nulls, GALILEO L1,E1,E2 & Beidou B1 4th nulls
 1525, 1560 # INMARSAT
 1615.5, 1626.5 # IRIDIUM
 1627.5, 1629.5 # TODO Recorded 2025/02
+1643.0, 1648.0 # TODO Recorded in 1777031581
 1674.5, 1698.5 # METEOSAT & NOAA
 1701.5, 1703.5 # NOAA HRPT & ARGOS
 1706.5, 1708.5 # NOAA HRPT
