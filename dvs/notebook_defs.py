@@ -98,8 +98,8 @@ def plot_delay_convergence(rr, ant, update_ref=None):
     # Histograms of ENUC
     mean_pos = []
     for j,p in enumerate("ENU"):
-        values = np.r_[[r[0][j] for r in (r_by_pol[0]+r_by_pol[1])]] # All pols together
-        sigmas = np.r_[[1/r[1][j] for r in (r_by_pol[0]+r_by_pol[1])]]
+        values = np.r_[[r[0][j] for r in (r_by_pol[0]+r_by_pol[-1])]] # All pols together
+        sigmas = np.r_[[1/r[1][j] for r in (r_by_pol[0]+r_by_pol[-1])]]
         mask = np.isfinite(values) & np.isfinite(sigmas)
         try:
             mean_pos.append(np.average(values[mask], weights=sigmas[mask]))
@@ -117,7 +117,7 @@ def plot_delay_convergence(rr, ant, update_ref=None):
         axs[3][1].hist(values[mask], orientation='horizontal', label="%s ~ %.2f"%(p,mean_pos[-1]))
     axs[3][1].legend()
     # Also add NIAO
-    values = [r[-3] for r in (r_by_pol[0]+r_by_pol[1])] # All pols together
+    values = [r[-3] for r in (r_by_pol[0]+r_by_pol[-1])] # All pols together
     mean_pos.append(np.nanmean(values))
 
     print(ant, "-->", ' '.join(['%.2f'%_ for _ in mean_pos]))
