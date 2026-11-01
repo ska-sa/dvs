@@ -86,7 +86,8 @@ def standard_script_options(usage, description):
     parser = _kcl_std_opts_(usage, description)
     
     # The default was changed from 15 to 20 in Dec. 2018, but was not intended to be changed for RTS (https://skaafrica.atlassian.net/browse/MKAIV-1378)
-    parser.set_default('horizon', 15)
+    # +.5deg Nov 2026 to reduce likelihood of time-outs when targets are at the limit at the time the POINT is issued
+    parser.set_default('horizon', 15.5)
     
     parser.add_option('--reset-gain', type='int', default=None,
                       help='Value for the reset of the correlator F-engine gain '
@@ -462,6 +463,7 @@ def cycle_feedindexer(ants, cycle, switch_indexer_every_nth_cycle, dry_run=False
 def start_nd_switching(sub, n_on, n_off, T_start='now'):
     """ Start Digitiser-level synchronous Noise Diode cycling.
         
+        @param sub: either an active "capture session", or a "CAM" command line control object
         @param n_on, n_off: describe integer number of SDP dump intervals
         @param T_start: time when the digitisers should trigger the start of the switching cycles.
         @return: (T_start[sec], on_fraction, period[sec])
