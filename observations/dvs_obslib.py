@@ -310,7 +310,9 @@ def hack_SetPointingCorrections(ants, tilt_enabled=True, force=False):
     for a in split_ants(ants)[1]: # Only relevant for MKE dishes
         dsm = tango.DeviceProxy(a.sensor.dsm_tango_address.get_value())
         # Enforce our rules for TILT
-        tilt_corr = (force and tilt_enabled) or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
+        tilt_corr = tilt_enabled or (__tilt_corr_allowed__ and (a.name in __d_tilt_OK__))
+        if force:
+            tilt_corr = tilt_enabled
         if hasattr(dsm, "tiltPointCorrEnabled"):
             if dsm.tiltPointCorrEnabled and not tilt_corr: # It should be off but is on
                 mod_tilt.append(a.name)
@@ -485,6 +487,24 @@ def start_nd_switching(sub, n_on, n_off, T_start='now'):
     ants.req.dig_noise_source(T_start, on_fraction, sdp_dt*(n_on+n_off))
     return T_start, on_fraction, sdp_dt*(n_on+n_off)
             
+    # # TODO: review this alternative implementation by Marcel Gouws from April 2020.
+    #     ND_PATTERN_LEAD_TIME = 5
+    #     # Wait for telstate dictionary keys to appear
+    #     session.telstate.wait_key('sdp_l0_int_time', timeout=TELSTATE_WAIT_TIME)
+    #     session.telstate.wait_key('sdp_l0_sync_time', timeout=TELSTATE_WAIT_TIME)
+    #     session.telstate.wait_key('sdp_l0_first_timestamp', timeout=TELSTATE_WAIT_TIME)
+    #     # Dump period - available after INIT.
+    #     dump_period = session.telstate['sdp_l0_int_time']  
+    #     # First timestamp - available after capture start.
+    #     t0 = session.telstate['sdp_l0_sync_time'] + session.telstate['sdp_l0_first_timestamp']
+    #     # Adjusting timestamp to be time at start of first dump
+    #     t0 -= dump_period/2.0
+    #     # Enable noise diode
+    #     cycle_length = (n_on+n_off)*dump_period 
+    #     n_dumps_from_t0 = np.ceil((time.time() + ND_PATTERN_LEAD_TIME - t0)/dump_period)
+    #     timestamp = t0 + n_dumps_from_t0*dump_period
+    #     session.ants.req.dig_noise_source(timestamp, on_fraction, cycle_length)
+
 
 def start_hacked_session(cam, **kwargs):
     """ Start a capture session and apply standard hacks as required for proper operation of the DVS system.
