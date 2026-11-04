@@ -50,7 +50,6 @@ def rate_slew(ants, azim, elev, azim_speed=0.5, azim_range=360, elev_range=0.0, 
     user_logger.info("Performing scan to azimuth %s at %s deg/sec.", end_azim, azim_speed)
     if not dry_run:
         ants.req.mode('SCAN') # Start the configured scan
-        hack_SetPointingCorrections(ants, tilt_enabled=False) # TODO: hack necessary 11/2024 because ACU re-enables it
     
     if not dry_run:
         time.sleep(5) # Avoid triggering before the antennas have started moving
