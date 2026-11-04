@@ -271,9 +271,20 @@ def calc_FIangle_adjustment(delta_Yf=None, delta_P4=None):
     return (dP4, dFI_angle)
 
 
-def dms2deg(d,m,s):
-    """ @return: arcseconds for an angle given in 'd:m:s' text format """ 
-    abs(d)+abs(m)/60+abs(s)/3600
+def dms2deg(*dms):
+    """ @return: arcseconds for an angle given in 'd:m:s' text format """
+    if (len(dms)==1):
+        try: # A ":" delimited string
+            d,m,s = [_.strip() for _ in dms[0].split(':')] # d,m,s
+            signs = np.r_[[-1 if _.startswith('-') else 1 for _ in (d,m,s)]]
+            d,m,s = [float(_) for _ in (d,m,s)]
+        except: # A tuple
+            d,m,s = dms[0]
+            signs = np.r_[np.sign(d), np.sign(m), np.sign(s)]
+    else: # Must be an unpacked tuple
+        d,m,s = dms
+        signs = np.r_[np.sign(d), np.sign(m), np.sign(s)]
+    return np.prod(signs[signs!=0]) * (abs(d)+abs(m)/60+abs(s)/3600)
 
 def asec2dms(asec):
     """ @return: text representation of an angle in d:m:s format """
@@ -288,3 +299,29 @@ def asec2dms(asec):
     m = int(asec/60)
     s = asec - m*60
     return f"{d:+03.0f}:{m:02d}:{s:02.1f}"
+
+class _DMSUnit_(object):
+    scales = {'rad':1, 'deg':180/np.pi, 'arcsec':180*60*60/np.pi}
+    def __init__(self, unit):
+        self.unit = unit
+    def __rmul__(self, value):
+        val_deg = dms2deg(value)
+        return val_deg * self.scales[self.unit] / self.scales['deg']
+    @classmethod
+    def format(cls, value, from_unit):
+        value = value * cls.scales['arcsec'] / cls.scales[from_unit]
+        return asec2dms(value)
+
+dms = _DMSUnit_('deg') # d:m:s or (d,m,s)
+
+
+class _TimeUnit_(object):
+    def __init__(self, unit, astype=None):
+        self.unit = unit
+        self.astype=astype
+    def __rmul__(self, value):
+        val = np.datetime64(value, 's')
+        return val.astype(self.astype) if (self.astype is not None) else val
+            
+sec = _TimeUnit_('s') # Converts to np.datetime64
+sec_unix = _TimeUnit_('s', astype=int) # Converts to UNIX seconds
