@@ -114,7 +114,7 @@ def measure_tilt_cal(kat, ants="*", start_az=-135, start_el=20, az_range=360, az
             for ant in ska_ants:
                 TILT_state[ant.name] = ant.sensor.dsm_Pointing_Status_TiltCorrActive.get_value()
             # ant_array(kat, mke_ants+ska_ants, "_ants").req.dsh_DisableTiltCorrections() # TODO: not exposed 11/2024
-            hack_SetPointingCorrections(mke_ants+ska_ants, tilt_enabled=False)
+            hack_SetPointingCorrections(mke_ants+ska_ants, tilt_enabled=False, force=True)
 
         for n in range(repeats):
             rate_slew(ants, mean_az, mean_el, azim_speed, az_range, el_range, dry_run=kat.dry_run)
