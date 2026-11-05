@@ -1084,7 +1084,11 @@ def load_results(fids, product="SEFD", root="", also_el=False, also_meta=False):
     """
     f_,d_H,d_V,el,meta = [],[],[],[],[]
     for i in fids:
-        f,x_h,x_v = np.loadtxt("%s/%s-%s.csv"%(root,i,product), delimiter=",", unpack=True)
+        try:
+            f,x_h,x_v = np.loadtxt("%s/%s-%s.csv"%(root,i,product), delimiter=",", unpack=True)
+        except Exception as e:
+            print("WARNING: skipping file %s due to error %s." % ("%s/%s-%s.csv"%(root,i,product), e))
+            continue
         d_H.append(x_h)
         d_V.append(x_v)
         f_.append(f)
