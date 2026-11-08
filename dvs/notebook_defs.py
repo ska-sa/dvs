@@ -124,11 +124,12 @@ def plot_delay_convergence(rr, ant, update_ref=None):
     return mean_pos
 
 
-def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", strict=True, mkat_array=False,
+def fit_centroids(ant, cbids, mask_S4=False, track_ants='*', kind='cardioid', scans="track", strict=True, mkat_array=False,
                   rfi_mask_fn="../catalogues/rfi_mask.txt", root='./l2_data', debug=False, **kwargs):
     """ Fit centroids to pointing datasets with the `dvs.tracking` module.
     
         @param ant: a specific antenna ID, or 'scan_ants' to process all.
+        @param track_ants: '*' to use all available, or None, or comma-separated string of permitted antennas to use if available (default '*')
         @param root: path string or function like root(ant) => f'../{ant}/tmp'
         @param mkat_array: True if data was recorded in MeerKAT instead of DVS array.
         @param mask_S4: True to omit 3.0-3.4GHz (default False). """
@@ -137,6 +138,7 @@ def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", str
             if (".mkat." in k): util.ksl.SENSOR_PORTALS[k] = 1
     phased_up = kwargs.pop('phased_up', None)
     chans = kwargs.pop('chans', None)
+    allowed_track_ants = track_ants
     for cbid in np.atleast_1d(cbids):
         ants = [ant] if (ant != 'scan_ants') else util.open_dataset(cbid).obs_params['scan_ants'].split(',')
         for _ant in ants:
@@ -151,7 +153,9 @@ def fit_centroids(ant, cbids, mask_S4=False, kind='cardioid', scans="track", str
                 if (rfi_mask_fn):
                     rfi_mask |= util.load_rfi_static_mask(rfi_mask_fn, ds.freqs)
                 _chans = ~rfi_mask if (_chans is None) else (_chans & ~rfi_mask)
-            track_ants = ds.obs_params['track_ants'].split(',') if ('track_ants' in ds.obs_params.keys()) else [None]
+            track_ants = [None]
+            if ('track_ants' in ds.obs_params.keys()) and (allowed_track_ants is not None):
+                track_ants = [t for t in ds.obs_params['track_ants'].split(',') if (t in allowed_track_ants) or (allowed_track_ants=='*')]
             for track_ant in track_ants:
                 try:
                     output_filepattern = f"%s_%s_{track_ant}_circular_pointing.csv" if (track_ant is not None) else f"%s_%s_point_source_scans.csv"
