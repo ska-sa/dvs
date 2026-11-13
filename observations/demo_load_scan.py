@@ -25,7 +25,7 @@ def gen_scan(starttime, scan_pattern, clip_safety_margin=0, min_elevation=15., m
     
     timedata = starttime + (scan_time-scan_time[0])
     # Clipping prevents antenna from hitting hard limit and getting stuck until technician reset it.
-    azdata = np.unwrap(scan_az, 180)
+    azdata = scan_az
     eldata = scan_el
     scan_data[:,0] = timedata
     scan_data[:,1] = np.clip(np.nan_to_num(azdata),min_az+clip_safety_margin,max_az-clip_safety_margin)
