@@ -97,7 +97,7 @@ with verify_and_connect(opts) as kat:
             user_logger.info("Using all antennas: %s", ' '.join(ant_names))
             
             # Scan pattern for this cycle. It's a static table, using the exact same az, el for all antennas
-            scan_data, cycle_expected_duration = gen_scan(next_start, scan_pattern, min_elevation=opts.horizon, min_az, max_az)
+            scan_data, cycle_expected_duration = gen_scan(next_start, scan_pattern, min_elevation=opts.horizon, min_az=min_az, max_az=max_az)
             
             # Slew / unwrap to get to start position
             next_start, t_az, t_el = scan_data[0]
