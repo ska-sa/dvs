@@ -158,7 +158,10 @@ def fit_centroids(ant, cbids, mask_S4=False, track_ants='*', kind='cardioid', sc
                 track_ants = [t for t in ds.obs_params['track_ants'].split(',') if (t in allowed_track_ants) or (allowed_track_ants=='*')]
             for track_ant in track_ants:
                 try:
-                    output_filepattern = f"%s_%s_{track_ant}_circular_pointing.csv" if (track_ant is not None) else f"%s_%s_point_source_scans.csv"
+                    if (kind == 'raster'):
+                        output_filepattern = f"%s_%s_point_source_scans.csv"
+                    else:
+                        output_filepattern = f"%s_%s_{track_ant}_circular_pointing.csv" if track_ant else f"%s_%s_circular_pointing.csv"
                     output_filepattern = None if (_root is None) else _root+'/'+output_filepattern
                     tracking.reduce_pointing_scans(ds, _ant, track_ant=track_ant, kind=kind,scans=scans, chans=_chans, strict=strict,
                                                    phased_up=(phased_up==True) or ((phased_up==None) and np.max(ds.freqs)<4e9), # Typically no advantage for Ku-band
