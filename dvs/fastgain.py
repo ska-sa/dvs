@@ -130,11 +130,11 @@ def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange
         if (timerange[0] < h5.timestamps[0]): # Convert from relative to absolute time
             timerange = (h5.timestamps[0]+timerange[0], h5.timestamps[0]+timerange[-1])
         h5.select(reset="", timerange=timerange)
-    if (channels is not None):
+    if (channels is not None) or (freqrange is not None):
+        if (freqrange is not None):
+            mask = (min(freqrange)<=h5.freqs) & (h5.freqs<=max(freqrange))
+            channels = mask if (channels is None) else channels & mask
         h5.select(channels=channels)
-    if (freqrange is not None):
-        mask = (min(freqrange)<=h5.freqs) & (h5.freqs<=max(freqrange))
-        channels = mask if (channels is None) else channels & mask
     fft_shift, gains, atten = get_fft_shift_and_gains(h5)
     
     t = h5.timestamps-h5.timestamps[0]
