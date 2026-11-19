@@ -102,13 +102,15 @@ def plot_allandev(x, dt=1, time=None, sfact=1., xyunits=("[sec]",""), label=None
 plot_allanvar = plot_allandev # DEPRECATED!
 
 
-def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False, T_interval=5, sigma_spec=0.10, cycle_50pct=False,
-           xK=[1.03,1.05,1.1,1.15], output_filepattern=None):
+def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False,
+            T_interval=5, sigma_spec=0.10, cycle_50pct=False,
+            xK=[1.03,1.05,1.1,1.15], output_filepattern=None):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
         
         @param flags: the katdal flags to apply to the data, or None (default 'data_lost') 
         @param channels: channel indices (list or slice) to select (default None)
-        @param timerange: passed to select, after selecting 'track' (default None)
+        @param freqrange: start & end frequencies [Hz] to select (default None)
+        @param timerange: absolute or relative start & end times [sec] to select, after selecting 'track' (default None)
         @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
         @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
@@ -125,9 +127,14 @@ def analyse(h5, ant, flags='data_lost', channels=None, timerange=None, t_spike_s
     if flags:
         h5.select(flags=flags)
     if (timerange is not None):
+        if (timerange[0] < h5.timestamps[0]): # Convert from relative to absolute time
+            timerange = (h5.timestamps[0]+timerange[0], h5.timestamps[0]+timerange[-1])
         h5.select(reset="", timerange=timerange)
     if (channels is not None):
         h5.select(channels=channels)
+    if (freqrange is not None):
+        mask = (min(freqrange)<=h5.freqs) & (h5.freqs<=max(freqrange))
+        channels = mask if (channels is None) else channels & mask
     fft_shift, gains, atten = get_fft_shift_and_gains(h5)
     
     t = h5.timestamps-h5.timestamps[0]
