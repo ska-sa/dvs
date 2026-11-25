@@ -24,7 +24,7 @@ import numpy as np
 import urllib.request
 
 
-def _ska_tango_(ant, sub, cmd_args, attr_value):
+def ska_tango(ant, sub, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID Tango device.
         @param ant: control object for dish proxy (e.g. cam.s0001)
         @param sub: either 'dsh', 'dsm' or 'spfc'
@@ -56,7 +56,7 @@ def x_dsh(ant, cmd_args=None, attr_value=None):
         @param attr_value: (name, value) for the attribute (default None)
         @return: text representation of the response
     """
-    return _ska_tango_(ant, 'dsh', cmd_args, attr_value)
+    return ska_tango(ant, 'dsh', cmd_args, attr_value)
 def x_dsm(ant, cmd_args=None, attr_value=None):
     """ Either perform a command, or set an attribute value, on the SKA-MID ds-manager.
         @param ant: control object for dish proxy (e.g. cam.s0001)
@@ -64,7 +64,7 @@ def x_dsm(ant, cmd_args=None, attr_value=None):
         @param attr_value: (name, value) for the attribute (default None)
         @return: text representation of the response
     """
-    return _ska_tango_(ant, 'dsm', cmd_args, attr_value)
+    return ska_tango(ant, 'dsm', cmd_args, attr_value)
 
 
 def reset_ACU(cam_ant):
@@ -72,15 +72,15 @@ def reset_ACU(cam_ant):
         This should be a temporary hack - follow up with CAM & LMC teams!
     """
     if (cam_ant.name[0] == 's'):
-        x_dsm(cam_ant, "InterlockAck")
-        x_dsm(cam_ant, "ResetAxesCommand")
-        x_dsh(cam_ant, attr_value=("ignoreSpfrx",True))
+        ska_tango(ant, 'dsm', cmd_args="InterlockAck")
+        ska_tango(ant, 'dsm', cmd_args="ResetAxesCommand")
+        ska_tango(ant, 'dsh', attr_value=("ignoreSpfrx",True))
         # The following are read-only
-        if (x_dsm(cam_ant, attr_value="pointing_status_staticcorractive") == 'True') or (x_dsm(cam_ant, attr_value="pointing_status_ambtempcorractive") == 'True'):
+        if (ska_tango(ant, 'dsm', attr_value="pointing_status_staticcorractive") == 'True') or (ska_tango(ant, 'dsm', attr_value="pointing_status_ambtempcorractive") == 'True'):
             print("WARNING: ACU Static Pointing Model for current band is active, must be activated manually!")
         
         if (cam_ant.sensors.mode.get_value() == 'STOW'):
-            x_dsm(cam_ant, "UnStow")
+            ska_tango(ant, 'dsm', cmd_args="UnStow")
     
     else:
         import tango
@@ -114,7 +114,7 @@ def release_ACU_authority(cam_ant):
     import tango
     for ant in np.atleast_1d(cam_ant):
         if (cam_ant.name[0] == 's'):
-            x_dsm(cam_ant, "ReleaseAuth")
+            ska_tango(ant, 'dsm', cmd_args="ReleaseAuth")
         else:
             dsm_addr = ant.sensors.dsm_tango_address.get_value()
             dsm = tango.DeviceProxy(dsm_addr)
@@ -129,24 +129,24 @@ def set_LNAs(cam_ant, band=2, enable=True, also_tempctl=False):
     lnaH, lnaV, pid = 'b%dLnaHPowerState'%band, 'b%dLnaVPowerState'%band, 'b%dLnaPidPowerState'%band
     for ant in np.atleast_1d(cam_ant):
         if (cam_ant.name[0] == 's'):
-            if ('OPERATE' not in x_dsh(cam_ant, attr_value='b%dCapabilityState'%band)): # "OPERATE_FULL"
-                print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually, to be safe!"%band)
+            if ('OPERATE' not in ska_tango(cam_ant, 'spfc', attr_value='b%dOperatingState'%band)): # "OPERATE_FULL"
+                print("ERROR: Band%d is not in OPERATE - you must call spfc_SetOperateMode() manually!"%band)
                 continue
             
-            current = [eval(x_dsh(cam_ant, attr_value=r)) for r in [lnaH, lnaV]]
+            current = [eval(ska_tango(cam_ant, 'spfc', attr_value=r)) for r in [lnaH, lnaV]]
             print("INFO: Band%d amplifiers are currently"%band, current)
             if enable and not np.all(current):
                 print(" --> turning them ON.")
-                x_dsh(cam_ant, attr_value=(lnaH,True)); x_dsh(cam_ant, attr_value=(lnaV,True))
+                ska_tango(cam_ant, 'spfc', attr_value=(lnaH,True)); time.sleep(5); ska_tango(cam_ant, 'spfc', attr_value=(lnaV,True))
                 if also_tempctl:
-                    ret = x_dsh(cam_ant, attr_value=(pid,True))
+                    ret = ska_tango(cam_ant, 'spfc', attr_value=(pid,True))
                     if (ret != 'True'): # 08/2026 attribute doesn't seem exposed by SKA-MID's 'dsh'
                         print("WARNING: Unable to turn on temperature control for Band%d!"%band)
             elif (not enable) and np.any(current):
                 print(" --> turning them OFF.")
-                x_dsh(cam_ant, attr_value=(lnaH,False)); x_dsh(cam_ant, attr_value=(lnaV,False))
+                ska_tango(cam_ant, 'spfc', attr_value=(lnaH,False)); time.sleep(5); ska_tango(cam_ant, 'spfc', attr_value=(lnaV,False))
                 if also_tempctl:
-                    ret = x_dsh(cam_ant, attr_value=(pid,False))
+                    ret = ska_tango(cam_ant, 'spfc', attr_value=(pid,False))
                     if (ret != 'False'): # 08/2026 attribute doesn't seem exposed by SKA-MID's 'dsh'
                         print("WARNING: Unable to turn off temperature control for Band%d!"%band)
         
