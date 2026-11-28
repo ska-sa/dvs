@@ -196,6 +196,7 @@ class DriftDataset(object):
         h5 = self.ds
         h5.select(flags=flags)
         
+        self.swapped_pol = swapped_pol
         pol_labels = reversed(self._pol) if swapped_pol else self._pol
         h5.select(pol=[_*2 for _ in pol_labels], reset="T")
         if verbose:
@@ -536,7 +537,7 @@ def getvis_null(vis, null_indices, win_len=4, debug=False):
     return np.moveaxis(np.asarray(vis_null), 1, 0) # Re-order to [time,freq,prod]
 
 
-def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], hpw_src=0, debug_level=0):
+def find_nulls(ds, fitpols='*', cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], hpw_src=0, debug_level=0):
     """ Finds time indices when the drift scan source passes through nulls and across bore sight.
         All indices are given relative to the time axis set up by '__select_SEFD__()'.
         
@@ -544,6 +545,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
         HPBW is derived from the dataset itself, and where no feasible values are found, the specified HPBW (whether numeric or a function)
         is used to fill in the gaps. 
         
+        @param fitpols: specify polarisations to use to fit HPBW from the data - either (0,1), (0,0), (1,1), or '*' to try all in this sequence (default '*').
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on, None for 'all'
         @param HPBW: 'lambda f: x' or 1d array [rad] to override fitted widths from the dataset (default None)
         @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16, or (min,max) (default -1).
@@ -563,7 +565,7 @@ def find_nulls(ds, cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,
     # Find the time of transit ('bore') and the beam widths ('HPBW') at each frequency
     print("INFO: Fitting transit & beam widths from the data itself.")
     # To speed up, fit only to 64 frequency channels
-    beamfits = load4hpbw(ds, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=2)
+    beamfits = load4hpbw(ds, usepols=fitpols, n_chunks=64, cleanchans=cleanchans, return_all=debug_level>0, debug=2)
     f, bore, sigma = beamfits[:3]
     HPBW_fitted = fit_hpbw(f, bore, sigma, ds.ant.diameter, hpw_src=hpw_src, fitchans=cleanchans, debug=debug_level>0)
     sigma2hpbw = np.sqrt(8*np.log(2)) * (2*np.pi*(1+1/365.28))/(24*60*60.) # rad/sec, as used in fit_hpbw()
@@ -891,7 +893,7 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
 
 
 def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, swapped_pol=False, strict=False,
-            HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
+            fitpols='*', HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
             fitfreqrange=None, freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)], rfifilt=[1,7],
             saveroot=None, makesummary=True, makepdf=False, debug=False, debug_nulls=1):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
@@ -901,7 +903,8 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()' (default None).
         @param cat_file: if given, overrides the default filename used by 'models.describe_source()' (default None).
-        @param HPBW: if given, like 'lambda f: 1.2*(3e8/f)/D' [rad], this is used instead of HPBW fitted from the data, fore selection of data in beam nulls (default None).
+        @param fitpols: specify polarisations to use to fit HPBW from the data - either (0,1), (0,0), (1,1), or '*' to try all in this sequence (default '*').
+        @param HPBW: if given, like 'lambda f: 1.2*(3e8/f)/D' [rad], this is used instead of HPBW fitted from the data, for selection of data in beam nulls (default None).
         @param N_bore: the minimum time samples to average over the bore sight crossing, or <0 to use average of <HPBW>/16 (default -1).
         @param Nk: beam factors that give the offsets from bore sight of the nulls relative, in multiples of HPBW
                    (default [1.292,2.136,2.987,3.861] as computed from theoretical parabolic illumination pattern)
@@ -932,8 +935,8 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     try:
         pp.capture_stdout(echo=True)
         print("Processing drift scan %s on %s with receiver %s." % (filename, ant.name, ds.RxSN))
-        if swapped_pol:
-            print("Note: The dataset has been adjusted to correct for a polarisation swap!")
+        if ds.swapped_pol:
+            print("Note: The dataset is being processed with polarisation order swapped!")
         print("")
         
         src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key, verbose=True, **({'cat_file':cat_file} if (cat_file) else {}))
@@ -949,7 +952,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         pp.report_fig(F+1, orientation="landscape")
     
         # Identify the bore sight and null transits
-        bore, null_l, null_r, _HPBW, N_bore = find_nulls(ds, cleanchans=fitchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
+        bore, null_l, null_r, _HPBW, N_bore = find_nulls(ds, fitpols=fitpols, cleanchans=fitchans, HPBW=HPBW, N_bore=N_bore, Nk=Nk, hpw_src=hpw_src, debug_level=debug_nulls)
         F = np.max(plt.get_fignums())
         if (debug_nulls>0):
             # 1-> (mu sigma vs time, HPBW fit, map null traces), 2-> (baselines, model residuals, mu sigma vs time, HPBW fit, trajectory, map null traces)
@@ -1166,7 +1169,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
         outfile.close()
 
 
-def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_size=None, cached=False, return_all=False, debug=2):
+def load4hpbw(ds, savetofile=None, usepols='*', n_chunks=64, cleanchans=None, jump_size=None, cached=False, return_all=False, debug=2):
     """ Processes a raw dataset to determine the beam crossing time instant, as well as the half power crossing duration.
         Note that the crossing duration is scaled to represent a target on the ecliptic (declination=0), which simplifies
         further interpretation.
@@ -1176,6 +1179,7 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_size=None,
          
         @param ds: either a raw drift scan dataset or an npz file name
         @param savetofile: npz filename to save the data to (default None)
+        @param usepols: specify (0,0) or (1,1) to force fitting only on first or second polarisation, or '*' to start with (0,1) with fallback to (0,0) & (1,1) (default '*')
         @param n_chunks: > 0 to average the frequency range into this many chunks to fit beams, or <=0 to fit band average only (default 64).
         @param cleanchans: used to select the clean channels to use to fit bore sight transit and beam widths on (default None).
         @param jump_size: controls automatic excision of jumps over (time,frequency) see 'fit_bm()' (default None)
@@ -1200,13 +1204,15 @@ def load4hpbw(ds, savetofile=None, n_chunks=64, cleanchans=None, jump_size=None,
         time_mask = (ds.sensor["Antennas/array/activity"]=="track") & (ds.sensor["Observation/label"]=="drift")
         if (jump_size is None): # Conservatively omit the first & last 10 timestamps unless specified
             time_mask &= np.roll(time_mask, 10) & np.roll(time_mask, -10)
-        for pp in [(0,1), (0,0), (1,1)]:
+        try_pols = [(0,1), (0,0), (1,1)] if (usepols == '*') else [usepols]
+        for pp in try_pols:
+            print("Fitting beams to polarisations %s simultaneously..."%str(pp))
             vis = np.stack([ds.vis[...,pp[0]],ds.vis[...,pp[1]]], -1)
             bl,mdl,sigma,mu = driftfit.fit_bm(vis, cleanchans, time_mask, n_chunks=n_chunks, k_size=jump_size, debug=debug)
             if (len(np.ma.compressed(sigma)) > 0):
                 break
             else:
-                print("WARNING: Failed to fit beams to polarisations %s simultaneously! Trying one at a time..."%str(pp))
+                print("WARNING: Failed to fit beams to polarisations %s simultaneously!"%str(pp))
         
         # To simplify further processing, the transit duration is scaled to represent a target at declination=0
         dec_tgt = ds.target.apparent_radec(np.mean(ds.timestamps[time_mask]))[1]
