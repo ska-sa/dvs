@@ -138,19 +138,18 @@ def mask_where(array_nd, domain1d, domainmask, axis=-1):
 
 class DriftDataset(object):
     """ A container for the raw measurement data, to optimise data retrieval behaviour. """
-    def __init__(self, ds, ant, pol_labels="H,V", swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, debug=False, **kwargs):
+    def __init__(self, ds, ant, pol_labels="H,V", strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, debug=False, **kwargs):
         """
            @param ds: filename string, or an already opened katdal.Dataset
            @param ant: either antenna ID (string) or index (int) in the dataset.ants list
-           @param pol_labels: two comma-separated characters e.g. 'H,V' to load the corresponding autocorrelation data in that sequence.
-           @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
+           @param pol_labels: two comma-separated characters e.g. 'H,V' to index the autocorrelation data in that sequence (or swapped).
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
            @param flags: Select flags used to clean the data (default "data_lost,ingest_rfi") - MUST exclude 'cam'!
            @param rfi_mask: filename to pairs of frequencies to filter RFI out from (default None)
            @param rfi_thresh: threshold to apply when removing RFI (default 1 i.e. values exceeding +/-100% of interpolated curves are removed).
            @param kwargs: Passed to utils.open_dataset(). E.g. 'hackedL=True', or 'ant_rx_override={antname:rxband.sn}' to override.
         """
-        self._pol = pol_labels.split(",")
+        self.pol_labels = pol_labels.split(",")
         self.ds = ds = util.open_dataset(ds, ref_ant=ant, **kwargs)
         self.name = ds.name.split("/")[-1].split(".")[0] # Without extension
         if (isinstance(ant, int)):
@@ -167,7 +166,7 @@ class DriftDataset(object):
         self.start_time = ds.start_time
         self.dump_period = ds.dump_period
         
-        self.__loadargs__ = dict(swapped_pol=swapped_pol, strict=strict, flags=flags, rfi_mask=rfi_mask, rfi_thresh=rfi_thresh) # If needed by future select()
+        self.__loadargs__ = dict(strict=strict, flags=flags, rfi_mask=rfi_mask, rfi_thresh=rfi_thresh) # If needed by future select()
         self._load_vis_(**self.__loadargs__)
         
         # Ensure dish diameter is as assumed in models (relied upon in this module)
@@ -179,15 +178,14 @@ class DriftDataset(object):
             self.debug()
 
 
-    def _load_vis_(self, swapped_pol=False, strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, verbose=True):
+    def _load_vis_(self, strict=False, flags="data_lost,ingest_rfi", rfi_mask=None, rfi_thresh=1, verbose=True):
         """ Loads the dataset and provides it with work-arounds for issues with the current observation procedures.
             Also supplies auxilliary features that are employed in processing steps in this module.
             
             The returned dataset has data filtered and arranged as required for processing. It specifically comprises
             only two products (third index of dataset), arranged as [0=antHH, 1=antVV]. DO NOT use the 'corr_products'
-            attribute as that will not reflect the 'swapped_pol' state. Use the hacked '_pol' attribute instead. 
+            attribute as that may not reflect the correct polarisation ordering. Use the 'pol_labels' attribute instead. 
            
-           @param swapped_pol: True to swap the order of the polarisation channels around e.g. if wired incorrectly (default False)
            @param strict: True to only use data while 'track'ing (e.g. tracking the drift target), vs. all data when just not 'slew'ing  (default False)
            @param rfi_mask: filename to pairs of frequencies to filter RFI out from (default None)
            @param rfi_thresh: threshold to apply when removing RFI (default 1 i.e. values exceeding +/-100% of interpolated curves are removed).
@@ -196,9 +194,7 @@ class DriftDataset(object):
         h5 = self.ds
         h5.select(flags=flags)
         
-        self.swapped_pol = swapped_pol
-        pol_labels = reversed(self._pol) if swapped_pol else self._pol
-        h5.select(pol=[_*2 for _ in pol_labels], reset="T")
+        h5.select(pol=[_*2 for _ in self.pol_labels], reset="T") # Note: doesn't work as expected if there's only one unique pol!
         if verbose:
             print(h5)
             print("Receivers:", {self.ant.name: h5.receivers[self.ant.name]})
@@ -277,7 +273,7 @@ class DriftDataset(object):
         vis_ = self.vis/np.nanpercentile(self.vis, 1, axis=0) # Normalized as increase above baseline (robust against unlikely zeroes)
         chans = self.channels
         ax = plt.subplots(2,3, sharex='col', gridspec_kw={'height_ratios':[2,1],'width_ratios':[4,4,1]}, figsize=(16,8))[1]
-        for p,P in enumerate(self._pol):
+        for p,P in enumerate(self.pol_labels):
             ax[0][p].imshow(10*np.log10(vis_[:,:,p]), aspect="auto", origin="lower", extent=(chans[0],chans[-1], 0,vis_.shape[0]),
                             vmin=0, vmax=6, cmap=plt.get_cmap("viridis"))
             ax[0][p].set_title("%s\n%s %s"%(self.name,self.ant.name,P)); ax[0][p].set_ylabel("Time [samples]")
@@ -416,7 +412,7 @@ def _get_ND_(ds, counts2scale=None, y_unit="counts", freqmask=None, rfifilt=None
             ND_delta = np.mean(ON,axis=0) - np.mean(OFF,axis=0) # ON-OFF spectrum for this pol
             if (counts2scale is not None):
                 ND_delta = ND_delta*counts2scale[:,pol]
-            plot_data(ds.channel_freqs[chans]/1e6, ND_delta, label="%s, %s"%(ds._pol[pol],label), newfig=len(S_ND)+len(S_ND[-1])==1,
+            plot_data(ds.channel_freqs[chans]/1e6, ND_delta, label="%s, %s"%(ds.pol_labels[pol],label), newfig=len(S_ND)+len(S_ND[-1])==1,
                       xtag="Frequency [MHz]", ytag="ND spectral density [%s]"%y_unit, header=title, y_lim=y_lim)
             S_ND[-1].append(ND_delta)
     
@@ -490,13 +486,14 @@ def get_SEFD_ND(ds,bore,nulls,win_len,S_src,hpw_src,profile_src,null_labels=None
     Tspill_deduced = Tsys_deduced - pText - np.asarray([pTrx]*len(nulls))
     
     pStyle = dict(marker="o", markevery=256, markersize=6)
+    pols = ds.pol_labels
     for n in range(len(nulls)):
         _ylim = _ylim_pct_(np.stack([pSEFD, SEFD_meas]), 2.5, 30, snap_to=10) # Range hides at most 5%
-        plot_data(freqs/1e6, SEFD_meas[n,:,0], newfig=(n==0), label="H, null "+null_labels[n], color="C%d"%(2*n),
+        plot_data(freqs/1e6, SEFD_meas[n,:,0], newfig=(n==0), label="%s, null %s"%(pols[0],null_labels[n]), color="C%d"%(2*n),
                   xtag="Frequency [MHz]", ytag="SEFD [Jy]", y_lim=_ylim)
-        plot_data(freqs/1e6, SEFD_meas[n,:,1], newfig=False, label="V, null "+null_labels[n], color="C%d"%(2*n+1), **pStyle)
-        plot_data(freqs/1e6, pSEFD[n,:,0], newfig=False, label="Expected H, null "+null_labels[n], color="C%d"%(2*n), style="--")
-        plot_data(freqs/1e6, pSEFD[n,:,1], newfig=False, label="Expected V, null "+null_labels[n], color="C%d"%(2*n+1), style="--", **pStyle)
+        plot_data(freqs/1e6, SEFD_meas[n,:,1], newfig=False, label="%s, null %s"%(pols[0],null_labels[n]), color="C%d"%(2*n+1), **pStyle)
+        plot_data(freqs/1e6, pSEFD[n,:,0], newfig=False, label="Expected %s, null %s"%(pols[0],null_labels[n]), color="C%d"%(2*n), style="--")
+        plot_data(freqs/1e6, pSEFD[n,:,1], newfig=False, label="Expected %s, null %s"%(pols[1],null_labels[n]), color="C%d"%(2*n+1), style="--", **pStyle)
     
     # Average over nulls
     counts2Jy, SEFD_meas = np.ma.mean(counts2Jy,axis=0), np.ma.mean(SEFD_meas,axis=0)
@@ -623,7 +620,7 @@ def find_nulls(ds, fitpols='*', cleanchans=None, HPBW=None, N_bore=-1, Nk=[1.292
         vis_nb = (vis - bl) / np.ma.max(bm, axis=0) # "Flattened" and normalised to fitted beam height 
         levels = [-0.1,-0.05,0,0.05,0.1] # Linear scale, fraction
         axes = plt.subplots(1, 2, sharex=True, figsize=(12,6))[1]
-        axes[0].set_title("Target contribution & postulated nulls, %s (left) & %s (right). Contour spacing 0.05    [peak fraction]"%(*ds._pol,), loc='left')
+        axes[0].set_title("Target contribution & postulated nulls, %s (left) & %s (right). Contour spacing 0.05    [peak fraction]"%(*ds.pol_labels,), loc='left')
         for p,ax in enumerate(axes):
             im = ax.imshow(vis_nb[...,p], origin='lower', extent=[f[0]/1e6,f[-1]/1e6,t[0],t[-1]], aspect='auto',
                            vmin=-0.15, vmax=0.15, cmap=plt.get_cmap('viridis'))
@@ -983,7 +980,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         
         result = [freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, offbore_deg]
         if makesummary:
-            summarize([result], pol=ds._pol, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
+            summarize([result], pol=ds.pol_labels, freqmask=freqmask, plot_singles=False, plot_predicted=True, plot_ratio=False)
             # (plot_singles=False,plot_ratio=False)-> (counts2Jy, SEFD, Ae/Tsys, ND_Jy, TND, Tsys, Tsys resid, Trec, Tspill)
             pp.report_fig([F+1+i for i in [1,2,4,5,6]], orientation="landscape")
         
@@ -1047,24 +1044,29 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         pp.close()
     
     if saveroot:
-        save_results(saveroot, filename, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg,
-                     model_ref=S_src.flux_key, dataset=ds)
+        save_results(saveroot, ds, ant.name, src_ID, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg,
+                     model_ref=S_src.flux_key)
     return result
 
 
-def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, model_ref, *ig, **nored):
+def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg, model_ref, pol=('H','V')):
     """ Saves data products to CSV files named as 'root/dataset-ant-product.csv
         @param root: root folder on filesystem to save files to.
-        @param dataset_fname: the filename of the raw dataset.
+        @param dataset_fname: the filename of the raw dataset, or the DriftDataset instance representing it.
         @param antname, target: identifies the antenna and target that the data was collected from.
         @param freqs, counts2Jy, SEFD_meas, pSEFD, Tsys_meas, Trx_deduced, Tspill_deduced, pTsys, pTrx, pTspill, S_ND, T_ND, el_deg: data products as returned by 'get_SEFD_ND()'.
         @param model_ref: a key to identify the model used for flux scale.
-        @param dataset (optional): a DriftDataset, so supply metadata
+        @param dataset (optional): a DriftDataset, to supply metadata
     """
+    try:
+        dataset, filename = dataset_fname, dataset_fname.name
+    except:
+        dataset, filename = None, dataset_fname
     fnroot = "%s/%s-%s-"%(root,dataset_fname.split("/")[-1].split(".")[0],antname)
-    metadata = dict(dataset=dataset_fname, antenna=antname, target=target, elevation="%.f [deg]"%el_deg)
-    if ('dataset' in nored.keys()):
-        dataset = nored['dataset']; ds = dataset.ds
+    metadata = dict(dataset=filename, antenna=antname, target=target, elevation="%.f [deg]"%el_deg)
+    if (dataset):
+        pol = dataset.pol_labels
+        ds = dataset.ds
         fft_shift, gains, atten = util.get_fft_shift_and_gains(ds)
         metadata.update(dict(antenna=dataset.ant.description, target=dataset.target.description,
                 receiver=dataset.RxSN, attenuation=str(atten)+" [dB]", FFT_shift=fft_shift, EQ_gain=str(gains[0]), dt="%g [sec]"%dataset.dump_period,
@@ -1076,7 +1078,7 @@ def save_results(root,dataset_fname,antname,target, freqs, counts2Jy, SEFD_meas,
                                ("SEFD",np.c_[freqs, SEFD_meas[:,0], SEFD_meas[:,1]],"SEFD at calibrator background","Jy"),
                                ("S_ND",np.c_[freqs, S_ND[:,0], S_ND[:,1]],"Noise Diode equivalent Flux","Jy")]:
         np.savetxt(fnroot+fn+".csv", data, delimiter=",",
-                   header="%s. %s\nfrequency [Hz]\t,H [%s]\t, V [%s]"%(descr,origin,unit,unit))
+                   header="%s. %s\nfrequency [Hz]\t,%s [%s]\t, %s [%s]"%(descr,origin,pol[0],unit,pol[1],unit))
 
 
 def load_results(fids, product="SEFD", root="", also_el=False, also_meta=False):
@@ -1121,7 +1123,7 @@ def load_results(fids, product="SEFD", root="", also_el=False, also_meta=False):
         return f, d_H, d_V
 
 
-def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=False):
+def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, pol=('H','V'), info="", rfi_mask=[], debug=False):
     """ Save noise diode equivalent temperatures to a model file, in the standard MeerKAT format.
         If there are lists of frequencies & T_ND then the data series will automatically be combined.
         
@@ -1145,7 +1147,7 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
     
     # Mask & write to file
         
-    for pol,Tdiode in enumerate([TndH,TndV]):
+    for p,Tdiode in zip(pol,[TndH,TndV]):
         Tdiode = mask_where(Tdiode, freqs, rfi_mask+[(0,np.min(freqs)+1),(np.max(freqs)-1,np.inf)]) # Mask out RFI-contaminated bits & always the "DC" bin
         
         # Scape currently blunders if the file contains nan or --, so only write valid numbers
@@ -1155,12 +1157,12 @@ def save_Tnd(freqs, T_ND, rx_band_SN, output_dir, info="", rfi_mask=[], debug=Fa
             _f, _T = _f[_f>540e6], _T[_f>540e6]
         
         if debug:
-            plot_data(_f/1e6, _T, style='.', xtag="Frequency [MHz]", ytag="T_ND [K]", newfig=(pol==0))
+            plot_data(_f/1e6, _T, style='.', xtag="Frequency [MHz]", ytag="T_ND %s [K]"%p, newfig=(p==pol[0]))
         
         # Write CSV files
-        #np.savetxt('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), # TODO: use this rather than below
+        #np.savetxt('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, p.lower()), # TODO: use this rather than below
         #           np.c_[_f,_T], delimiter=",", fmt='%.2f')
-        outfile = open('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, "hv"[pol]), 'w')
+        outfile = open('%s/rx.%s.%s.%s.csv' % (output_dir, rx_band.lower(), rx_SN, p.lower()), 'w')
         outfile.write('#Noise Diode table. %s\n'%info)
         outfile.write('# Frequency [Hz], Temperature [K]\n')
         if (_f[-1] < _f[0]): # unflip the flipped first nyquist ordering
