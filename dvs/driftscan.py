@@ -889,14 +889,14 @@ def summarize(results, labels=None, pol=["H","V"], pctmask=100, freqmask=None, p
     return f, m_SEFD, m_TSYS, m_ND, m_TND
 
 
-def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, swapped_pol=False, strict=False,
+def analyse(f, ant=0, source=None, flux_key=None, cat_file=None,
             fitpols='*', HPBW=None, N_bore=-1, Nk=[1.292,2.136,2.987,3.861], nulls=[(0,0)],
             fitfreqrange=None, freqmask=[(0,200e6),(360e6,380e6),(924e6,960e6),(1084e6,1092e6)], rfifilt=[1,7],
-            saveroot=None, makesummary=True, makepdf=False, debug=False, debug_nulls=1):
+            saveroot=None, makesummary=True, makepdf=False, debug_nulls=1, **dataset_kwargs):
     """ Generates measured and predicted SEFD results and collects it all in a PDF report, if required.
         
         @param f: filename string, or an already opened katdal.Dataset or DriftDataset
-        @param ant, ant_rxSN, swapped_pol, strict: to be passed to 'DriftDataset()'.
+        @param dataset_kwargs: arguments to be passed to 'DriftDataset()' - e.g. ant, ant_rxSN, pol_labels, strict.
         @param source: a description of the calibrator source (see 'models.describe_source()'), or None to use the defaults defined for the drift scan target.
         @param flux_key: an identifier for the source flux model, passed to 'models.describe_source()' (default None).
         @param cat_file: if given, overrides the default filename used by 'models.describe_source()' (default None).
@@ -915,10 +915,7 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
         @return: same products as get_SEFD_ND() + [offbore_deg]
     """
     # Select all of the raw data that's relevant
-    if (isinstance(f, DriftDataset) and (ant in [0, f.ant.name])): # Avoid re-loading the data - doesn't work if ant is an index. 
-        ds = f
-    else:
-        ds = DriftDataset(f, ant, swapped_pol=swapped_pol, strict=strict, ant_rx_override=ant_rxSN, debug=debug)
+    ds = f if isinstance(f, DriftDataset) else DriftDataset(f, **dataset_kwargs)
     vis = ds.vis
     filename = ds.name
     ant = ds.ant
