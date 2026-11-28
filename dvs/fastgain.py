@@ -102,7 +102,7 @@ def plot_allandev(x, dt=1, time=None, sfact=1., xyunits=("[sec]",""), label=None
 plot_allanvar = plot_allandev # DEPRECATED!
 
 
-def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange=None, t_spike_start=None, t_spike_end=None, vs_freq=False,
+def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange=None, t_spike_start=None, t_spike_end=None, usepols=(0,1), vs_freq=False,
             T_interval=5, sigma_spec=0.10, cycle_50pct=False,
             xK=[1.03,1.05,1.1,1.15], output_filepattern=None):
     """ Load the data from a suitable dataset and perform the standard analysis on it.
@@ -112,6 +112,7 @@ def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange
         @param freqrange: start & end frequencies [Hz] to select (default None)
         @param timerange: absolute or relative start & end times [sec] to select, after selecting 'track' (default None)
         @param t_spike_start, t_spike_end: start & end times of noisy time series to be excluded from analysis, in [sec]
+        @param usepols: specify (0,0) to threshold only on stability of H, or (1,1) for only V (default (0,1))
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
         @param T_interval: interval for sliding window to evaluate over, in seconds (default 5)
         @param sigma_spec: the reference limit in percent to indicate on the final figures (default 0.10)
@@ -164,7 +165,7 @@ def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange
     _pol_lbl_ = lambda pol: "%s pol @ gain %s"%(pol,gains[0]["%s%s"%(ant,pol.lower())])
     dataset_id = "%s: %s[%s]"%(filename,ant,h5.receivers[ant])
     _info_ = "with FFT shift %d & atten %sdB" % (fft_shift, atten)
-    P_h, P_v = standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, xK,
+    P_h, P_v = standard_report(dt, h5.freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct, usepols, xK,
                                dataset_id, _pol_lbl_, _info_, vs_freq, channels=h5.channels, t_spike_start=t_spike_start, t_spike_end=t_spike_end)
     
     if (output_filepattern is not None): # Save combined time series data
@@ -184,7 +185,7 @@ def analyse(h5, ant, flags='data_lost', channels=None, freqrange=None, timerange
 analyze = analyse # Alias
 
 
-def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct=False, xK=[1.03,1.05,1.1,1.15],
+def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50pct=False, usepols=(0,1), xK=[1.03,1.05,1.1,1.15],
                     dataset_id="", _pol_lbl_=lambda pol:pol, _info_="", vs_freq=False, **kwargs):
     """ Perform standard stability analysis on a set of regularly sampled data.
         
@@ -193,6 +194,7 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
         @param T_interval: interval for sliding window to evaluate over, in seconds
         @param sigma_spec: the reference limit in percent to indicate on the final figures
         @param cycle_50pct: True to process the data as the difference between consecutive samples (default False)
+        @param usepols: in case of malfunction of a polarisation channel, specify (0,0) to threshold only data from H, or (1,1) for only V (default (0,1))
         @param xK: acceptable scale factors for stability threshold (default [1.03,1.05,1.1,1.15])
         @param vs_freq: True to make plots vs. frequency rather than channel number (default False)
         @param kwargs: may specify `channels` if not to use default numbering, and also t_spike_start & t_spike_end
@@ -240,10 +242,11 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
 
     snr_h = [np.mean(np.nanstd(p_h[:,C],axis=0)/np.nanmean(p_h[:,C],axis=0)) for C in ch_chunks]
     snr_v = [np.mean(np.nanstd(p_v[:,C],axis=0)/np.nanmean(p_v[:,C],axis=0)) for C in ch_chunks]
-    if (abs(1-np.nanmedian(snr_h)/np.nanmedian(snr_v)) > 1): # One pol is significantly worse than the other
-        snr = np.nanmin([snr_h,snr_v],axis=0) # Min over frequency
+    snr = [(snr_h,snr_v)[_] for _ in usepols]
+    if (abs(1-np.nanmedian(snr[0])/np.nanmedian(snr[1])) > 1): # One pol is significantly worse than the other
+        snr = np.nanmin(snr, axis=0) # Min over frequency
     else:
-        snr = 1/2**.5 * np.sqrt(np.asarray(snr_h)**2+np.asarray(snr_v)**2) # Average over frequency
+        snr = 1/2**.5 * np.sqrt(np.asarray(snr[0])**2+np.asarray(snr[1])**2) # Average over frequency
 
     for x in xK: # K*(1+x) -- acceptable thresholds to filter out RFI
         snr_flags = np.abs(snr/K - 1) < x-1 # at most x% more than expected
@@ -260,8 +263,8 @@ def standard_report(dt, freqs, p_h, p_v, p_hv, T_interval, sigma_spec, cycle_50p
     print(hv[snr_flags])
     hv_flags = hv<10*np.percentile(hv,10) # flag out chunks where HV varies greatly
 
-    if np.all(~snr_flags[hv_flags]): # APH 06/2018 added this to avoid unnecessarily blocking good data?
-        print("WARNING: skipping final flagging based on HV stability, since that leaves no data")
+    if np.all(~snr_flags[hv_flags]) or (len(set(usepols)) == 1): # APH 06/2018 added this to avoid unnecessarily blocking good data?
+        print("WARNING: skipping final flagging based on HV smoothness!")
         ch_chunks = np.asarray(ch_chunks)[snr_flags]
     else:
         ch_chunks = np.asarray(ch_chunks)[snr_flags*hv_flags]
