@@ -932,8 +932,6 @@ def analyse(f, ant=0, source=None, flux_key=None, cat_file=None, ant_rxSN={}, sw
     try:
         pp.capture_stdout(echo=True)
         print("Processing drift scan %s on %s with receiver %s." % (filename, ant.name, ds.RxSN))
-        if ds.swapped_pol:
-            print("Note: The dataset is being processed with polarisation order swapped!")
         print("")
         
         src_ID, hpw_src, profile_src, S_src = models.describe_source(source, flux_key, verbose=True, **({'cat_file':cat_file} if (cat_file) else {}))
